@@ -12,21 +12,34 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
+// Public URL used for absolute social-share links. Update when a custom domain is connected.
+const SITE_URL = "https://lamp-glow-creations.lovable.app";
+
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-screen items-center justify-center bg-ink px-5 text-white">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+        <p className="font-display text-7xl font-bold">
+          <span className="bg-gradient-to-r from-aurora-a via-aurora-b to-aurora-c bg-clip-text text-transparent">
+            404
+          </span>
         </p>
-        <div className="mt-6">
+        <h1 className="mt-4 font-display text-xl font-semibold">This page is off the map</h1>
+        <p className="mt-2 text-sm text-mist">
+          The page you're looking for doesn't exist or has moved.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Link
             to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-ink transition hover:brightness-110"
           >
             Go home
+          </Link>
+          <Link
+            to="/apply"
+            className="rounded-full px-5 py-2.5 text-sm font-semibold ring-1 ring-white/15 transition hover:bg-white/5"
+          >
+            Check my options
           </Link>
         </div>
       </div>
@@ -84,15 +97,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Lamp is a small-business working capital brokerage. See what you qualify for, in plain terms.",
       },
       { name: "author", content: "Lamp" },
+      { name: "theme-color", content: "#0b0d17" },
+      { property: "og:site_name", content: "Lamp" },
       { property: "og:title", content: "Lamp — Working capital, made clear." },
       {
         property: "og:description",
         content:
-          "Lamp is a small-business working capital brokerage. See what you qualify for, in plain terms.",
+          "Answer a few questions, see what your business qualifies for, and compare offers side by side in plain English.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: `${SITE_URL}/og.png` },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:image", content: `${SITE_URL}/og.png` },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -105,7 +123,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "icon", href: "/favicon.ico", sizes: "any" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
     ],
   }),
   shellComponent: RootShell,
@@ -120,7 +140,7 @@ function RootShell({ children }: { children: ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body className="bg-ink">
         {children}
         <Scripts />
       </body>
