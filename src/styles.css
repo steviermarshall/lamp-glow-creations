@@ -175,3 +175,76 @@
 @utility aurora-blob-c {
   animation: aurora 23s ease-in-out -11s infinite;
 }
+
+html {
+  scroll-behavior: smooth;
+}
+
+:target {
+  scroll-margin-top: 6rem;
+}
+
+/* Faint grid that fades out toward the bottom of the hero */
+@utility grid-fade {
+  background-image:
+    linear-gradient(to right, oklch(1 0 0 / 4%) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(1 0 0 / 4%) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, black 30%, transparent 75%);
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@utility rise {
+  animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -8px, 0); }
+}
+
+@utility float {
+  animation: float 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Long-form copy on about / legal pages */
+.prose-lamp {
+  color: var(--color-mist);
+  line-height: 1.75;
+}
+.prose-lamp h2 {
+  margin-top: 2.5rem;
+  font-family: var(--font-display-family);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: white;
+}
+.prose-lamp p,
+.prose-lamp ul {
+  margin-top: 1rem;
+}
+.prose-lamp ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.prose-lamp li + li {
+  margin-top: 0.4rem;
+}
+.prose-lamp a {
+  color: var(--color-aurora-a);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
