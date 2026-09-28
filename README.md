@@ -37,14 +37,14 @@ npm run dev
 
 ## Accounts (Lovable Cloud / Supabase)
 
-Accounts, leads and uploads use Supabase. Until it's connected, the site still works and
-the last step falls back to "email us your answers".
+Accounts, leads and uploads use Lovable Cloud (Supabase), which is enabled for this project. The
+`applications` and `leads` tables and the storage policies are in `supabase/migrations/`.
 
-1. In Lovable, enable **Cloud** (or connect Supabase). It provides `VITE_SUPABASE_URL` and
-   `VITE_SUPABASE_PUBLISHABLE_KEY`.
-2. Run `supabase/migrations/20260928000000_applications_leads_documents.sql` (creates
-   `applications`, `leads`, and a private `documents` storage bucket, all with row-level security).
-3. Auth settings: enable **Email** (magic link) and **Google** providers, and add your site URL
+To finish setup in Lovable Cloud:
+
+1. Make sure a private storage bucket named `documents` exists. The migration
+   `20260928230000_documents_bucket.sql` creates it if it's missing.
+2. Auth settings: turn on **Email** (magic link) and **Google** sign-in, and add your site URL
    plus `/account` to the allowed redirect URLs.
 
 Applications and leads are visible to the Lamp team in the Supabase table editor; change an
