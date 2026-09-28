@@ -14,7 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      applications: {
+        Row: {
+          answers: Json
+          business_name: string | null
+          created_at: string
+          email: string | null
+          first_name: string | null
+          id: string
+          phone: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          utm: Json
+        }
+        Insert: {
+          answers?: Json
+          business_name?: string | null
+          created_at?: string
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          utm?: Json
+        }
+        Update: {
+          answers?: Json
+          business_name?: string | null
+          created_at?: string
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          utm?: Json
+        }
+        Relationships: []
+      }
+      leads: {
+        Row: {
+          answers: Json
+          created_at: string
+          email: string
+          first_name: string | null
+          id: string
+          utm: Json
+        }
+        Insert: {
+          answers?: Json
+          created_at?: string
+          email: string
+          first_name?: string | null
+          id?: string
+          utm?: Json
+        }
+        Update: {
+          answers?: Json
+          created_at?: string
+          email?: string
+          first_name?: string | null
+          id?: string
+          utm?: Json
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
