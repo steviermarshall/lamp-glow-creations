@@ -158,3 +158,20 @@
     color: var(--color-foreground);
   }
 }
+
+@keyframes aurora {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-3%, 4%, 0) scale(1.08); }
+}
+
+@utility aurora-blob {
+  animation: aurora 14s ease-in-out infinite;
+}
+
+@utility aurora-blob-b {
+  animation: aurora 19s ease-in-out -6s infinite;
+}
+
+@utility aurora-blob-c {
+  animation: aurora 23s ease-in-out -11s infinite;
+}
