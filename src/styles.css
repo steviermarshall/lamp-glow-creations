@@ -70,6 +70,14 @@
 }
 
 :root {
+  --ink: oklch(0.13 0.015 275);
+  --panel: oklch(0.19 0.022 272);
+  --aurora-a: oklch(0.83 0.13 172);
+  --aurora-b: oklch(0.68 0.16 279);
+  --aurora-c: oklch(0.81 0.12 77);
+  --mist: oklch(0.76 0.025 272);
+  --font-display-family: "Space Grotesk", sans-serif;
+  --font-body-family: "Inter", sans-serif;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.129 0.042 264.695);
