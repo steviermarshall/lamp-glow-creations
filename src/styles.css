@@ -19,6 +19,14 @@
  */
 
 @theme inline {
+  --color-ink: var(--ink);
+  --color-panel: var(--panel);
+  --color-aurora-a: var(--aurora-a);
+  --color-aurora-b: var(--aurora-b);
+  --color-aurora-c: var(--aurora-c);
+  --color-mist: var(--mist);
+  --font-display: var(--font-display-family);
+  --font-body: var(--font-body-family);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
