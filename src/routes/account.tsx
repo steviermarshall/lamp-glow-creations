@@ -294,8 +294,8 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
         </dl>
         <p className="mt-6 text-xs leading-relaxed text-mist/70">
           Need to change something? Email{" "}
-          <a className="underline" href="mailto:hello@getlamp.com">
-            hello@getlamp.com
+          <a className="underline" href="mailto:hello@getlamp.app">
+            hello@getlamp.app
           </a>
           .
         </p>

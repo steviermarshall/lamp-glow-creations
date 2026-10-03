@@ -47,8 +47,8 @@ function About() {
       </p>
       <h2>Get in touch</h2>
       <p>
-        Questions? Email <a href="mailto:hello@getlamp.com">hello@getlamp.com</a>. Funders and ISOs
-        can reach the partner desk at <a href="mailto:partners@getlamp.com">partners@getlamp.com</a>
+        Questions? Email <a href="mailto:hello@getlamp.app">hello@getlamp.app</a>. Funders and ISOs
+        can reach the partner desk at <a href="mailto:partners@getlamp.app">partners@getlamp.app</a>
         .
       </p>
       <div className="mt-10">

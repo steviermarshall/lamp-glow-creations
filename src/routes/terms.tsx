@@ -48,7 +48,7 @@ function Terms() {
       </p>
       <h2>Contact</h2>
       <p>
-        Questions? Email <a href="mailto:hello@getlamp.com">hello@getlamp.com</a>.
+        Questions? Email <a href="mailto:hello@getlamp.app">hello@getlamp.app</a>.
       </p>
     </ProsePage>
   );

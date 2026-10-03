@@ -40,8 +40,8 @@ function Faq() {
         </h1>
         <p className="mt-5 text-lg leading-relaxed text-mist">
           Everything owners usually ask before they check their options. Still curious? Email{" "}
-          <a className="text-aurora-a underline" href="mailto:hello@getlamp.com">
-            hello@getlamp.com
+          <a className="text-aurora-a underline" href="mailto:hello@getlamp.app">
+            hello@getlamp.app
           </a>
           .
         </p>

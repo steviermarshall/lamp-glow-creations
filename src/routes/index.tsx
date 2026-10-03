@@ -519,7 +519,7 @@ function ForFunders() {
             surprises on your side too.
           </p>
         </div>
-        <a className={btnGhost} href="mailto:partners@getlamp.com?subject=Partner%20inquiry">
+        <a className={btnGhost} href="mailto:partners@getlamp.app?subject=Partner%20inquiry">
           Reach the partner desk
         </a>
       </div>

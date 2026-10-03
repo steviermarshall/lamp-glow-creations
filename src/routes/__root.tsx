@@ -13,7 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 // Public URL used for absolute social-share links. Update when a custom domain is connected.
-const SITE_URL = "https://lamp-glow-creations.lovable.app";
+const SITE_URL = "https://getlamp.app";
 
 function NotFoundComponent() {
   return (

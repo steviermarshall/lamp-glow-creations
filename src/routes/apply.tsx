@@ -363,7 +363,7 @@ function ResultStep({
             Online accounts are being set up. In the meantime,{" "}
             <a
               className="font-semibold text-white underline"
-              href={`mailto:hello@getlamp.com?subject=${encodeURIComponent(
+              href={`mailto:hello@getlamp.app?subject=${encodeURIComponent(
                 `Application — ${answers.businessName ?? ""}`,
               )}&body=${encodeURIComponent(summaryText(answers))}`}
             >

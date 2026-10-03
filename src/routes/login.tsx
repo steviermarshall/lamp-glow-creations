@@ -45,8 +45,8 @@ function Login() {
           {!isSupabaseConfigured ? (
             <p className="mt-6 rounded-xl bg-aurora-c/10 p-4 text-sm text-mist ring-1 ring-aurora-c/30">
               Online accounts are being set up. Email{" "}
-              <a className="font-semibold text-white underline" href="mailto:hello@getlamp.com">
-                hello@getlamp.com
+              <a className="font-semibold text-white underline" href="mailto:hello@getlamp.app">
+                hello@getlamp.app
               </a>{" "}
               and we'll help right away.
             </p>

@@ -52,7 +52,7 @@ function Privacy() {
       <h2>Your choices</h2>
       <p>
         You can ask us to access, correct, or delete your information, or unsubscribe from
-        marketing, by emailing <a href="mailto:hello@getlamp.com">hello@getlamp.com</a>. Every
+        marketing, by emailing <a href="mailto:hello@getlamp.app">hello@getlamp.app</a>. Every
         marketing email includes an unsubscribe link.
       </p>
       <h2>Security</h2>
@@ -62,7 +62,7 @@ function Privacy() {
       </p>
       <h2>Contact</h2>
       <p>
-        Questions about this policy? Email <a href="mailto:hello@getlamp.com">hello@getlamp.com</a>.
+        Questions about this policy? Email <a href="mailto:hello@getlamp.app">hello@getlamp.app</a>.
       </p>
     </ProsePage>
   );
