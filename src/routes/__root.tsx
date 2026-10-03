@@ -12,32 +12,43 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
-// Public URL used for absolute social-share links. Update when a custom domain is connected.
-const SITE_URL = "https://getlamp.app";
+import { SITE } from "../lib/site";
+
+const SITE_URL = SITE.url;
+
+// Tells search engines what Lamp is: a financial service brokering in NJ and NYC.
+const ORG_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "FinancialService",
+  name: SITE.name,
+  legalName: SITE.legalName,
+  url: SITE.url,
+  logo: `${SITE.url}/apple-touch-icon.png`,
+  image: `${SITE.url}/og.png`,
+  email: SITE.email,
+  ...(SITE.phone ? { telephone: SITE.phone } : {}),
+  description:
+    "Small-business working capital brokerage. Lamp shops a merchant's file to third-party funders and lays the offers out side by side in plain English.",
+  areaServed: SITE.areaServed.map((name) => ({ "@type": "AdministrativeArea", name })),
+};
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-ink px-5 text-white">
+    <div className="lamp-light flex min-h-screen items-center justify-center px-5 font-body text-paper">
       <div className="max-w-md text-center">
-        <p className="font-display text-7xl font-bold">
-          <span className="bg-gradient-to-r from-aurora-a via-aurora-b to-aurora-c bg-clip-text text-transparent">
-            404
-          </span>
-        </p>
-        <h1 className="mt-4 font-display text-xl font-semibold">This page is off the map</h1>
-        <p className="mt-2 text-sm text-mist">
-          The page you're looking for doesn't exist or has moved.
-        </p>
+        <p className="font-display text-7xl font-bold tabular-nums text-amber">404</p>
+        <h1 className="mt-4 font-display text-2xl font-bold">This page is off the map</h1>
+        <p className="mt-2 text-mist">The page you're looking for doesn't exist or has moved.</p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Link
             to="/"
-            className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-ink transition hover:brightness-110"
+            className="rounded-full bg-amber px-5 py-2.5 font-semibold text-ink transition hover:brightness-105"
           >
             Go home
           </Link>
           <Link
             to="/apply"
-            className="rounded-full px-5 py-2.5 text-sm font-semibold ring-1 ring-white/15 transition hover:bg-white/5"
+            className="rounded-full px-5 py-2.5 font-semibold ring-1 ring-white/20 transition hover:bg-white/5"
           >
             Check my options
           </Link>
@@ -97,7 +108,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Lamp is a small-business working capital brokerage. See what you qualify for, in plain terms.",
       },
       { name: "author", content: "Lamp" },
-      { name: "theme-color", content: "#0b0d17" },
+      { name: "theme-color", content: "#231d17" },
       { property: "og:site_name", content: "Lamp" },
       { property: "og:title", content: "Lamp — Working capital, made clear." },
       {
@@ -111,13 +122,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:image:height", content: "630" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:image", content: `${SITE_URL}/og.png` },
+      { property: "og:image:alt", content: "Lamp: working capital, made clear." },
     ],
+    scripts: [{ type: "application/ld+json", children: JSON.stringify(ORG_JSON_LD) }],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Commissioner:wght@600;700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap",
       },
       {
         rel: "stylesheet",
@@ -140,7 +153,7 @@ function RootShell({ children }: { children: ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body className="bg-ink">
+      <body className="bg-paper">
         {children}
         <Scripts />
       </body>

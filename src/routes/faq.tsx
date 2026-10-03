@@ -1,17 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { PageShell, Eyebrow, btnPrimary } from "@/components/site/layout";
 import { FAQS, FaqList } from "@/components/site/faq";
+import { seo } from "@/lib/site";
 
 export const Route = createFileRoute("/faq")({
   head: () => ({
-    meta: [
-      { title: "FAQ — Lamp" },
-      {
-        name: "description",
-        content:
-          "Straight answers about working capital, factor rates, credit checks, costs, and how Lamp works.",
-      },
-    ],
+    ...seo({
+      path: "/faq",
+      title: "FAQ — Lamp",
+      description:
+        "Straight answers about working capital, factor rates, credit checks, costs, and how Lamp works.",
+    }),
     scripts: [
       {
         type: "application/ld+json",
@@ -38,9 +37,9 @@ function Faq() {
         <h1 className="mt-5 font-display text-4xl font-bold tracking-tight sm:text-5xl">
           Straight answers.
         </h1>
-        <p className="mt-5 text-lg leading-relaxed text-mist">
+        <p className="mt-5 text-lg leading-relaxed text-smoke">
           Everything owners usually ask before they check their options. Still curious? Email{" "}
-          <a className="text-aurora-a underline" href="mailto:hello@getlamp.app">
+          <a className="text-amber-deep underline" href="mailto:hello@getlamp.app">
             hello@getlamp.app
           </a>
           .
