@@ -5,10 +5,17 @@ import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth, saveDraftToAccount } from "@/hooks/use-auth";
 import { labelFor, loadDraft, QUESTIONS, type Answers } from "@/lib/apply";
 import { cn } from "@/lib/utils";
-import { btnGhost, btnPrimary, card, PageShell } from "@/components/site/layout";
+import { seo } from "@/lib/site";
+import { btnOutline, btnPrimary, card, PageShell } from "@/components/site/layout";
 
 export const Route = createFileRoute("/account")({
-  head: () => ({ meta: [{ title: "My account — Lamp" }, { name: "robots", content: "noindex" }] }),
+  head: () =>
+    seo({
+      path: "/account",
+      title: "My account — Lamp",
+      description: "Check on your Lamp file and your offers.",
+      noindex: true,
+    }),
   component: Account,
 });
 
@@ -61,9 +68,9 @@ function Account() {
   if (!isSupabaseConfigured) {
     return (
       <PageShell>
-        <div className="mx-auto max-w-xl px-5 py-24 text-center text-mist">
+        <div className="mx-auto max-w-xl px-5 py-24 text-center text-smoke">
           Online accounts are being set up.{" "}
-          <Link to="/apply" className="font-semibold text-aurora-a">
+          <Link to="/apply" className="font-semibold text-amber-deep">
             Check your options
           </Link>{" "}
           in the meantime.
@@ -76,7 +83,7 @@ function Account() {
     return (
       <PageShell footer={false}>
         <div className="grid place-items-center py-40">
-          <Loader2 className="size-6 animate-spin text-mist" />
+          <Loader2 className="size-6 animate-spin text-smoke" />
         </div>
       </PageShell>
     );
@@ -93,14 +100,14 @@ function Account() {
       <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-6 sm:pt-14">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-sm text-mist">{user.email}</p>
+            <p className="text-sm text-smoke">{user.email}</p>
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">
               Hi {name}.
             </h1>
           </div>
           <button
             type="button"
-            className={cn(btnGhost, "px-4 py-2.5")}
+            className={cn(btnOutline, "px-4 py-2.5")}
             onClick={async () => {
               await getSupabase()?.auth.signOut();
               navigate({ to: "/" });
@@ -115,7 +122,7 @@ function Account() {
         {!app ? (
           <div className={cn(card, "mt-8 p-8 text-center")}>
             <h2 className="font-display text-xl font-semibold">Let's get your file started</h2>
-            <p className="mt-2 text-mist">Answer a few quick questions to see your options.</p>
+            <p className="mt-2 text-smoke">Answer a few quick questions to see your options.</p>
             <Link to="/apply" className={cn(btnPrimary, "mt-6")}>
               Check my options
             </Link>
@@ -202,21 +209,21 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
                   className={cn(
                     "grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold ring-1",
                     s.done
-                      ? "bg-aurora-a text-ink ring-aurora-a"
+                      ? "bg-amber text-ink ring-amber"
                       : i === current
-                        ? "text-aurora-a ring-aurora-a"
-                        : "text-mist ring-white/15",
+                        ? "text-amber-deep ring-amber"
+                        : "text-smoke ring-line",
                   )}
                 >
                   {s.done ? <Check className="size-4" /> : i + 1}
                 </span>
                 <span
-                  className={cn("text-sm", s.done || i === current ? "text-white" : "text-mist")}
+                  className={cn("text-sm", s.done || i === current ? "text-ink" : "text-smoke")}
                 >
                   {s.label}
                 </span>
                 {i === current && (
-                  <span className="ml-auto rounded-full bg-aurora-a/15 px-2.5 py-1 text-xs font-semibold text-aurora-a">
+                  <span className="ml-auto rounded-full bg-amber/15 px-2.5 py-1 text-xs font-semibold text-amber-deep">
                     Next
                   </span>
                 )}
@@ -227,7 +234,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
 
         <section className={cn(card, "p-6")}>
           <h2 className="font-display text-lg font-semibold">Upload your documents</h2>
-          <p className="mt-2 text-sm text-mist">
+          <p className="mt-2 text-sm text-smoke">
             Your last three months of business bank statements (PDF) and a photo of your driver's
             license. Files are private to you and the Lamp team.
           </p>
@@ -243,14 +250,14 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
             type="button"
             onClick={() => inputRef.current?.click()}
             disabled={uploading}
-            className="mt-5 flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/15 px-6 py-8 text-sm text-mist transition hover:border-aurora-a/50 hover:bg-white/[0.03]"
+            className="mt-5 flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line px-6 py-8 text-sm text-smoke transition hover:border-amber hover:bg-sand"
           >
             {uploading ? (
               <Loader2 className="size-6 animate-spin" />
             ) : (
-              <FileUp className="size-6 text-aurora-a" />
+              <FileUp className="size-6 text-amber-deep" />
             )}
-            <span className="font-semibold text-white">
+            <span className="font-semibold text-ink">
               {uploading ? "Uploading…" : "Tap to choose files"}
             </span>
             PDF or photo, up to 20 MB each
@@ -261,14 +268,14 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
               {docs.map((d) => (
                 <li
                   key={d.path}
-                  className="flex items-center gap-3 rounded-xl bg-white/5 px-4 py-3 text-sm"
+                  className="flex items-center gap-3 rounded-xl bg-sand px-4 py-3 text-sm"
                 >
-                  <Paperclip className="size-4 shrink-0 text-mist" />
+                  <Paperclip className="size-4 shrink-0 text-smoke" />
                   <span className="truncate">{d.name}</span>
                   <button
                     type="button"
                     onClick={() => remove(d.path)}
-                    className="ml-auto text-mist transition hover:text-white"
+                    className="ml-auto text-smoke transition hover:text-ink"
                     aria-label={`Remove ${d.name}`}
                   >
                     <Trash2 className="size-4" />
@@ -287,12 +294,12 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
         <dl className="mt-4 space-y-3 text-sm">
           {QUESTIONS.map((q) => (
             <div key={q.key}>
-              <dt className="text-xs text-mist/70">{q.title}</dt>
+              <dt className="text-xs text-smoke">{q.title}</dt>
               <dd className="font-medium">{labelFor(q.key, app.answers[q.key]) ?? "—"}</dd>
             </div>
           ))}
         </dl>
-        <p className="mt-6 text-xs leading-relaxed text-mist/70">
+        <p className="mt-6 text-xs leading-relaxed text-smoke">
           Need to change something? Email{" "}
           <a className="underline" href="mailto:hello@getlamp.app">
             hello@getlamp.app

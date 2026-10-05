@@ -1,8 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { seo } from "@/lib/site";
 import { ProsePage } from "@/components/site/layout";
 
 export const Route = createFileRoute("/terms")({
-  head: () => ({ meta: [{ title: "Terms of Use — Lamp" }] }),
+  head: () =>
+    seo({
+      path: "/terms",
+      title: "Terms of Use — Lamp",
+      description:
+        "The terms for using getlamp.app. Lamp is a broker, not a lender, and estimates are not offers.",
+    }),
   component: Terms,
 });
 

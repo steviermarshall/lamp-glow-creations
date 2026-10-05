@@ -1,8 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { seo } from "@/lib/site";
 import { ProsePage } from "@/components/site/layout";
 
 export const Route = createFileRoute("/privacy")({
-  head: () => ({ meta: [{ title: "Privacy Policy — Lamp" }] }),
+  head: () =>
+    seo({
+      path: "/privacy",
+      title: "Privacy Policy — Lamp",
+      description:
+        "What Lamp collects, why, who we share it with, and how to reach us about your data.",
+    }),
   component: Privacy,
 });
 

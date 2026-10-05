@@ -14,9 +14,11 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as FaqRouteImport } from './routes/faq'
+import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -43,6 +45,11 @@ const FaqRoute = FaqRouteImport.update({
   path: '/faq',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HowItWorksRoute = HowItWorksRouteImport.update({
+  id: '/how-it-works',
+  path: '/how-it-works',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -58,6 +65,11 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApplyRepRoute = ApplyRepRouteImport.update({
+  id: '/apply_/$rep',
+  path: '/apply/$rep',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -65,9 +77,11 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/apply': typeof ApplyRoute
   '/faq': typeof FaqRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
+  '/apply/$rep': typeof ApplyRepRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -75,9 +89,11 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/apply': typeof ApplyRoute
   '/faq': typeof FaqRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
+  '/apply/$rep': typeof ApplyRepRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,9 +102,11 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/apply': typeof ApplyRoute
   '/faq': typeof FaqRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
+  '/apply_/$rep': typeof ApplyRepRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -98,9 +116,11 @@ export interface FileRouteTypes {
     | '/account'
     | '/apply'
     | '/faq'
+    | '/how-it-works'
     | '/login'
     | '/privacy'
     | '/terms'
+    | '/apply/$rep'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -108,9 +128,11 @@ export interface FileRouteTypes {
     | '/account'
     | '/apply'
     | '/faq'
+    | '/how-it-works'
     | '/login'
     | '/privacy'
     | '/terms'
+    | '/apply/$rep'
   id:
     | '__root__'
     | '/'
@@ -118,9 +140,11 @@ export interface FileRouteTypes {
     | '/account'
     | '/apply'
     | '/faq'
+    | '/how-it-works'
     | '/login'
     | '/privacy'
     | '/terms'
+    | '/apply_/$rep'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -129,9 +153,11 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   ApplyRoute: typeof ApplyRoute
   FaqRoute: typeof FaqRoute
+  HowItWorksRoute: typeof HowItWorksRoute
   LoginRoute: typeof LoginRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
+  ApplyRepRoute: typeof ApplyRepRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -171,6 +197,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FaqRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/how-it-works': {
+      id: '/how-it-works'
+      path: '/how-it-works'
+      fullPath: '/how-it-works'
+      preLoaderRoute: typeof HowItWorksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -192,6 +225,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/apply_/$rep': {
+      id: '/apply_/$rep'
+      path: '/apply/$rep'
+      fullPath: '/apply/$rep'
+      preLoaderRoute: typeof ApplyRepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -201,9 +241,11 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   ApplyRoute: ApplyRoute,
   FaqRoute: FaqRoute,
+  HowItWorksRoute: HowItWorksRoute,
   LoginRoute: LoginRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
+  ApplyRepRoute: ApplyRepRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
