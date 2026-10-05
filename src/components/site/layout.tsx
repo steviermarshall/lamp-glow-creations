@@ -50,6 +50,7 @@ export function Wordmark({ size = "lg" }: { size?: "lg" | "sm" }) {
 
 const NAV = [
   { label: "How it works", to: "/how-it-works" },
+  { label: "Offer Check", to: "/offer-check" },
   { label: "Funding options", to: "/", hash: "options" },
   { label: "FAQ", to: "/faq" },
   { label: "About", to: "/about" },
@@ -182,6 +183,7 @@ export function SiteFooter() {
           links={[
             { label: "Check my options", to: "/apply" },
             { label: "How it works", to: "/how-it-works" },
+            { label: "Check an offer you have", to: "/offer-check" },
             { label: "Funding options", to: "/", hash: "options" },
           ]}
         />

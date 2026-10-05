@@ -16,6 +16,7 @@ import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as FaqRouteImport } from './routes/faq'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as OfferCheckRouteImport } from './routes/offer-check'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
@@ -55,6 +56,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OfferCheckRoute = OfferCheckRouteImport.update({
+  id: '/offer-check',
+  path: '/offer-check',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/faq': typeof FaqRoute
   '/how-it-works': typeof HowItWorksRoute
   '/login': typeof LoginRoute
+  '/offer-check': typeof OfferCheckRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/apply/$rep': typeof ApplyRepRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/faq': typeof FaqRoute
   '/how-it-works': typeof HowItWorksRoute
   '/login': typeof LoginRoute
+  '/offer-check': typeof OfferCheckRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/apply/$rep': typeof ApplyRepRoute
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/faq': typeof FaqRoute
   '/how-it-works': typeof HowItWorksRoute
   '/login': typeof LoginRoute
+  '/offer-check': typeof OfferCheckRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/apply_/$rep': typeof ApplyRepRoute
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/faq'
     | '/how-it-works'
     | '/login'
+    | '/offer-check'
     | '/privacy'
     | '/terms'
     | '/apply/$rep'
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/faq'
     | '/how-it-works'
     | '/login'
+    | '/offer-check'
     | '/privacy'
     | '/terms'
     | '/apply/$rep'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/faq'
     | '/how-it-works'
     | '/login'
+    | '/offer-check'
     | '/privacy'
     | '/terms'
     | '/apply_/$rep'
@@ -155,6 +167,7 @@ export interface RootRouteChildren {
   FaqRoute: typeof FaqRoute
   HowItWorksRoute: typeof HowItWorksRoute
   LoginRoute: typeof LoginRoute
+  OfferCheckRoute: typeof OfferCheckRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
   ApplyRepRoute: typeof ApplyRepRoute
@@ -211,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/offer-check': {
+      id: '/offer-check'
+      path: '/offer-check'
+      fullPath: '/offer-check'
+      preLoaderRoute: typeof OfferCheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
@@ -243,6 +263,7 @@ const rootRouteChildren: RootRouteChildren = {
   FaqRoute: FaqRoute,
   HowItWorksRoute: HowItWorksRoute,
   LoginRoute: LoginRoute,
+  OfferCheckRoute: OfferCheckRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
   ApplyRepRoute: ApplyRepRoute,
