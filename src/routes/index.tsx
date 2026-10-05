@@ -406,6 +406,12 @@ function OfferExplainer() {
             Illustration only. Real offers vary by funder and may include fees, which we'll always
             show you in writing.
           </p>
+          <Link
+            to="/offer-check"
+            className="mt-3 inline-flex items-center gap-1.5 font-semibold text-amber-deep underline-offset-4 hover:underline"
+          >
+            Already have an offer? Check what it really costs <ArrowRight className="size-4" />
+          </Link>
         </div>
       </div>
     </section>
