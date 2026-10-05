@@ -1,17 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ProsePage, btnPrimary } from "@/components/site/layout";
+import { seo } from "@/lib/site";
 
 export const Route = createFileRoute("/about")({
-  head: () => ({
-    meta: [
-      { title: "About — Lamp" },
-      {
-        name: "description",
-        content:
-          "Lamp is a working capital brokerage for owner-operators in New Jersey and New York City. We shop your file and show you the offers in plain English.",
-      },
-    ],
-  }),
+  head: () =>
+    seo({
+      path: "/about",
+      title: "About — Lamp",
+      description:
+        "Lamp is a working capital brokerage for owner-operators in New Jersey and New York City. We shop your file and show you the offers in plain English.",
+    }),
   component: About,
 });
 
@@ -47,8 +45,8 @@ function About() {
       </p>
       <h2>Get in touch</h2>
       <p>
-        Questions? Email <a href="mailto:hello@getlamp.com">hello@getlamp.com</a>. Funders and ISOs
-        can reach the partner desk at <a href="mailto:partners@getlamp.com">partners@getlamp.com</a>
+        Questions? Email <a href="mailto:hello@getlamp.app">hello@getlamp.app</a>. Funders and ISOs
+        can reach the partner desk at <a href="mailto:partners@getlamp.app">partners@getlamp.app</a>
         .
       </p>
       <div className="mt-10">

@@ -3,31 +3,53 @@ import { Link } from "@tanstack/react-router";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { SITE, telHref } from "@/lib/site";
 
+// Buttons. Primary is the lamp: amber with ink text. Ghost sits on dark ground, outline on paper.
 export const btnPrimary =
-  "inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-ink shadow-lg shadow-aurora-a/20 transition hover:-translate-y-0.5 hover:shadow-aurora-a/40 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-full bg-amber px-6 py-3.5 text-[0.95rem] font-semibold text-ink shadow-[0_8px_24px_-10px_oklch(0.8_0.145_72/0.8)] transition hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50";
 export const btnGhost =
-  "inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-sm font-semibold text-white ring-1 ring-white/15 backdrop-blur-md transition hover:bg-white/5 disabled:pointer-events-none disabled:opacity-50";
-export const card = "rounded-2xl border border-white/10 bg-panel/60 backdrop-blur-xl";
+  "inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-[0.95rem] font-semibold text-paper ring-1 ring-white/20 transition hover:bg-white/5 disabled:pointer-events-none disabled:opacity-50";
+export const btnOutline =
+  "inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-[0.95rem] font-semibold text-ink ring-1 ring-line transition hover:ring-ink/30 disabled:pointer-events-none disabled:opacity-50";
+
+// Surfaces. A card is a sheet of paper on the cream ground; cardDark is a panel on ink.
+export const card = "rounded-2xl border border-line bg-white";
+export const cardDark = "rounded-2xl border border-white/10 bg-ink-2";
+
+export function LampMark({ size = "lg" }: { size?: "lg" | "sm" }) {
+  const box = size === "lg" ? "size-9 rounded-[11px]" : "size-7 rounded-[9px]";
+  const dot = size === "lg" ? "size-3.5" : "size-2.5";
+  return (
+    <span
+      className={cn("grid place-items-center bg-ink-2 ring-1 ring-white/10", box)}
+      aria-hidden="true"
+    >
+      <span
+        className={cn("rounded-full bg-amber shadow-[0_0_14px_3px_oklch(0.8_0.145_72/0.65)]", dot)}
+      />
+    </span>
+  );
+}
 
 export function Wordmark({ size = "lg" }: { size?: "lg" | "sm" }) {
-  const box = size === "lg" ? "size-9 rounded-xl" : "size-7 rounded-lg";
-  const dot = size === "lg" ? "size-3" : "size-2";
-  const text = size === "lg" ? "text-xl" : "text-base";
   return (
     <span className="flex items-center gap-2.5">
+      <LampMark size={size} />
       <span
-        className={`grid ${box} place-items-center bg-gradient-to-br from-aurora-a via-aurora-b to-aurora-c shadow-lg shadow-aurora-b/30`}
+        className={cn(
+          "font-display font-bold tracking-tight text-paper",
+          size === "lg" ? "text-xl" : "text-lg",
+        )}
       >
-        <span className={`${dot} rounded-full bg-ink/85`} />
+        Lamp
       </span>
-      <span className={`font-display ${text} font-bold tracking-tight`}>Lamp</span>
     </span>
   );
 }
 
 const NAV = [
-  { label: "How it works", to: "/", hash: "how-it-works" },
+  { label: "How it works", to: "/how-it-works" },
   { label: "Funding options", to: "/", hash: "options" },
   { label: "FAQ", to: "/faq" },
   { label: "About", to: "/about" },
@@ -38,20 +60,25 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
   const { user } = useAuth();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/5 bg-ink/60 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-6">
-        <Link to="/" aria-label="Lamp home">
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-ink/95 backdrop-blur-sm">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5 sm:px-6">
+        <Link to="/" aria-label="Lamp home" className="rounded-lg">
           <Wordmark />
         </Link>
 
         {!minimal && (
-          <nav className="hidden items-center gap-8 text-sm font-medium text-mist md:flex">
+          <nav
+            aria-label="Main"
+            className="hidden items-center gap-8 text-[0.95rem] font-medium text-mist md:flex"
+          >
             {NAV.map((n) => (
               <Link
                 key={n.label}
                 to={n.to}
                 {...("hash" in n ? { hash: n.hash } : {})}
-                className="transition hover:text-white"
+                className="transition hover:text-paper"
+                activeProps={{ className: "text-paper" }}
+                activeOptions={{ includeHash: true }}
               >
                 {n.label}
               </Link>
@@ -62,22 +89,19 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
         <div className="flex items-center gap-2">
           <Link
             to={user ? "/account" : "/login"}
-            className="hidden rounded-full px-4 py-2.5 text-sm font-semibold text-mist transition hover:text-white sm:inline-flex"
+            className="hidden rounded-full px-4 py-2.5 text-[0.95rem] font-semibold text-mist transition hover:text-paper sm:inline-flex"
           >
             {user ? "My account" : "Sign in"}
           </Link>
           {!minimal && (
-            <Link
-              to="/apply"
-              className="hidden rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-ink transition hover:brightness-110 sm:inline-flex"
-            >
+            <Link to="/apply" className={cn(btnPrimary, "hidden px-5 py-2.5 sm:inline-flex")}>
               Check my options
             </Link>
           )}
           {!minimal && (
             <button
               type="button"
-              className="grid size-10 place-items-center rounded-full text-white ring-1 ring-white/15 md:hidden"
+              className="grid size-11 place-items-center rounded-full text-paper ring-1 ring-white/20 md:hidden"
               aria-label={open ? "Close menu" : "Open menu"}
               aria-expanded={open}
               onClick={() => setOpen((o) => !o)}
@@ -89,14 +113,14 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
       </div>
 
       {open && (
-        <nav className="border-t border-white/5 px-5 pb-6 pt-2 md:hidden">
+        <nav aria-label="Mobile" className="border-t border-white/10 px-5 pb-6 pt-2 md:hidden">
           {NAV.map((n) => (
             <Link
               key={n.label}
               to={n.to}
               {...("hash" in n ? { hash: n.hash } : {})}
               onClick={() => setOpen(false)}
-              className="block border-b border-white/5 py-4 text-base font-medium text-white"
+              className="block border-b border-white/10 py-4 text-base font-medium text-paper"
             >
               {n.label}
             </Link>
@@ -104,7 +128,7 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
           <Link
             to={user ? "/account" : "/login"}
             onClick={() => setOpen(false)}
-            className="block border-b border-white/5 py-4 text-base font-medium text-white"
+            className="block border-b border-white/10 py-4 text-base font-medium text-paper"
           >
             {user ? "My account" : "Sign in"}
           </Link>
@@ -123,21 +147,42 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-white/10">
-      <div className="mx-auto grid max-w-6xl gap-10 px-5 py-12 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+    <footer className="border-t border-white/10 bg-ink text-mist">
+      <div className="mx-auto grid max-w-6xl gap-10 px-5 py-14 sm:px-6 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
         <div>
           <Wordmark size="sm" />
-          <p className="mt-4 max-w-xs text-sm leading-relaxed text-mist/80">
+          <p className="mt-4 max-w-xs text-[0.95rem] leading-relaxed">
             Working capital for owner-operators in New Jersey and New York City, explained in plain
             English.
           </p>
+          <ul className="mt-5 space-y-1.5 text-[0.95rem]">
+            <li>
+              <a
+                className="text-paper underline-offset-4 hover:underline"
+                href={`mailto:${SITE.email}`}
+              >
+                {SITE.email}
+              </a>
+            </li>
+            {SITE.phone && (
+              <li>
+                <a
+                  className="text-paper underline-offset-4 hover:underline"
+                  href={telHref(SITE.phone)}
+                >
+                  {SITE.phone}
+                </a>
+              </li>
+            )}
+            {SITE.address && <li>{SITE.address}</li>}
+          </ul>
         </div>
         <FooterCol
           title="Get funded"
           links={[
             { label: "Check my options", to: "/apply" },
+            { label: "How it works", to: "/how-it-works" },
             { label: "Funding options", to: "/", hash: "options" },
-            { label: "How it works", to: "/", hash: "how-it-works" },
           ]}
         />
         <FooterCol
@@ -156,12 +201,12 @@ export function SiteFooter() {
           ]}
         />
       </div>
-      <div className="border-t border-white/5">
-        <p className="mx-auto max-w-6xl px-5 py-6 text-xs leading-relaxed text-mist/60 sm:px-6">
-          © {new Date().getFullYear()} Lamp Financial Group LLC. Lamp is a brokerage, not a lender.
-          We arrange offers through a network of third-party funders, and every offer is subject to
-          that funder's review and approval. Estimates shown on this site are for illustration only
-          and are not offers or commitments to lend.
+      <div className="border-t border-white/10">
+        <p className="mx-auto max-w-6xl px-5 py-6 text-[0.8rem] leading-relaxed text-mist/80 sm:px-6">
+          © {new Date().getFullYear()} {SITE.legalName}. Lamp is a brokerage, not a lender. We
+          arrange offers through a network of third-party funders, and every offer is subject to
+          that funder's review and approval. Estimates on this site are for illustration only and
+          are not offers or commitments to fund.
         </p>
       </div>
     </footer>
@@ -173,31 +218,20 @@ type FooterLink = { label: string; to: string; hash?: string };
 function FooterCol({ title, links }: { title: string; links: FooterLink[] }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-mist/60">{title}</p>
-      <ul className="mt-4 space-y-3 text-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-mist/70">{title}</p>
+      <ul className="mt-4 space-y-3 text-[0.95rem]">
         {links.map((l) => (
           <li key={l.label}>
             <Link
               to={l.to}
               {...(l.hash ? { hash: l.hash } : {})}
-              className="text-mist transition hover:text-white"
+              className="transition hover:text-paper"
             >
               {l.label}
             </Link>
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-export function Aurora() {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-      <div className="aurora-blob absolute -left-40 -top-52 h-[440px] w-[440px] rounded-full bg-aurora-a/35 blur-[130px]" />
-      <div className="aurora-blob-b absolute right-[-12%] top-[-6%] h-[520px] w-[520px] rounded-full bg-aurora-b/35 blur-[140px]" />
-      <div className="aurora-blob-c absolute bottom-[-20%] left-1/3 h-[480px] w-[480px] rounded-full bg-aurora-c/20 blur-[150px]" />
-      <div className="grid-fade absolute inset-0" />
     </div>
   );
 }
@@ -212,13 +246,18 @@ export function PageShell({
   footer?: boolean;
 }) {
   return (
-    <div className="font-body relative min-h-screen overflow-x-clip bg-ink text-white antialiased">
-      <Aurora />
-      <div className="relative flex min-h-screen flex-col">
-        <SiteHeader minimal={minimalHeader} />
-        <main className="flex-1">{children}</main>
-        {footer && <SiteFooter />}
-      </div>
+    <div className="font-body relative flex min-h-screen flex-col overflow-x-clip bg-paper text-ink antialiased">
+      <a
+        href="#main"
+        className="sr-only z-50 rounded-full bg-amber px-4 py-2 font-semibold text-ink focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+      >
+        Skip to content
+      </a>
+      <SiteHeader minimal={minimalHeader} />
+      <main id="main" className="flex-1">
+        {children}
+      </main>
+      {footer && <SiteFooter />}
     </div>
   );
 }
@@ -237,20 +276,32 @@ export function ProsePage({
 }) {
   return (
     <PageShell>
-      <section className="mx-auto max-w-3xl px-5 pb-24 pt-14 sm:px-6 sm:pt-20">
-        <Eyebrow>{eyebrow}</Eyebrow>
-        <h1 className="mt-5 font-display text-4xl font-bold tracking-tight sm:text-5xl">{title}</h1>
-        {intro && <p className="mt-5 text-lg leading-relaxed text-mist">{intro}</p>}
-        <div className="prose-lamp mt-10">{children}</div>
+      <section className="lamp-light text-paper">
+        <div className="mx-auto max-w-3xl px-5 pb-14 pt-14 sm:px-6 sm:pt-20">
+          <Eyebrow dark>{eyebrow}</Eyebrow>
+          <h1 className="mt-5 font-display text-4xl font-bold tracking-tight sm:text-5xl">
+            {title}
+          </h1>
+          {intro && <p className="mt-5 max-w-2xl text-lg leading-relaxed text-mist">{intro}</p>}
+        </div>
+      </section>
+      <section className="mx-auto max-w-3xl px-5 pb-24 pt-4 sm:px-6">
+        <div className="prose-lamp">{children}</div>
       </section>
     </PageShell>
   );
 }
 
-export function Eyebrow({ children }: { children: ReactNode }) {
+export function Eyebrow({ children, dark = false }: { children: ReactNode; dark?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-mist ring-1 ring-white/10">
-      <span className="size-1.5 rounded-full bg-aurora-a" /> {children}
+    <span
+      className={cn(
+        "inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em]",
+        dark ? "text-amber" : "text-amber-deep",
+      )}
+    >
+      <span className="size-1.5 rounded-full bg-amber shadow-[0_0_8px_2px_oklch(0.8_0.145_72/0.6)]" />
+      {children}
     </span>
   );
 }

@@ -13,7 +13,7 @@ export type ChoiceQuestion = {
 export type ChoiceKey =
   "amount" | "purpose" | "revenue" | "tib" | "credit" | "industry" | "timeline";
 
-export type ContactKey = "firstName" | "businessName" | "phone" | "email";
+export type ContactKey = "firstName" | "businessName" | "phone" | "email" | "phoneConsent";
 
 export type Answers = Partial<Record<ChoiceKey | ContactKey, string>>;
 
@@ -105,6 +105,11 @@ export const QUESTIONS: ChoiceQuestion[] = [
 ];
 
 export const CONTACT_KEYS: ContactKey[] = ["firstName", "businessName", "phone", "email"];
+
+/** Shown next to the phone field and stored with a timestamp when they tick the box.
+ *  Have the attorney review this wording before calls or texts go out at volume. */
+export const PHONE_CONSENT_TEXT =
+  "I agree that Lamp may call and text me at this number about my application and funding options, including with automated technology. Agreeing isn't required to get offers. Message and data rates may apply, and frequency varies. Reply STOP to opt out.";
 
 /** URL params accepted by /apply for prefill. Short, email-friendly names. */
 export const PARAM_MAP: Record<string, ChoiceKey | ContactKey> = {
