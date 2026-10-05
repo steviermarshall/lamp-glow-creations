@@ -36,7 +36,7 @@ export function GoogleButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex w-full items-center justify-center gap-3 rounded-full bg-white px-6 py-4 text-base font-semibold text-ink shadow-lg shadow-aurora-a/20 transition hover:-translate-y-0.5"
+      className="inline-flex w-full items-center justify-center gap-3 rounded-full bg-white px-6 py-4 text-base font-semibold text-ink ring-1 ring-line transition hover:-translate-y-0.5"
     >
       <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
         <path

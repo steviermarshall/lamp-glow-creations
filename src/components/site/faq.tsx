@@ -42,13 +42,13 @@ export const FAQS: { q: string; a: string }[] = [
 
 export function FaqList({ items = FAQS }: { items?: { q: string; a: string }[] }) {
   return (
-    <Accordion type="single" collapsible className="divide-y divide-white/10">
+    <Accordion type="single" collapsible className="divide-y divide-line border-y border-line">
       {items.map((f, i) => (
         <AccordionItem key={f.q} value={`q${i}`} className="border-none">
-          <AccordionTrigger className="py-5 text-left font-display text-base font-semibold text-white hover:no-underline sm:text-lg [&>svg]:text-mist">
+          <AccordionTrigger className="py-5 text-left font-display text-base font-semibold text-ink hover:no-underline sm:text-lg [&>svg]:text-smoke">
             {f.q}
           </AccordionTrigger>
-          <AccordionContent className="pb-5 text-sm leading-relaxed text-mist sm:text-base">
+          <AccordionContent className="pb-5 text-sm leading-relaxed text-smoke sm:text-base">
             {f.a}
           </AccordionContent>
         </AccordionItem>
