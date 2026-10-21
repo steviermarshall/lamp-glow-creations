@@ -18,6 +18,7 @@ import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OfferCheckRouteImport } from './routes/offer-check'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as StaffRouteImport } from './routes/staff'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
 
@@ -66,6 +67,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
   path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StaffRoute = StaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/offer-check': typeof OfferCheckRoute
   '/privacy': typeof PrivacyRoute
+  '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/apply/$rep': typeof ApplyRepRoute
 }
@@ -100,6 +107,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/offer-check': typeof OfferCheckRoute
   '/privacy': typeof PrivacyRoute
+  '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/apply/$rep': typeof ApplyRepRoute
 }
@@ -114,6 +122,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/offer-check': typeof OfferCheckRoute
   '/privacy': typeof PrivacyRoute
+  '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/apply_/$rep': typeof ApplyRepRoute
 }
@@ -129,6 +138,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/offer-check'
     | '/privacy'
+    | '/staff'
     | '/terms'
     | '/apply/$rep'
   fileRoutesByTo: FileRoutesByTo
@@ -142,6 +152,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/offer-check'
     | '/privacy'
+    | '/staff'
     | '/terms'
     | '/apply/$rep'
   id:
@@ -155,6 +166,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/offer-check'
     | '/privacy'
+    | '/staff'
     | '/terms'
     | '/apply_/$rep'
   fileRoutesById: FileRoutesById
@@ -169,6 +181,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OfferCheckRoute: typeof OfferCheckRoute
   PrivacyRoute: typeof PrivacyRoute
+  StaffRoute: typeof StaffRoute
   TermsRoute: typeof TermsRoute
   ApplyRepRoute: typeof ApplyRepRoute
 }
@@ -238,6 +251,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/staff': {
+      id: '/staff'
+      path: '/staff'
+      fullPath: '/staff'
+      preLoaderRoute: typeof StaffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -265,6 +285,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   OfferCheckRoute: OfferCheckRoute,
   PrivacyRoute: PrivacyRoute,
+  StaffRoute: StaffRoute,
   TermsRoute: TermsRoute,
   ApplyRepRoute: ApplyRepRoute,
 }
