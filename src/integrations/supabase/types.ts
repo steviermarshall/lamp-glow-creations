@@ -520,6 +520,80 @@ export type Database = {
         }
         Relationships: []
       }
+      engine_leads: {
+        Row: {
+          city: string | null
+          email: string | null
+          first_found: string | null
+          id: number
+          industry: string | null
+          name: string | null
+          need: number | null
+          notes: string
+          phone: string | null
+          pushed_at: string
+          reason: string | null
+          rep_slug: string | null
+          signals: Json
+          source: string
+          source_key: string
+          state: string | null
+          status: string
+          tier: string | null
+          worked_at: string | null
+        }
+        Insert: {
+          city?: string | null
+          email?: string | null
+          first_found?: string | null
+          id?: number
+          industry?: string | null
+          name?: string | null
+          need?: number | null
+          notes?: string
+          phone?: string | null
+          pushed_at?: string
+          reason?: string | null
+          rep_slug?: string | null
+          signals?: Json
+          source: string
+          source_key: string
+          state?: string | null
+          status?: string
+          tier?: string | null
+          worked_at?: string | null
+        }
+        Update: {
+          city?: string | null
+          email?: string | null
+          first_found?: string | null
+          id?: number
+          industry?: string | null
+          name?: string | null
+          need?: number | null
+          notes?: string
+          phone?: string | null
+          pushed_at?: string
+          reason?: string | null
+          rep_slug?: string | null
+          signals?: Json
+          source?: string
+          source_key?: string
+          state?: string | null
+          status?: string
+          tier?: string | null
+          worked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "engine_leads_rep_slug_fkey"
+            columns: ["rep_slug"]
+            isOneToOne: false
+            referencedRelation: "reps"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       leads: {
         Row: {
           answers: Json

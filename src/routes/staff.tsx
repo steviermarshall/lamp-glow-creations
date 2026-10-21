@@ -8,8 +8,10 @@ import { isStage, useStaffAccess, type Stage } from "@/lib/staff";
 import { PageShell } from "@/components/site/layout";
 import { Board } from "@/components/staff/board";
 import { FileView } from "@/components/staff/file-view";
+import { EngineLeads } from "@/components/staff/engine-leads";
 
 type StaffSearch = {
+  view?: "engine" | undefined;
   stage?: Stage | undefined;
   rep?: string | undefined;
   file?: string | undefined;
@@ -20,6 +22,7 @@ const SLUG = /^[a-z0-9][a-z0-9-]{1,31}$/;
 
 export const Route = createFileRoute("/staff")({
   validateSearch: (s: Record<string, unknown>): StaffSearch => ({
+    view: s["view"] === "engine" ? "engine" : undefined,
     stage: isStage(s["stage"]) ? s["stage"] : undefined,
     rep:
       typeof s["rep"] === "string" && (s["rep"] === "unassigned" || SLUG.test(s["rep"]))
@@ -89,7 +92,29 @@ function Staff() {
           {user?.email} · {access.isAdmin ? "Admin" : "Rep"}
           {access.repSlug && ` · /${access.repSlug}`}
         </p>
-        <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">Files</h1>
+        <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">
+          {search.view === "engine" ? "Engine leads" : "Files"}
+        </h1>
+        {!search.file && (
+          <nav className="mt-4 flex gap-2 text-sm" aria-label="Staff views">
+            <Link
+              to="/staff"
+              search={{}}
+              className={viewTab(search.view !== "engine")}
+              data-staff-view="files"
+            >
+              Files
+            </Link>
+            <Link
+              to="/staff"
+              search={{ view: "engine" }}
+              className={viewTab(search.view === "engine")}
+              data-staff-view="engine"
+            >
+              Engine leads
+            </Link>
+          </nav>
+        )}
         {search.file ? (
           <FileView
             fileId={search.file}
@@ -98,6 +123,8 @@ function Staff() {
             repSlug={access.repSlug}
             reps={reps}
           />
+        ) : search.view === "engine" ? (
+          <EngineLeads isAdmin={access.isAdmin} repSlug={access.repSlug} reps={reps} />
         ) : (
           <Board
             isAdmin={access.isAdmin}
@@ -115,3 +142,8 @@ function Staff() {
     </PageShell>
   );
 }
+
+const viewTab = (on: boolean) =>
+  on
+    ? "rounded-full bg-ink px-4 py-1.5 font-semibold text-white"
+    : "rounded-full px-4 py-1.5 font-semibold text-smoke ring-1 ring-line hover:text-ink";
