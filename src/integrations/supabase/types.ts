@@ -378,7 +378,7 @@ export type Database = {
           bucket: string
           created_at: string
           id: string
-          kind: Database["public"]["Enums"]["document_kind"]
+          kind: string
           mime_type: string | null
           original_name: string | null
           review_note: string | null
@@ -395,7 +395,7 @@ export type Database = {
           bucket?: string
           created_at?: string
           id?: string
-          kind?: Database["public"]["Enums"]["document_kind"]
+          kind?: string
           mime_type?: string | null
           original_name?: string | null
           review_note?: string | null
@@ -412,7 +412,7 @@ export type Database = {
           bucket?: string
           created_at?: string
           id?: string
-          kind?: Database["public"]["Enums"]["document_kind"]
+          kind?: string
           mime_type?: string | null
           original_name?: string | null
           review_note?: string | null
@@ -1156,12 +1156,6 @@ export type Database = {
         | "withdrawn"
         | "closed"
       deal_status: "funded" | "paid_off" | "renewed" | "defaulted"
-      document_kind:
-        | "bank_statement"
-        | "id"
-        | "voided_check"
-        | "tax_return"
-        | "other"
       document_status: "received" | "accepted" | "rejected"
       event_kind:
         | "stage_change"
@@ -1338,13 +1332,6 @@ export const Constants = {
         "closed",
       ],
       deal_status: ["funded", "paid_off", "renewed", "defaulted"],
-      document_kind: [
-        "bank_statement",
-        "id",
-        "voided_check",
-        "tax_return",
-        "other",
-      ],
       document_status: ["received", "accepted", "rejected"],
       event_kind: [
         "stage_change",
