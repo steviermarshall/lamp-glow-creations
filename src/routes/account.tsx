@@ -4,6 +4,14 @@ import { Check, FileUp, Loader2, LogOut, Paperclip, Trash2 } from "lucide-react"
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth, saveDraftToAccount } from "@/hooks/use-auth";
 import { labelFor, loadDraft, QUESTIONS, type Answers, type Draft } from "@/lib/apply";
+import {
+  checklistFor,
+  DOCUMENT_LABELS,
+  isDocumentKind,
+  nextMissingKind,
+  REQUIRED_DOCUMENTS,
+  type DocumentKind,
+} from "@/lib/documents";
 import { cn } from "@/lib/utils";
 import { seo } from "@/lib/site";
 import type { Database } from "@/integrations/supabase/types";
@@ -39,6 +47,8 @@ type Doc = {
   path: string;
   /** null: a file in the folder with no documents row, so the team can't see it. */
   status: DocStatus | null;
+  /** Which checklist item the file is for; null for a file with no row. */
+  kind: DocumentKind | null;
   createdAt: string | null;
   removable: boolean;
 };
@@ -54,7 +64,7 @@ const ENDED: readonly Stage[] = ["declined", "withdrawn", "closed"];
 /** One line under "Your file" where the steps alone don't say enough. */
 const STAGE_NOTE: Partial<Record<Stage, string>> = {
   docs_needed:
-    "We need a document from you. Upload it below, or email hello@getlamp.app if you're not sure which one.",
+    "We need a document from you. The checklist below shows what's still missing; email hello@getlamp.app if you're not sure.",
   submitted: "Your file is with funders now.",
   offers_ready: "You have offers. Your Lamp rep will go through them with you.",
   accepted: "You picked an offer. The funder is preparing the paperwork.",
@@ -201,6 +211,8 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState<ReadonlySet<string>>(new Set());
   const [uploadError, setUploadError] = useState("");
+  /** The item the merchant picked for the next upload; null means follow the checklist. */
+  const [chosenKind, setChosenKind] = useState<DocumentKind | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const refreshSeq = useRef(0);
 
@@ -216,7 +228,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
         .list(userId, { limit: 1000, sortBy: { column: "created_at", order: "desc" } }),
       sb
         .from("documents")
-        .select("storage_path,status,original_name,application_id,created_at")
+        .select("storage_path,status,kind,original_name,application_id,created_at")
         .eq("user_id", userId)
         .eq("bucket", BUCKET)
         .order("created_at", { ascending: false }),
@@ -246,6 +258,8 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
       name: r.original_name || fileLabel(r.storage_path),
       path: r.storage_path,
       status: r.status,
+      // A value the site doesn't know (none expected) sits with the other files.
+      kind: isDocumentKind(r.kind) ? r.kind : "other",
       createdAt: r.created_at,
       removable: canRemoveRow(r.status, submittedAt.get(r.application_id)),
     });
@@ -255,6 +269,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
         name: fileLabel(f.name),
         path: `${userId}/${f.name}`,
         status: null,
+        kind: null,
         createdAt: f.created_at ?? null,
         removable: true,
       }));
@@ -273,7 +288,10 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
    * Upload one file and index it: "saved", "failed" (nothing left behind), or "unknown" when
    * the result could not be confirmed (the list after the upload shows the truth).
    */
-  const uploadOne = async (file: File): Promise<"saved" | "failed" | "unknown"> => {
+  const uploadOne = async (
+    file: File,
+    kind: DocumentKind,
+  ): Promise<"saved" | "failed" | "unknown"> => {
     const sb = getSupabase();
     if (!sb) return "failed";
     const path = `${userId}/${Date.now()}-${file.name.replace(/[^\w.-]+/g, "_")}`;
@@ -284,6 +302,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
       user_id: userId,
       bucket: BUCKET,
       storage_path: path,
+      kind,
       original_name: file.name,
       size_bytes: file.size,
       mime_type: file.type || null,
@@ -303,7 +322,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
     return "failed";
   };
 
-  const upload = async (list: FileList | null) => {
+  const upload = async (list: FileList | null, kind: DocumentKind) => {
     if (!getSupabase() || !list?.length) return;
     const files = Array.from(list);
     setUploadError("");
@@ -320,13 +339,15 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
     const unsure: string[] = [];
     try {
       for (const file of files) {
-        const outcome = await uploadOne(file);
+        const outcome = await uploadOne(file, kind);
         if (outcome === "failed") failed.push(file.name);
         if (outcome === "unknown") unsure.push(file.name);
       }
     } finally {
       await refresh();
       setUploading(false);
+      // Back to following the checklist, so the picker moves on to the next missing item.
+      setChosenKind(null);
       if (inputRef.current) inputRef.current.value = "";
     }
     const messages: string[] = [];
@@ -412,12 +433,18 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
   const current = steps.findIndex((s) => !s.done);
   const kept = [...docs, ...earlier].some((d) => !d.removable);
 
+  // What funders need, counted from this application's files. The picker follows the first
+  // item still short until the merchant chooses one themselves.
+  const checklist = checklistFor(docs);
+  const kind = chosenKind ?? nextMissingKind(checklist);
+  const others = docs.filter((d) => d.kind === null || d.kind === "other");
+
   const docItem = (d: Doc) => {
     const tag =
       d.status === "accepted"
         ? "Accepted"
         : d.status === "rejected"
-          ? "Not accepted"
+          ? "Please re-upload"
           : d.status === null
             ? "Not sent to the team"
             : null;
@@ -426,7 +453,12 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
         <Paperclip className="size-4 shrink-0 text-smoke" />
         <span className="truncate">{d.name}</span>
         {tag && (
-          <span className="ml-auto shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-smoke ring-1 ring-line">
+          <span
+            className={cn(
+              "ml-auto shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold ring-1 ring-line",
+              d.status === "rejected" ? "text-amber-deep" : "text-smoke",
+            )}
+          >
             {tag}
           </span>
         )}
@@ -489,28 +521,83 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
         {(canUpload || docs.length > 0 || earlier.length > 0 || listError) && (
           <section className={cn(card, "p-6")}>
             <h2 className="font-display text-lg font-semibold">
-              {canUpload ? "Upload your documents" : "Your documents"}
+              {canUpload ? "What we need" : "Your documents"}
             </h2>
             {canUpload && (
-              <>
-                <p className="mt-2 text-sm text-smoke">
-                  {app.submitted_at
-                    ? "Need to send something else? Add it here. Files sent after your file goes to funders stay on your file."
-                    : "Your last three months of business bank statements (PDF) and a photo of your driver's license. Files are private to you and the Lamp team."}
-                </p>
+              <p className="mt-2 text-sm text-smoke">
+                {app.submitted_at
+                  ? "Your file is with funders. If they ask for anything else, add it here; files sent now stay on your file."
+                  : "Funders ask every business for the same four things. Files are private to you and the Lamp team."}
+              </p>
+            )}
+            <ol className="mt-5 space-y-4">
+              {checklist.map((item) => {
+                const files = docs.filter((d) => d.kind === item.kind);
+                return (
+                  <li key={item.kind} className="flex items-start gap-3">
+                    <span
+                      className={cn(
+                        "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full ring-1",
+                        item.done ? "bg-amber text-ink ring-amber" : "ring-line",
+                      )}
+                      aria-hidden="true"
+                    >
+                      {item.done && <Check className="size-3.5" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold">{item.label}</span>
+                        <span className="ml-auto shrink-0 text-xs font-semibold text-smoke">
+                          <span className="sr-only">{item.done ? "Done, " : ""}</span>
+                          {item.have} of {item.required}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs leading-relaxed text-smoke">{item.help}</p>
+                      {files.length > 0 && <ul className="mt-2 space-y-2">{files.map(docItem)}</ul>}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+            {canUpload && (
+              <div className="mt-6 border-t border-line pt-5">
+                <label htmlFor="document-kind" className="block text-sm font-medium">
+                  This file is
+                </label>
+                <select
+                  id="document-kind"
+                  value={kind}
+                  disabled={uploading}
+                  onChange={(e) => {
+                    if (isDocumentKind(e.target.value)) setChosenKind(e.target.value);
+                  }}
+                  className="mt-2 w-full rounded-xl bg-sand px-4 py-3 text-sm ring-1 ring-line focus:outline-none focus:ring-2 focus:ring-amber"
+                >
+                  {REQUIRED_DOCUMENTS.map((item) => (
+                    <option key={item.kind} value={item.kind}>
+                      {item.label}
+                    </option>
+                  ))}
+                  <option value="other">{DOCUMENT_LABELS.other}</option>
+                </select>
+                {kind === "bank_statement" && (
+                  <p className="mt-1.5 text-xs text-smoke">
+                    You can choose all three months at once.
+                  </p>
+                )}
                 <input
                   ref={inputRef}
                   type="file"
                   multiple
                   accept="application/pdf,image/*"
                   className="hidden"
-                  onChange={(e) => upload(e.target.files)}
+                  onChange={(e) => upload(e.target.files, kind)}
                 />
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
                   disabled={uploading}
-                  className="mt-5 flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line px-6 py-8 text-sm text-smoke transition hover:border-amber hover:bg-sand"
+                  className="mt-4 flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line px-6 py-8 text-sm text-smoke transition hover:border-amber hover:bg-sand"
                 >
                   {uploading ? (
                     <Loader2 className="size-6 animate-spin" />
@@ -522,11 +609,18 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
                   </span>
                   PDF or photo, up to 20 MB each
                 </button>
-              </>
+              </div>
             )}
             {uploadError && <p className="mt-3 text-sm text-destructive">{uploadError}</p>}
             {listError && <p className="mt-3 text-sm text-destructive">{listError}</p>}
-            {docs.length > 0 && <ul className="mt-5 space-y-2">{docs.map(docItem)}</ul>}
+            {others.length > 0 && (
+              <>
+                <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-smoke">
+                  Other files
+                </h3>
+                <ul className="mt-2 space-y-2">{others.map(docItem)}</ul>
+              </>
+            )}
             {earlier.length > 0 && (
               <>
                 <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-smoke">
