@@ -7,7 +7,8 @@
 --
 -- Who can do what:
 --   * the merchant who owns the application reads, creates and edits their row, and signs it;
---     once signed (signed_at set) the merchant can no longer change it;
+--     ownership must hold on both the row (user_id) and the application, and only that merchant
+--     can sign; once signed (signed_at set) the merchant can no longer change it;
 --   * staff read rows for applications they can see (the subquery runs under the applications
 --     table's own policies, so a rep sees only their own and unassigned files once rep scoping
 --     is live) and admins may correct a signed row; reps cannot edit;
@@ -61,6 +62,10 @@ begin
   -- the database stamps the signature; the browser only sends the typed name
   if new.signed_name is not null and length(trim(new.signed_name)) >= 3
      and (tg_op = 'INSERT' or old.signed_at is null) then
+    -- only the merchant the row belongs to can sign it; staff and admins never sign for them
+    if auth.uid() is distinct from new.user_id then
+      raise exception 'only the merchant can sign their application' using errcode = 'insufficient_privilege';
+    end if;
     new.signed_at := now();
     new.signed_name := trim(new.signed_name);
     insert into public.events (application_id, actor_user_id, kind, body, visible_to_merchant)
@@ -89,13 +94,19 @@ create trigger application_details_guard
 
 alter table public.application_details enable row level security;
 revoke all on public.application_details from anon;
+-- Supabase's default privileges grant authenticated everything on new tables; keep only what the
+-- policies below use (no delete, no truncate)
+revoke all on public.application_details from authenticated;
 grant select, insert, update on public.application_details to authenticated;
 grant all on public.application_details to service_role;
 
 drop policy if exists "Merchants read own application details" on public.application_details;
 create policy "Merchants read own application details" on public.application_details
   for select to authenticated
-  using (application_id in (select id from public.applications where user_id = (select auth.uid())));
+  using (
+    user_id = (select auth.uid())
+    and application_id in (select id from public.applications where user_id = (select auth.uid()))
+  );
 
 drop policy if exists "Merchants start own application details" on public.application_details;
 create policy "Merchants start own application details" on public.application_details
@@ -110,9 +121,13 @@ create policy "Merchants edit own unsigned application details" on public.applic
   for update to authenticated
   using (
     signed_at is null
+    and user_id = (select auth.uid())
     and application_id in (select id from public.applications where user_id = (select auth.uid()))
   )
-  with check (application_id in (select id from public.applications where user_id = (select auth.uid())));
+  with check (
+    user_id = (select auth.uid())
+    and application_id in (select id from public.applications where user_id = (select auth.uid()))
+  );
 
 drop policy if exists "Staff read application details" on public.application_details;
 create policy "Staff read application details" on public.application_details
