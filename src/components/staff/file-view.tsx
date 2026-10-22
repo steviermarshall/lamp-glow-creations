@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ExternalLink, Loader2, Paperclip, X } from "lucide-re
 import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { labelFor, QUESTIONS, type Answers } from "@/lib/apply";
+import { downloadApplicationPdf } from "@/lib/application-pdf";
 import {
   EVENT_LABEL,
   STAGE_LABEL,
@@ -261,6 +262,32 @@ export function FileView({
             {file.business_name || "Unnamed business"}
           </h2>
         </div>
+        <button
+          type="button"
+          className={cn(btnOutline, "px-4 py-2.5")}
+          disabled={busy === "pdf"}
+          onClick={async () => {
+            setBusy("pdf");
+            setError("");
+            try {
+              await downloadApplicationPdf({
+                answers: file.answers,
+                first_name: file.first_name,
+                business_name: file.business_name,
+                phone: file.phone,
+                email: file.email,
+                amount_requested: file.amount_requested,
+                repName: file.rep_slug ? repName(file.rep_slug) : null,
+              });
+            } catch {
+              setError("Couldn't build the application PDF. Try again.");
+            } finally {
+              setBusy(null);
+            }
+          }}
+        >
+          {busy === "pdf" ? "Building PDF…" : "Application PDF"}
+        </button>
       </div>
 
       {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
