@@ -46,7 +46,8 @@ Guardrails the database enforces whatever the app sends:
 - a rep changes `rep_slug` only from null to their own slug; reassigning, handing over or releasing a file, and changing `source_rep_slug` (link attribution), are admin-only (`applications_before_update` raises);
 - a rep reads a stored file only when it belongs to a file they can see: through its `documents` row (bucket + storage_path), or, for a file with no row yet, when every application of the folder's owner is theirs or unassigned (`rep_can_read_file()`);
 - a merchant can add a document only as `received`, only for a file that exists under `<own user id>/`, and only with a `kind` from the list below; a merchant cannot change a row afterwards (to relabel a file they remove it and upload it again);
-- a merchant can remove a `received` or `rejected` document only while its application has never been submitted, and can remove a file from storage only when no document row points at it (`storage_object_is_indexed()`), so documents sent to funders stay with the deal.
+- a merchant can remove a `received` or `rejected` document only while its application has never been submitted, and can remove a file from storage only when no document row points at it (`storage_object_is_indexed()`), so documents sent to funders stay with the deal;
+- `engine_leads` is written only by the engine (service role, upsert by `(source, source_key)`); staff read every row and may change only `status`, `notes` and `rep_slug` (`engine_leads_before_update` resets everything else, stamps `worked_at` and fills `rep_slug` with the caller's slug on a status change). Anonymous has no access.
 
 ## Tables
 
@@ -66,6 +67,7 @@ Guardrails the database enforces whatever the app sends:
 | offers | funder terms as written: amount, payback, fees, frequency, payments; generated factor_rate, payment, received_net | application, funder, one-accepted partial unique |
 | deals | the funded offer, one per application | rep, funder, funded_on |
 | commission_entries | owed, paid, clawback, adjustment per deal | deal |
+| engine_leads | the lead engine's output (public-record businesses, tiered A/B/C/X), mirrored in by the engine; staff set status and notes | unique (source, source_key), (tier, status, need, first_found), phone, (rep_slug, status) |
 
 Views (`security_invoker`, so policies still apply): `pipeline_board` for the rep Kanban
 (one row per file with counts and last touch, one query per load) and `my_offers` for the
@@ -152,6 +154,12 @@ the same way, no business edits by reps, `accept_offer()` for the owning merchan
 admin only, and attribution (`source_rep_slug`) admin-only. Also safe to run again. A rep
 opening a file now sees "Staff" rather than a name for timeline entries by admins or other
 reps, since their profiles are not readable to the rep.
+
+Then `supabase/migrations/20261020120000_engine_leads.sql`: the `engine_leads` table the
+staff page's "Engine leads" view reads. Safe to run again. The rows come from the lead
+engine in Asad's war room (`lamp/push_supabase.py`, upsert by source key, service role),
+which is pointed at this project with its URL and secret key; until it is, the view is
+empty and says so.
 
 Own Supabase project: `supabase link --project-ref <ref>` then `supabase db push`, or paste
 the files into the SQL editor in order. Both existing migrations must have run first (they
