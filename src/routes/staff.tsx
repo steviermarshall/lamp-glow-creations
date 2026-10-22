@@ -9,12 +9,22 @@ import { PageShell } from "@/components/site/layout";
 import { Board } from "@/components/staff/board";
 import { FileView } from "@/components/staff/file-view";
 import { EngineLeads } from "@/components/staff/engine-leads";
+import { Funders } from "@/components/staff/funders";
+import { Money } from "@/components/staff/money";
 
 type StaffSearch = {
-  view?: "engine" | undefined;
+  view?: View | undefined;
   stage?: Stage | undefined;
   rep?: string | undefined;
   file?: string | undefined;
+};
+
+type View = "engine" | "funders" | "money";
+const VIEWS: readonly View[] = ["engine", "funders", "money"];
+const VIEW_TITLE: Record<View, string> = {
+  engine: "Engine leads",
+  funders: "Funders",
+  money: "Money",
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -22,7 +32,7 @@ const SLUG = /^[a-z0-9][a-z0-9-]{1,31}$/;
 
 export const Route = createFileRoute("/staff")({
   validateSearch: (s: Record<string, unknown>): StaffSearch => ({
-    view: s["view"] === "engine" ? "engine" : undefined,
+    view: VIEWS.includes(s["view"] as View) ? (s["view"] as View) : undefined,
     stage: isStage(s["stage"]) ? s["stage"] : undefined,
     rep:
       typeof s["rep"] === "string" && (s["rep"] === "unassigned" || SLUG.test(s["rep"]))
@@ -93,26 +103,24 @@ function Staff() {
           {access.repSlug && ` · /${access.repSlug}`}
         </p>
         <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          {search.view === "engine" ? "Engine leads" : "Files"}
+          {search.view ? VIEW_TITLE[search.view] : "Files"}
         </h1>
         {!search.file && (
-          <nav className="mt-4 flex gap-2 text-sm" aria-label="Staff views">
-            <Link
-              to="/staff"
-              search={{}}
-              className={viewTab(search.view !== "engine")}
-              data-staff-view="files"
-            >
+          <nav className="mt-4 flex flex-wrap gap-2 text-sm" aria-label="Staff views">
+            <Link to="/staff" search={{}} className={viewTab(!search.view)} data-staff-view="files">
               Files
             </Link>
-            <Link
-              to="/staff"
-              search={{ view: "engine" }}
-              className={viewTab(search.view === "engine")}
-              data-staff-view="engine"
-            >
-              Engine leads
-            </Link>
+            {VIEWS.map((v) => (
+              <Link
+                key={v}
+                to="/staff"
+                search={{ view: v }}
+                className={viewTab(search.view === v)}
+                data-staff-view={v}
+              >
+                {VIEW_TITLE[v]}
+              </Link>
+            ))}
           </nav>
         )}
         {search.file ? (
@@ -125,6 +133,10 @@ function Staff() {
           />
         ) : search.view === "engine" ? (
           <EngineLeads isAdmin={access.isAdmin} repSlug={access.repSlug} reps={reps} />
+        ) : search.view === "funders" ? (
+          <Funders isAdmin={access.isAdmin} />
+        ) : search.view === "money" ? (
+          <Money isAdmin={access.isAdmin} userId={access.userId} reps={reps} />
         ) : (
           <Board
             isAdmin={access.isAdmin}
