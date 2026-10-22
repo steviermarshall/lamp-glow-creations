@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { seo } from "@/lib/site";
 import type { Database } from "@/integrations/supabase/types";
 import { btnOutline, btnPrimary, card, PageShell } from "@/components/site/layout";
+import { MyOffers } from "@/components/site/my-offers";
 
 export const Route = createFileRoute("/account")({
   head: () =>
@@ -485,6 +486,8 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
             </ol>
           )}
         </section>
+
+        <MyOffers applicationId={app.id} />
 
         {(canUpload || docs.length > 0 || earlier.length > 0 || listError) && (
           <section className={cn(card, "p-6")}>

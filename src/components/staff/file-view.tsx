@@ -14,6 +14,7 @@ import {
   type Stage,
 } from "@/lib/staff";
 import { btnOutline, btnPrimary, card } from "@/components/site/layout";
+import { FileOffers } from "@/components/staff/file-offers";
 
 type FileRow = {
   id: string;
@@ -398,6 +399,14 @@ export function FileView({
               </ul>
             )}
           </section>
+
+          <FileOffers
+            fileId={file.id}
+            userId={userId}
+            isAdmin={isAdmin}
+            fileRep={file.rep_slug}
+            onChange={() => void load()}
+          />
 
           <section className={cn(card, "p-6")}>
             <h3 className="font-display text-lg font-semibold">Timeline</h3>
