@@ -5,6 +5,9 @@ import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { labelFor, QUESTIONS, type Answers } from "@/lib/apply";
 import { downloadApplicationPdf } from "@/lib/application-pdf";
+import { detailsToPdf } from "@/lib/application-details";
+import { FileApplication } from "@/components/staff/file-application";
+import { useFullApplication } from "@/lib/full-application";
 import {
   EVENT_LABEL,
   STAGE_LABEL,
@@ -91,6 +94,7 @@ export function FileView({
   const [busy, setBusy] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [notesSaved, setNotesSaved] = useState(false);
+  const full = useFullApplication(fileId);
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -270,15 +274,24 @@ export function FileView({
             setBusy("pdf");
             setError("");
             try {
-              await downloadApplicationPdf({
-                answers: file.answers,
-                first_name: file.first_name,
-                business_name: file.business_name,
-                phone: file.phone,
-                email: file.email,
-                amount_requested: file.amount_requested,
-                repName: file.rep_slug ? repName(file.rep_slug) : null,
-              });
+              await downloadApplicationPdf(
+                {
+                  answers: file.answers,
+                  first_name: file.first_name,
+                  business_name: file.business_name,
+                  phone: file.phone,
+                  email: file.email,
+                  amount_requested: file.amount_requested,
+                  repName: file.rep_slug ? repName(file.rep_slug) : null,
+                },
+                full
+                  ? detailsToPdf(
+                      full.details,
+                      { name: full.signedName, at: full.signedAt },
+                      file.rep_slug ? repName(file.rep_slug) : null,
+                    )
+                  : undefined,
+              );
             } catch {
               setError("Couldn't build the application PDF. Try again.");
             } finally {
@@ -286,7 +299,11 @@ export function FileView({
             }
           }}
         >
-          {busy === "pdf" ? "Building PDF…" : "Application PDF"}
+          {busy === "pdf"
+            ? "Building PDF…"
+            : full?.signedAt
+              ? "Signed application PDF"
+              : "Application PDF"}
         </button>
       </div>
 
@@ -462,6 +479,8 @@ export function FileView({
         </div>
 
         <div className="space-y-5">
+          <FileApplication full={full} />
+
           <section className={cn(card, "p-6")}>
             <h3 className="font-display text-lg font-semibold">Contact</h3>
             <dl className="mt-4 space-y-3 text-sm">

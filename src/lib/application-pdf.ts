@@ -3,8 +3,10 @@
 // The template is the one-page paper form in public/forms. This adds a form field over every
 // box on it, fills what the online application already knows, and leaves the rest (EIN,
 // addresses, owners, SSN, date of birth, balances, signature) for the merchant or rep to
-// complete in any PDF reader. SSN and date of birth are never collected online and never
-// prefilled. Nothing here uploads or sends: the PDF is built in the browser and downloaded.
+// complete in any PDF reader. When the merchant has completed and signed the full application
+// online (application_details), every box is filled from it, SSN and date of birth included, with
+// the typed signature on the signature line. The quick answers alone never carry SSN or date of
+// birth. Nothing here uploads or sends: the PDF is built in the browser and downloaded.
 import { PDFDocument, StandardFonts, type PDFForm, type PDFPage, type PDFTextField } from "pdf-lib";
 
 type FieldAppearanceOptions = NonNullable<Parameters<PDFTextField["addToPage"]>[1]>;
@@ -79,6 +81,8 @@ export const TEXT_FIELDS: Record<string, Box> = {
   amount_requested: [131, 486, 222, 496],
   lamp_rep: [491, 486, 565, 496],
   owner1_print_name: [86, 519, 299, 528],
+  owner1_signature: [74, 535, 224, 544],
+  owner2_signature: [347, 535, 497, 544],
   owner1_sign_date: [247, 535, 299, 544],
   owner2_print_name: [360, 519, 572, 528],
   owner2_sign_date: [520, 535, 572, 544],
@@ -100,9 +104,6 @@ export const CHECKBOXES: Record<string, Box> = {
   term_9: [366.3, 488.7, 371.5, 493.9],
   term_12: [392.8, 488.7, 398, 493.9],
 };
-
-/** Fields that must never be prefilled, whatever the caller passes. */
-const NEVER_PREFILL = new Set(["owner1_ssn", "owner1_dob", "owner2_ssn", "owner2_dob"]);
 
 export type ApplicationValues = {
   text: Partial<Record<keyof typeof TEXT_FIELDS, string>>;
@@ -180,7 +181,7 @@ const clear = (box: Box) =>
 
 function addText(form: PDFForm, page: PDFPage, name: string, box: Box, value: string | undefined) {
   const field = form.createTextField(name);
-  if (value && !NEVER_PREFILL.has(name)) field.setText(value);
+  if (value) field.setText(value);
   field.addToPage(page, clear(box));
   field.setFontSize(box[3] - box[1] >= 14 ? 9 : 8);
 }
@@ -210,10 +211,13 @@ export async function buildApplicationPdf(
 }
 
 /** Fetches the template, builds the PDF and starts the download. Browser only. */
-export async function downloadApplicationPdf(src: ApplicationSource): Promise<void> {
+export async function downloadApplicationPdf(
+  src: ApplicationSource,
+  full?: ApplicationValues,
+): Promise<void> {
   const res = await fetch(APPLICATION_TEMPLATE_URL);
   if (!res.ok) throw new Error("Couldn't load the application form.");
-  const bytes = await buildApplicationPdf(await res.arrayBuffer(), applicationValues(src));
+  const bytes = await buildApplicationPdf(await res.arrayBuffer(), full ?? applicationValues(src));
   const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

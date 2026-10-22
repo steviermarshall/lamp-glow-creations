@@ -17,6 +17,7 @@ import { seo } from "@/lib/site";
 import type { Database } from "@/integrations/supabase/types";
 import { btnOutline, btnPrimary, card, PageShell } from "@/components/site/layout";
 import { MyOffers } from "@/components/site/my-offers";
+import { CompleteApplication } from "@/components/site/complete-application";
 
 export const Route = createFileRoute("/account")({
   head: () =>
@@ -518,6 +519,8 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
             </ol>
           )}
         </section>
+
+        <CompleteApplication applicationId={app.id} userId={userId} />
 
         <MyOffers applicationId={app.id} />
 

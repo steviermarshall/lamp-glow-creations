@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      application_details: {
+        Row: {
+          application_id: string
+          balances: Json
+          business: Json
+          consent_text: string | null
+          consent_version: string | null
+          created_at: string
+          owners: Json
+          request: Json
+          signed_at: string | null
+          signed_name: string | null
+          signer_agent: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          application_id: string
+          balances?: Json
+          business?: Json
+          consent_text?: string | null
+          consent_version?: string | null
+          created_at?: string
+          owners?: Json
+          request?: Json
+          signed_at?: string | null
+          signed_name?: string | null
+          signer_agent?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          application_id?: string
+          balances?: Json
+          business?: Json
+          consent_text?: string | null
+          consent_version?: string | null
+          created_at?: string
+          owners?: Json
+          request?: Json
+          signed_at?: string | null
+          signed_name?: string | null
+          signer_agent?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_details_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: true
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_details_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: true
+            referencedRelation: "pipeline_board"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       applications: {
         Row: {
           amount_requested: number | null
