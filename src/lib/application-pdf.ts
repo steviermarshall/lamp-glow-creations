@@ -210,14 +210,22 @@ export async function buildApplicationPdf(
   return doc.save();
 }
 
+/** Fetches the template and builds the PDF's bytes. Browser only. */
+export async function applicationPdfBytes(
+  src: ApplicationSource,
+  full?: ApplicationValues,
+): Promise<Uint8Array> {
+  const res = await fetch(APPLICATION_TEMPLATE_URL);
+  if (!res.ok) throw new Error("Couldn't load the application form.");
+  return buildApplicationPdf(await res.arrayBuffer(), full ?? applicationValues(src));
+}
+
 /** Fetches the template, builds the PDF and starts the download. Browser only. */
 export async function downloadApplicationPdf(
   src: ApplicationSource,
   full?: ApplicationValues,
 ): Promise<void> {
-  const res = await fetch(APPLICATION_TEMPLATE_URL);
-  if (!res.ok) throw new Error("Couldn't load the application form.");
-  const bytes = await buildApplicationPdf(await res.arrayBuffer(), full ?? applicationValues(src));
+  const bytes = await applicationPdfBytes(src, full);
   const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

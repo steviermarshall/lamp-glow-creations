@@ -1,1 +1,10 @@
 project_id = "tsdroifbunxdzckvzrsy"
+
+# Both functions check the caller themselves: send-to-funders verifies the staff session (or the
+# shared secret for automatic sends), and gmail-connect receives Google's redirect, which carries
+# no Supabase session.
+[functions.send-to-funders]
+verify_jwt = false
+
+[functions.gmail-connect]
+verify_jwt = false

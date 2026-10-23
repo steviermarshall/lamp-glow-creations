@@ -173,7 +173,7 @@ export function FileOffers({
               className={chip}
               onClick={() => setPanel(panel === "send" ? null : "send")}
             >
-              Send to a funder
+              Record a send
             </button>
             <button
               type="button"
