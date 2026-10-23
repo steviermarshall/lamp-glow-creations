@@ -13,6 +13,7 @@ import {
   type DocumentKind,
 } from "@/lib/documents";
 import { cn } from "@/lib/utils";
+import { useStaffAccess } from "@/lib/staff";
 import { seo } from "@/lib/site";
 import type { Database } from "@/integrations/supabase/types";
 import { btnOutline, btnPrimary, card, PageShell } from "@/components/site/layout";
@@ -102,10 +103,19 @@ function Account() {
   const [app, setApp] = useState<Application | null>(null);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
+  // Staff sign in through the same login, and every new account also holds the merchant
+  // role, so without this a rep or admin lands on "Let's get your file started". Send
+  // staff to their board instead, unless they have an application of their own.
+  const access = useStaffAccess(user?.id ?? null, loading);
+  const sendToStaff = access.state === "staff" && !fetching && !app;
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [loading, user, navigate]);
+
+  useEffect(() => {
+    if (sendToStaff) navigate({ to: "/staff", replace: true });
+  }, [sendToStaff, navigate]);
 
   useEffect(() => {
     const sb = getSupabase();
@@ -148,7 +158,7 @@ function Account() {
     );
   }
 
-  if (loading || !user || fetching) {
+  if (loading || !user || fetching || access.state === "loading" || sendToStaff) {
     return (
       <PageShell footer={false}>
         <div className="grid place-items-center py-40">
