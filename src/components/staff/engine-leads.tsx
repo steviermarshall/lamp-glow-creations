@@ -3,11 +3,13 @@ import { Loader2 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { age } from "@/lib/staff";
-import { card } from "@/components/site/layout";
+import { btnPrimary, card } from "@/components/site/layout";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import {
   ENGINE_STATUS_LABEL,
   ENGINE_STATUSES,
   TIERS,
+  leadsFromCsv,
   signalSummary,
   tel,
   type EngineStatus,
@@ -15,8 +17,9 @@ import {
 
 /**
  * Engine leads: businesses the public-record lead engine found and tiered (A is the dial
- * list), mirrored into this database by the engine itself. Staff read them here and record
- * what happened on the call; the engine never dials or sends, a person does.
+ * list). The engine runs outside Lamp; an admin picks leads there, downloads them with the rep
+ * each one goes to, and uploads the file here. A rep sees and works only their own leads and
+ * records what happened on the call; the engine never dials or sends, a person does.
  */
 
 type Row = {
@@ -51,7 +54,7 @@ export function EngineLeads({
   repSlug: string | null;
   reps: { slug: string; name: string }[];
 }) {
-  const [tier, setTier] = useState<string>("A");
+  const [tier, setTier] = useState<string>(isAdmin ? "A" : "");
   const [status, setStatus] = useState<string>("new");
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState("");
@@ -112,6 +115,23 @@ export function EngineLeads({
     );
   }
 
+  async function assignRep(row: Row, next: string) {
+    const sb = getSupabase();
+    const slug = next || null;
+    if (!sb || slug === row.rep_slug) return;
+    setSaving(row.id);
+    const { error: err } = await sb
+      .from("engine_leads")
+      .update({ rep_slug: slug })
+      .eq("id", row.id);
+    setSaving(null);
+    if (err) {
+      setError(`Couldn't reassign ${row.name ?? "that lead"}: ${err.message}`);
+      return;
+    }
+    setRows((rs) => (rs ? rs.map((r) => (r.id === row.id ? { ...r, rep_slug: slug } : r)) : rs));
+  }
+
   const repName = (slug: string | null) =>
     slug ? (reps.find((r) => r.slug === slug)?.name ?? slug) : null;
 
@@ -160,15 +180,20 @@ export function EngineLeads({
           Refresh
         </button>
         <p className="ml-auto text-sm text-smoke">
-          {isAdmin ? "Every engine lead" : "The shared dial list"}
+          {isAdmin ? "Every engine lead" : "Your leads"}
           {rows && ` · ${rows.length}${rows.length === LIMIT ? "+" : ""}`}
         </p>
       </div>
 
       <p className="mt-3 text-xs text-smoke">
-        Found by the lead engine from public records and tiered by need. Set the status after every
-        call; it stamps the time and your rep slug. Nothing here dials or sends.
+        Found by the lead engine from public records and tiered by need.{" "}
+        {isAdmin
+          ? "Each rep sees only the leads assigned to them."
+          : "These are assigned to you; no other rep sees them."}{" "}
+        Set the status after every call; it stamps the time. Nothing here dials or sends.
       </p>
+
+      {isAdmin && <UploadLeads reps={reps} onDone={() => setReload((n) => n + 1)} />}
 
       {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
@@ -179,7 +204,9 @@ export function EngineLeads({
           </div>
         ) : rows.length === 0 ? (
           <p className="px-6 py-12 text-center text-sm text-smoke">
-            No engine leads here. The engine pushes new batches after each weekly scout.
+            {isAdmin
+              ? "No engine leads here. Upload a file from the Board to hand some out."
+              : "No leads assigned to you here yet."}
           </p>
         ) : (
           <table className="w-full min-w-[900px] text-left text-sm">
@@ -255,13 +282,157 @@ export function EngineLeads({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-smoke">{repName(r.rep_slug) ?? "—"}</td>
+                  <td className="px-4 py-3 text-smoke">
+                    {isAdmin ? (
+                      <select
+                        className="rounded-full bg-white px-3 py-1.5 text-xs ring-1 ring-line"
+                        value={r.rep_slug ?? ""}
+                        disabled={saving === r.id}
+                        onChange={(e) => void assignRep(r, e.target.value)}
+                        aria-label={`Rep for ${r.name ?? "lead"}`}
+                      >
+                        <option value="">Unassigned</option>
+                        {reps.map((p) => (
+                          <option key={p.slug} value={p.slug}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      (repName(r.rep_slug) ?? "—")
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Admin only: upload the CSV the Board downloads for Lamp. Each lead goes to the rep in the
+ * file's rep_slug column, or to one rep picked here for the whole file. A lead already in Lamp
+ * (same source and key) is only reassigned; what a rep has recorded on it stays.
+ */
+function UploadLeads({
+  reps,
+  onDone,
+}: {
+  reps: { slug: string; name: string }[];
+  onDone: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [rep, setRep] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState("");
+  const parsed = text
+    ? leadsFromCsv(
+        text,
+        reps.map((r) => r.slug),
+        rep || null,
+      )
+    : null;
+
+  async function upload() {
+    const sb = getSupabase();
+    if (!sb || !parsed || parsed.leads.length === 0) return;
+    setBusy(true);
+    setResult("");
+    let done = 0;
+    for (let i = 0; i < parsed.leads.length; i += 200) {
+      const chunk = parsed.leads.slice(i, i + 200);
+      const { error } = await sb
+        .from("engine_leads")
+        .upsert(chunk as TablesInsert<"engine_leads">[], { onConflict: "source,source_key" });
+      if (error) {
+        setBusy(false);
+        setResult(`Stopped after ${done} of ${parsed.leads.length}: ${error.message}`);
+        if (done) onDone();
+        return;
+      }
+      done += chunk.length;
+    }
+    setBusy(false);
+    setResult(`Handed out ${done} lead${done === 1 ? "" : "s"}.`);
+    setText("");
+    setFileName("");
+    onDone();
+  }
+
+  const perRep = parsed
+    ? Object.entries(
+        parsed.leads.reduce<Record<string, number>>(
+          (m, l) => ({ ...m, [l.rep_slug]: (m[l.rep_slug] ?? 0) + 1 }),
+          {},
+        ),
+      )
+        .map(([slug, n]) => `${reps.find((r) => r.slug === slug)?.name ?? slug} ${n}`)
+        .join(" · ")
+    : "";
+
+  return (
+    <div className={cn(card, "mt-4 p-5")} data-upload-leads>
+      <p className="text-sm font-semibold">Hand out leads</p>
+      <p className="mt-1 text-xs text-smoke">
+        On the Board, tick the leads, pick a rep and download the file for Lamp. Upload it here.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <label className="cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold ring-1 ring-line hover:ring-ink/40">
+          {fileName || "Choose CSV file"}
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="sr-only"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              setResult("");
+              if (!f) return;
+              setFileName(f.name);
+              setText(await f.text());
+            }}
+          />
+        </label>
+        <select
+          className="rounded-full bg-white px-4 py-2 text-sm ring-1 ring-line"
+          value={rep}
+          onChange={(e) => setRep(e.target.value)}
+          aria-label="Rep for the whole file"
+        >
+          <option value="">Rep from the file</option>
+          {reps.map((r) => (
+            <option key={r.slug} value={r.slug}>
+              All to {r.name}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className={cn(btnPrimary, "px-4 py-2 disabled:opacity-40")}
+          disabled={busy || !parsed || parsed.leads.length === 0}
+          onClick={() => void upload()}
+        >
+          {busy
+            ? "Uploading…"
+            : parsed
+              ? `Upload ${parsed.leads.length} lead${parsed.leads.length === 1 ? "" : "s"}`
+              : "Upload"}
+        </button>
+        {perRep && <span className="text-xs text-smoke">{perRep}</span>}
+      </div>
+      {parsed && parsed.problems.length > 0 && (
+        <ul className="mt-3 space-y-1 text-xs text-destructive">
+          {parsed.problems.slice(0, 8).map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+          {parsed.problems.length > 8 && <li>and {parsed.problems.length - 8} more.</li>}
+        </ul>
+      )}
+      {result && <p className="mt-3 text-sm">{result}</p>}
     </div>
   );
 }
