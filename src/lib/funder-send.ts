@@ -1,6 +1,6 @@
 // Pure pieces of sending a file to funders: which funders to send to, the email text, and the
 // MIME message Gmail sends. No network and no database here, so all of it is unit-tested in
-// funder-send.test.ts. The two edge functions import from this file.
+// tests/funder-send.test.ts. The server routes import it through funder-send.server.ts.
 
 export type Match = {
   funder_id: string;
@@ -130,7 +130,10 @@ export function b64(bytes: Uint8Array, wrap = true): string {
 }
 
 export const b64url = (s: string) =>
-  b64(new TextEncoder().encode(s), false).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  b64(new TextEncoder().encode(s), false)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 
 /** RFC 2047 for a header that may carry non-ASCII (the subject, a business name). */
 const encodeHeader = (s: string) =>
@@ -139,7 +142,10 @@ const encodeHeader = (s: string) =>
 /** A filename safe for a MIME header: ASCII, no quotes, no path. */
 export function safeFilename(name: string): string {
   const base = name.split(/[\\/]/).pop() ?? "file";
-  const ascii = base.normalize("NFKD").replace(/[^\x20-\x7e]/g, "").replace(/["\r\n]/g, "");
+  const ascii = base
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7e]/g, "")
+    .replace(/["\r\n]/g, "");
   return ascii.trim() || "file";
 }
 
@@ -177,7 +183,7 @@ export function buildMime(opts: {
         "Content-Transfer-Encoding: base64",
         "",
         b64(a.bytes),
-      ].join("\r\n")
+      ].join("\r\n"),
     ),
   ];
   return `${head.join("\r\n")}\r\n\r\n${parts.join("\r\n")}\r\n--${boundary}--\r\n`;

@@ -153,16 +153,24 @@ export function FileSend({
           application_pdf = toBase64(bytes);
         }
       }
-      const { data, error: e } = await sb.functions.invoke("send-to-funders", {
-        body: {
+      const session = (await sb.auth.getSession()).data.session;
+      if (!session) throw new Error("Sign in again to send.");
+      const res = await fetch("/api/funders/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
           application_id: fileId,
           funder_ids: chosen.map((m) => m.funder_id),
           application_pdf,
           dry_run: dryRun,
-        },
+        }),
       });
-      if (e) throw e;
-      setResults(((data as { results?: Result[] })?.results ?? []) as Result[]);
+      const data = (await res.json().catch(() => ({}))) as { results?: Result[]; error?: string };
+      if (!res.ok) throw new Error(data.error || `The sending service answered ${res.status}.`);
+      setResults(data.results ?? []);
       if (!dryRun) {
         await load();
         onSent();
