@@ -3,17 +3,38 @@ import { cn } from "@/lib/utils";
 import { stamp } from "@/lib/staff";
 import { card } from "@/components/site/layout";
 import { fmtEin, fmtSsn, maskSsn, missing } from "@/lib/application-details";
-import type { FullApplication } from "@/lib/full-application";
+import { RESTRICTED, revealFullApplication, type FullApplication } from "@/lib/full-application";
 
 /**
  * The merchant's full application on a file, read-only for staff: what they entered, whether
- * it is signed and when, and what is still missing. SSNs stay masked until someone clicks Show.
+ * it is signed and when, and what is still missing. Only an admin or the file's rep sees it at
+ * all. The database sends SSNs cut to the last four and dates of birth hidden; Show SSN asks for
+ * the full numbers, and the database logs who asked before answering.
  * Admins can correct a signed application in the database; this screen does not edit it.
  */
 
-export function FileApplication({ full }: { full: FullApplication | null | undefined }) {
-  const [reveal, setReveal] = useState(false);
+export function FileApplication({
+  fileId,
+  full,
+}: {
+  fileId: string;
+  full: FullApplication | typeof RESTRICTED | null | undefined;
+}) {
+  const [revealed, setRevealed] = useState<FullApplication | null>(null);
+  const [revealing, setRevealing] = useState(false);
+  const [revealError, setRevealError] = useState("");
   if (full === undefined) return null;
+  if (full === RESTRICTED) {
+    return (
+      <section className={cn(card, "p-6")} data-full-application="restricted">
+        <h3 className="font-display text-lg font-semibold">Full application</h3>
+        <p className="mt-2 text-sm text-smoke">
+          Only an admin or the rep this file is assigned to can see the full application, because it
+          holds SSNs and dates of birth. Take the file to see it.
+        </p>
+      </section>
+    );
+  }
   if (full === null) {
     return (
       <section className={cn(card, "p-6")} data-full-application="none">
@@ -46,11 +67,32 @@ export function FileApplication({ full }: { full: FullApplication | null | undef
         <button
           type="button"
           className="ml-auto text-xs font-semibold underline"
-          onClick={() => setReveal(!reveal)}
+          disabled={revealing}
+          onClick={async () => {
+            if (revealed) {
+              setRevealed(null);
+              return;
+            }
+            setRevealing(true);
+            setRevealError("");
+            try {
+              setRevealed(await revealFullApplication(fileId, "reveal_ssn"));
+            } catch (e) {
+              setRevealError(e instanceof Error ? e.message : "Couldn't show the SSN.");
+            } finally {
+              setRevealing(false);
+            }
+          }}
         >
-          {reveal ? "Hide SSN" : "Show SSN"}
+          {revealed ? "Hide SSN" : revealing ? "Opening…" : "Show SSN"}
         </button>
       </div>
+      {revealError && <p className="mt-2 text-sm text-destructive">{revealError}</p>}
+      {revealed && (
+        <p className="mt-2 text-xs text-smoke">
+          Showing SSNs and dates of birth. This view is recorded in the access log.
+        </p>
+      )}
       {!signedAt && todo.length > 0 && (
         <p className="mt-2 text-sm text-smoke">Still missing: {todo.join(", ")}.</p>
       )}
@@ -104,8 +146,8 @@ export function FileApplication({ full }: { full: FullApplication | null | undef
           )}
           {row("Home", [o.address, o.city, o.state, o.zip].filter(Boolean).join(", "))}
           {row("Mobile / email", [o.mobile, o.email].filter(Boolean).join(" · "))}
-          {row("Date of birth", o.dob)}
-          {row("SSN", reveal ? fmtSsn(o.ssn) : maskSsn(o.ssn))}
+          {row("Date of birth", revealed?.details.owners[i]?.dob ?? o.dob)}
+          {row("SSN", revealed ? fmtSsn(revealed.details.owners[i]?.ssn ?? "") : maskSsn(o.ssn))}
           {row("Credit (stated)", o.credit)}
         </dl>
       ))}

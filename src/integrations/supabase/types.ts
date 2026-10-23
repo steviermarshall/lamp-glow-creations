@@ -1140,6 +1140,14 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id?: string }; Returns: boolean }
+      reveal_application_details: {
+        Args: { _application_id: string; _purpose?: string }
+        Returns: Json
+      }
+      staff_application_details: {
+        Args: { _application_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "merchant" | "rep" | "admin"

@@ -224,7 +224,7 @@ export function missing(d: Details): string[] {
     need(digits(o.mobile).length >= 10, `${who}'s mobile phone`);
     need(/\S+@\S+\.\S+/.test(o.email), `${who}'s email`);
     need(!!o.dob, `${who}'s date of birth`);
-    need(digits(o.ssn).length === 9, `${who}'s SSN (nine digits)`);
+    need(digits(o.ssn).length === 9 || isMaskedSsn(o.ssn), `${who}'s SSN (nine digits)`);
   });
   return out;
 }
@@ -240,6 +240,9 @@ export function signatureMatches(typed: string, owner: Owner): boolean {
     t.includes(n(owner.first).slice(0, 1))
   );
 }
+
+/** What staff are sent instead of an SSN until they reveal it (see staff_application_details). */
+export const isMaskedSsn = (s: string) => /^\*{3}-\*{2}-\d{4}$/.test(s);
 
 export const maskSsn = (s: string) => {
   const d = digits(s);

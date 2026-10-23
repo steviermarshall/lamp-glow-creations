@@ -7,7 +7,7 @@ import { labelFor, QUESTIONS, type Answers } from "@/lib/apply";
 import { downloadApplicationPdf } from "@/lib/application-pdf";
 import { detailsToPdf } from "@/lib/application-details";
 import { FileApplication } from "@/components/staff/file-application";
-import { useFullApplication } from "@/lib/full-application";
+import { RESTRICTED, revealFullApplication, useFullApplication } from "@/lib/full-application";
 import {
   EVENT_LABEL,
   STAGE_LABEL,
@@ -274,6 +274,12 @@ export function FileView({
             setBusy("pdf");
             setError("");
             try {
+              // The PDF carries full SSNs, so the database logs it like Show SSN. Staff who can't
+              // see the full application get the quick answers only.
+              const pdfFull =
+                full && full !== RESTRICTED
+                  ? await revealFullApplication(fileId, "application_pdf")
+                  : null;
               await downloadApplicationPdf(
                 {
                   answers: file.answers,
@@ -284,10 +290,10 @@ export function FileView({
                   amount_requested: file.amount_requested,
                   repName: file.rep_slug ? repName(file.rep_slug) : null,
                 },
-                full
+                pdfFull
                   ? detailsToPdf(
-                      full.details,
-                      { name: full.signedName, at: full.signedAt },
+                      pdfFull.details,
+                      { name: pdfFull.signedName, at: pdfFull.signedAt },
                       file.rep_slug ? repName(file.rep_slug) : null,
                     )
                   : undefined,
@@ -301,7 +307,7 @@ export function FileView({
         >
           {busy === "pdf"
             ? "Building PDF…"
-            : full?.signedAt
+            : full && full !== RESTRICTED && full.signedAt
               ? "Signed application PDF"
               : "Application PDF"}
         </button>
@@ -479,7 +485,7 @@ export function FileView({
         </div>
 
         <div className="space-y-5">
-          <FileApplication full={full} />
+          <FileApplication fileId={fileId} full={full} />
 
           <section className={cn(card, "p-6")}>
             <h3 className="font-display text-lg font-semibold">Contact</h3>
