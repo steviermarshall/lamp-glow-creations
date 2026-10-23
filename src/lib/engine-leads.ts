@@ -41,3 +41,157 @@ export function signalSummary(signals: unknown): string {
 }
 
 export const tel = (phone: string | null) => (phone ?? "").replace(/[^0-9+]/g, "");
+
+/** RFC 4180 CSV: quoted fields may hold commas, quotes ("") and line breaks. */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  const s = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (quoted) {
+      if (c === '"' && s[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") {
+      row.push(field);
+      field = "";
+    } else if (c === "\n" || c === "\r") {
+      if (c === "\r" && s[i + 1] === "\n") i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else field += c;
+  }
+  if (field !== "" || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((v) => v.trim() !== ""));
+}
+
+/** The columns of the CSV the Board downloads for Lamp, in its order. */
+export const COLUMNS = [
+  "source",
+  "source_key",
+  "name",
+  "phone",
+  "email",
+  "city",
+  "state",
+  "industry",
+  "tier",
+  "need",
+  "reason",
+  "signals",
+  "first_found",
+  "rep_slug",
+] as const;
+type Column = (typeof COLUMNS)[number];
+
+/** One row of the CSV the Board downloads for Lamp, ready to upsert by (source, source_key). */
+export type LeadUpload = {
+  source: string;
+  source_key: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  state: string | null;
+  industry: string | null;
+  tier: string | null;
+  need: number | null;
+  reason: string | null;
+  signals: unknown[];
+  first_found: string | null;
+  rep_slug: string;
+};
+
+/**
+ * Reads the Board's CSV. Every lead needs a source and key, and a rep: the file's rep_slug
+ * column, or `rep` when the admin picks one rep for the whole file. Rows that can't be used
+ * are listed in `problems` with their line number and left out.
+ */
+export function leadsFromCsv(
+  text: string,
+  repSlugs: string[],
+  rep: string | null,
+): { leads: LeadUpload[]; problems: string[] } {
+  const [head, ...body] = parseCsv(text);
+  const problems: string[] = [];
+  if (!head) return { leads: [], problems: ["The file is empty."] };
+  const at = {} as Record<Column, number>;
+  for (const k of COLUMNS) at[k] = head.findIndex((h) => h.trim().toLowerCase() === k);
+  if (at.source < 0 || at.source_key < 0) {
+    return {
+      leads: [],
+      problems: ["This isn't a Lamp lead file: it has no source and source_key columns."],
+    };
+  }
+  const seen = new Set<string>();
+  const leads: LeadUpload[] = [];
+  body.forEach((r, i) => {
+    const line = i + 2;
+    const v = (k: Column) => (at[k] >= 0 ? (r[at[k]] ?? "").trim() : "");
+    const orNull = (k: Column) => v(k) || null;
+    const source = v("source");
+    const key = v("source_key");
+    if (!source || !key) {
+      problems.push(`Line ${line}: no source or source_key.`);
+      return;
+    }
+    if (seen.has(`${source}\u0000${key}`)) {
+      problems.push(`Line ${line}: the same lead appears twice in the file.`);
+      return;
+    }
+    const slug = (rep ?? v("rep_slug")).toLowerCase();
+    if (!slug || !repSlugs.includes(slug)) {
+      problems.push(
+        `Line ${line}: ${slug ? `"${slug}" is not a Lamp rep` : "no rep"} (${v("name") || key}).`,
+      );
+      return;
+    }
+    const tier = v("tier").toUpperCase();
+    if (tier && !["A", "B", "C", "X"].includes(tier)) {
+      problems.push(`Line ${line}: tier "${tier}" should be A, B, C or X.`);
+      return;
+    }
+    const need = v("need");
+    let signals: unknown[] = [];
+    if (v("signals")) {
+      try {
+        const parsed: unknown = JSON.parse(v("signals"));
+        signals = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        problems.push(
+          `Line ${line}: the signals column isn't valid JSON; uploaded without signals.`,
+        );
+      }
+    }
+    const found = v("first_found");
+    seen.add(`${source}\u0000${key}`);
+    leads.push({
+      source,
+      source_key: key,
+      name: orNull("name"),
+      phone: orNull("phone"),
+      email: orNull("email"),
+      city: orNull("city"),
+      state: orNull("state"),
+      industry: orNull("industry"),
+      tier: tier || null,
+      need: /^-?\d+$/.test(need) ? Number(need) : null,
+      reason: orNull("reason"),
+      signals,
+      first_found: /^\d{4}-\d{2}-\d{2}$/.test(found.slice(0, 10)) ? found.slice(0, 10) : null,
+      rep_slug: slug,
+    });
+  });
+  return { leads, problems };
+}
