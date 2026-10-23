@@ -148,6 +148,13 @@ export function Funders({ isAdmin }: { isAdmin: boolean }) {
   const [saving, setSaving] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const [reload, setReload] = useState(0);
+  // Read apart from FUNDER_COLUMNS so this page keeps working before the funder-send
+  // migration is applied: then these stay null and the sending controls are hidden.
+  const [autoSend, setAutoSend] = useState<Record<string, boolean> | null>(null);
+  const [mailbox, setMailbox] = useState<
+    { mailbox: string; connected_at: string } | null | undefined
+  >(undefined);
+  const [mailNote, setMailNote] = useState("");
 
   useEffect(() => {
     const sb = getSupabase();
@@ -161,6 +168,85 @@ export function Funders({ isAdmin }: { isAdmin: boolean }) {
         setRows((data as FunderRow[] | null) ?? []);
       });
   }, [reload]);
+
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    void sb
+      .from("funders")
+      .select("id,auto_send")
+      .then(({ data, error: e }) =>
+        setAutoSend(
+          e
+            ? null
+            : Object.fromEntries(
+                ((data ?? []) as { id: string; auto_send: boolean }[]).map((r) => [
+                  r.id,
+                  r.auto_send,
+                ]),
+              ),
+        ),
+      );
+    void sb.rpc("mailer_status").then(({ data, error: e }) => {
+      setMailbox(
+        e ? undefined : (((data ?? []) as { mailbox: string; connected_at: string }[])[0] ?? null),
+      );
+    });
+  }, [reload]);
+
+  // Back from Google's consent screen: /staff?view=funders&mailbox=<outcome>.
+  useEffect(() => {
+    const outcome = new URLSearchParams(window.location.search).get("mailbox");
+    if (!outcome) return;
+    const say: Record<string, string> = {
+      connected: "Mailbox connected. Files can now go out by email.",
+      wrong_account:
+        "That was a different Google account. Sign in as the Lamp mailbox and try again.",
+      declined: "Google wasn't given permission, so nothing changed.",
+      expired: "That link expired. Start again.",
+      not_configured:
+        "Sending isn't set up yet: the Google client settings are missing from the function secrets.",
+      no_refresh_token: "Google didn't grant lasting access. Start again and allow it.",
+      send_not_allowed: "Google didn't grant permission to send email. Start again and tick it.",
+    };
+    setMailNote(say[outcome] ?? "Connecting the mailbox didn't finish. Start again.");
+  }, []);
+
+  async function connectMailbox() {
+    const sb = getSupabase();
+    if (!sb) return;
+    setMailNote("");
+    const { data, error: e } = await sb.functions.invoke("gmail-connect", {
+      body: { action: "start" },
+    });
+    const url = (data as { url?: string } | null)?.url;
+    if (e || !url) {
+      setMailNote(
+        "Couldn't start connecting the mailbox. Only an admin can, once sending is set up.",
+      );
+      return;
+    }
+    window.location.assign(url);
+  }
+
+  async function toggleAuto(f: FunderRow, on: boolean) {
+    const sb = getSupabase();
+    if (!sb) return;
+    if (
+      on &&
+      !window.confirm(
+        `Send matched files to ${f.name} automatically?\n\nOnce a file has its signed application and 3 bank statements, it goes to ${f.submission_email} with no one clicking Send.`,
+      )
+    ) {
+      return;
+    }
+    const { error: e } = await sb.from("funders").update({ auto_send: on }).eq("id", f.id);
+    if (e) {
+      setError("Couldn't change automatic sending. Only admins can.");
+      return;
+    }
+    setAutoSend((m) => ({ ...(m ?? {}), [f.id]: on }));
+  }
 
   const set = (k: keyof Draft) => (v: string) => setDraft((d) => ({ ...d, [k]: v }));
 
@@ -237,6 +323,25 @@ export function Funders({ isAdmin }: { isAdmin: boolean }) {
           </button>
         )}
       </div>
+      {mailbox !== undefined && (
+        <div className={cn(card, "flex flex-wrap items-center gap-3 p-4 text-sm")} data-mailbox>
+          <span>
+            {mailbox
+              ? `Files go out by email from ${mailbox.mailbox}, connected ${new Date(mailbox.connected_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}.`
+              : "No sending mailbox yet, so files can't go out by email."}
+          </span>
+          {isAdmin && (
+            <button
+              type="button"
+              className={cn(chip, "ml-auto")}
+              onClick={() => void connectMailbox()}
+            >
+              {mailbox ? "Reconnect" : "Connect partners@getlamp.app"}
+            </button>
+          )}
+          {mailNote && <p className="w-full text-smoke">{mailNote}</p>}
+        </div>
+      )}
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {editing !== null && (
@@ -480,6 +585,27 @@ export function Funders({ isAdmin }: { isAdmin: boolean }) {
                         portal
                       </a>
                     </>
+                  )}
+                </p>
+              )}
+              {autoSend && f.active && (
+                <p
+                  className="mt-2 flex flex-wrap items-center gap-2 text-smoke"
+                  data-auto-send={autoSend[f.id] ? "on" : "off"}
+                >
+                  {autoSend[f.id]
+                    ? "Matched files go here automatically."
+                    : "Files go here when someone clicks Send."}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      className={chip}
+                      disabled={!autoSend[f.id] && !f.submission_email}
+                      title={!f.submission_email ? "Add a submission email first" : undefined}
+                      onClick={() => void toggleAuto(f, !autoSend[f.id])}
+                    >
+                      {autoSend[f.id] ? "Turn off automatic" : "Send automatically"}
+                    </button>
                   )}
                 </p>
               )}

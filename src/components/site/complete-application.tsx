@@ -20,7 +20,7 @@ import {
   type Details,
   type Owner,
 } from "@/lib/application-details";
-import { downloadApplicationPdf } from "@/lib/application-pdf";
+import { applicationPdfBytes, downloadApplicationPdf } from "@/lib/application-pdf";
 
 /**
  * The full application on the merchant's account page: business, owners, current advances and
@@ -172,6 +172,51 @@ export function CompleteApplication({
     if (r.signed_at) {
       setSigned({ name: r.signed_name, at: r.signed_at });
       setOpen(false);
+      if (sign) void storeSignedCopy({ name: r.signed_name, at: r.signed_at });
+    }
+  }
+
+  /**
+   * Keep the signed application with the merchant's documents, as the "signed funder
+   * application" item. Funders get this file when Lamp sends the deal, including automatic
+   * sends. Best effort: if it fails, the rep's Send builds the same PDF from the saved answers.
+   */
+  async function storeSignedCopy(sig: { name: string | null; at: string | null }) {
+    const sb = getSupabase();
+    if (!sb || !d) return;
+    try {
+      const bytes = await applicationPdfBytes(
+        {
+          answers: null,
+          first_name: owner.first,
+          business_name: d.business.legal_name,
+          phone: d.business.phone,
+          email: d.business.email,
+          amount_requested: null,
+          repName,
+        },
+        detailsToPdf(d, sig, repName),
+      );
+      const path = `${userId}/${Date.now()}-signed-application.pdf`;
+      const up = await sb.storage
+        .from("documents")
+        .upload(path, new Blob([bytes as BlobPart], { type: "application/pdf" }), {
+          upsert: false,
+        });
+      if (up.error) return;
+      const idx = await sb.from("documents").insert({
+        application_id: applicationId,
+        user_id: userId,
+        bucket: "documents",
+        storage_path: path,
+        kind: "funder_application",
+        original_name: "Signed application.pdf",
+        size_bytes: bytes.length,
+        mime_type: "application/pdf",
+      });
+      if (idx.error) await sb.storage.from("documents").remove([path]);
+    } catch {
+      /* the staff Send builds it from the saved answers instead */
     }
   }
 

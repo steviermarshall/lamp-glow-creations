@@ -511,6 +511,7 @@ export type Database = {
       funders: {
         Row: {
           active: boolean
+          auto_send: boolean
           commission_points: number | null
           contact_email: string | null
           contact_name: string | null
@@ -535,6 +536,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          auto_send?: boolean
           commission_points?: number | null
           contact_email?: string | null
           contact_name?: string | null
@@ -559,6 +561,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          auto_send?: boolean
           commission_points?: number | null
           contact_email?: string | null
           contact_name?: string | null
@@ -929,12 +932,16 @@ export type Database = {
       submissions: {
         Row: {
           application_id: string
+          attachments: Json
           created_at: string
           decided_at: string | null
           decline_reason: string | null
+          email_message_id: string | null
           funder_id: string
           id: string
           notes: string | null
+          sent_to: string | null
+          sent_via: string
           status: Database["public"]["Enums"]["submission_status"]
           submitted_at: string
           submitted_by: string | null
@@ -942,12 +949,16 @@ export type Database = {
         }
         Insert: {
           application_id: string
+          attachments?: Json
           created_at?: string
           decided_at?: string | null
           decline_reason?: string | null
+          email_message_id?: string | null
           funder_id: string
           id?: string
           notes?: string | null
+          sent_to?: string | null
+          sent_via?: string
           status?: Database["public"]["Enums"]["submission_status"]
           submitted_at?: string
           submitted_by?: string | null
@@ -955,12 +966,16 @@ export type Database = {
         }
         Update: {
           application_id?: string
+          attachments?: Json
           created_at?: string
           decided_at?: string | null
           decline_reason?: string | null
+          email_message_id?: string | null
           funder_id?: string
           id?: string
           notes?: string | null
+          sent_to?: string | null
+          sent_via?: string
           status?: Database["public"]["Enums"]["submission_status"]
           submitted_at?: string
           submitted_by?: string | null
@@ -1132,6 +1147,23 @@ export type Database = {
         }
       }
       current_rep_slug: { Args: { _user_id?: string }; Returns: string }
+      funder_matches: {
+        Args: { _application_id: string }
+        Returns: {
+          already_sent: boolean
+          auto_send: boolean
+          blockers: string[]
+          checks: string[]
+          eligible: boolean
+          funder_id: string
+          funder_name: string
+          submission_email: string
+        }[]
+      }
+      funder_package_ready: {
+        Args: { _application_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1140,6 +1172,13 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id?: string }; Returns: boolean }
+      mailer_status: {
+        Args: never
+        Returns: {
+          connected_at: string
+          mailbox: string
+        }[]
+      }
       reveal_application_details: {
         Args: { _application_id: string; _purpose?: string }
         Returns: Json

@@ -73,7 +73,7 @@ export function useFullApplication(fileId: string, reload = 0) {
  */
 export async function revealFullApplication(
   fileId: string,
-  purpose: "reveal_ssn" | "application_pdf",
+  purpose: "reveal_ssn" | "application_pdf" | "funder_submission",
 ): Promise<FullApplication | null> {
   const sb = getSupabase();
   if (!sb) return null;

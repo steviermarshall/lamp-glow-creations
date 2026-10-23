@@ -19,6 +19,7 @@ import {
 } from "@/lib/staff";
 import { btnOutline, btnPrimary, card } from "@/components/site/layout";
 import { FileOffers } from "@/components/staff/file-offers";
+import { FileSend } from "@/components/staff/file-send";
 
 type FileRow = {
   id: string;
@@ -95,6 +96,8 @@ export function FileView({
   const [notes, setNotes] = useState("");
   const [notesSaved, setNotesSaved] = useState(false);
   const full = useFullApplication(fileId);
+  // Bumped after a send so the funders-and-offers panel reloads its "Sent to" list.
+  const [sentTick, setSentTick] = useState(0);
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -450,7 +453,30 @@ export function FileView({
             )}
           </section>
 
+          {/* Only admins and the file's rep may send it: they're the ones who may read the full
+              application that goes out with it. Others get RESTRICTED from the hook. */}
+          {full !== undefined && full !== RESTRICTED && (
+            <FileSend
+              fileId={file.id}
+              file={{
+                answers: file.answers,
+                first_name: file.first_name,
+                business_name: file.business_name,
+                phone: file.phone,
+                email: file.email,
+                amount_requested: file.amount_requested,
+              }}
+              repName={file.rep_slug ? repName(file.rep_slug) : null}
+              signedAt={full?.signedAt ?? null}
+              onSent={() => {
+                setSentTick((n) => n + 1);
+                void load();
+              }}
+            />
+          )}
+
           <FileOffers
+            key={sentTick}
             fileId={file.id}
             userId={userId}
             isAdmin={isAdmin}
