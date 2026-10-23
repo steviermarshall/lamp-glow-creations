@@ -290,7 +290,7 @@ export function Money({
                   {repName(d.rep_slug)}
                 </span>
                 {(p?.share ?? 0) >= RENEWAL_AT && (
-                  <span className="ml-auto font-semibold text-amber-deep">Call now</span>
+                  <span className="ml-auto font-semibold text-forest">Call now</span>
                 )}
               </li>
             ))}

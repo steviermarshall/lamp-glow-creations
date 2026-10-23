@@ -4,6 +4,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { cn } from "@/lib/utils";
 
 export const FAQS: { q: string; a: string }[] = [
   {
@@ -40,15 +41,39 @@ export const FAQS: { q: string; a: string }[] = [
   },
 ];
 
-export function FaqList({ items = FAQS }: { items?: { q: string; a: string }[] }) {
+export function FaqList({
+  items = FAQS,
+  dark = false,
+}: {
+  items?: { q: string; a: string }[];
+  /** On the Lamplight (night) ground. */
+  dark?: boolean;
+}) {
   return (
-    <Accordion type="single" collapsible className="divide-y divide-line border-y border-line">
+    <Accordion
+      type="single"
+      collapsible
+      className={cn(
+        "divide-y border-y",
+        dark ? "divide-white/10 border-white/10" : "divide-line border-line",
+      )}
+    >
       {items.map((f, i) => (
         <AccordionItem key={f.q} value={`q${i}`} className="border-none">
-          <AccordionTrigger className="py-5 text-left font-display text-base font-semibold text-ink hover:no-underline sm:text-lg [&>svg]:text-smoke">
+          <AccordionTrigger
+            className={cn(
+              "py-5 text-left font-display text-base font-semibold hover:no-underline sm:text-lg",
+              dark ? "text-paper [&>svg]:text-leaf" : "text-ink [&>svg]:text-smoke",
+            )}
+          >
             {f.q}
           </AccordionTrigger>
-          <AccordionContent className="pb-5 text-sm leading-relaxed text-smoke sm:text-base">
+          <AccordionContent
+            className={cn(
+              "pb-5 text-sm leading-relaxed sm:text-base",
+              dark ? "text-mist" : "text-smoke",
+            )}
+          >
             {f.a}
           </AccordionContent>
         </AccordionItem>

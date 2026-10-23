@@ -111,7 +111,7 @@ export function MyOffers({ applicationId }: { applicationId: string }) {
                 <span className="font-display text-xl font-bold tabular-nums">{usd(o.amount)}</span>
                 <span className="text-smoke">from {o.funder_name ?? "a funding partner"}</span>
                 {o.status === "accepted" && (
-                  <span className="ml-auto inline-flex items-center gap-1 font-semibold text-amber-deep">
+                  <span className="ml-auto inline-flex items-center gap-1 font-semibold text-forest">
                     <Check className="size-4" /> Accepted
                   </span>
                 )}

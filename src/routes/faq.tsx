@@ -39,7 +39,7 @@ function Faq() {
         </h1>
         <p className="mt-5 text-lg leading-relaxed text-smoke">
           Everything owners usually ask before they check their options. Still curious? Email{" "}
-          <a className="text-amber-deep underline" href="mailto:hello@getlamp.app">
+          <a className="text-forest underline" href="mailto:hello@getlamp.app">
             hello@getlamp.app
           </a>
           .

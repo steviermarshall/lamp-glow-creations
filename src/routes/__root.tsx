@@ -36,13 +36,13 @@ function NotFoundComponent() {
   return (
     <div className="lamp-light flex min-h-screen items-center justify-center px-5 font-body text-paper">
       <div className="max-w-md text-center">
-        <p className="font-display text-7xl font-bold tabular-nums text-amber">404</p>
+        <p className="font-display text-7xl font-bold tabular-nums text-leaf">404</p>
         <h1 className="mt-4 font-display text-2xl font-bold">This page is off the map</h1>
         <p className="mt-2 text-mist">The page you're looking for doesn't exist or has moved.</p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Link
             to="/"
-            className="rounded-full bg-amber px-5 py-2.5 font-semibold text-ink transition hover:brightness-105"
+            className="rounded-full bg-leaf px-5 py-2.5 font-semibold text-ink transition hover:brightness-105"
           >
             Go home
           </Link>
@@ -108,7 +108,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Lamp is a small-business working capital brokerage. See what you qualify for, in plain terms.",
       },
       { name: "author", content: "Lamp" },
-      { name: "theme-color", content: "#231d17" },
+      { name: "theme-color", content: "#0b140f" },
       { property: "og:site_name", content: "Lamp" },
       { property: "og:title", content: "Lamp — Working capital, made clear." },
       {
@@ -130,7 +130,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Commissioner:wght@600;700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Commissioner:wght@600;700;800&family=JetBrains+Mono:wght@500;600&family=Newsreader:ital,opsz,wght@1,6..72,400&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap",
       },
       {
         rel: "stylesheet",

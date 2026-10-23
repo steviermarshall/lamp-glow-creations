@@ -423,7 +423,7 @@ export function FileView({
                       type="button"
                       onClick={() => open(d)}
                       aria-label={`Open ${docName(d)}`}
-                      className="inline-flex min-w-0 items-center gap-1.5 font-medium hover:text-amber-deep"
+                      className="inline-flex min-w-0 items-center gap-1.5 font-medium hover:text-forest"
                     >
                       <span className="truncate">{docName(d)}</span>
                       <ExternalLink className="size-3.5 shrink-0" />

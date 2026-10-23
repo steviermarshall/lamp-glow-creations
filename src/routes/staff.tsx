@@ -86,7 +86,7 @@ function Staff() {
             {access.state === "error" ? access.message : "This page is for the Lamp team."}
           </p>
           {access.state === "signed_out" && (
-            <Link to="/login" className="mt-6 inline-block font-semibold text-amber-deep">
+            <Link to="/login" className="mt-6 inline-block font-semibold text-forest">
               Sign in
             </Link>
           )}

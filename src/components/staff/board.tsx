@@ -160,7 +160,7 @@ export function Board({
                     <Link
                       to="/staff"
                       search={{ file: r.id ?? undefined }}
-                      className="underline-offset-4 hover:text-amber-deep hover:underline"
+                      className="underline-offset-4 hover:text-forest hover:underline"
                     >
                       {r.business_name || "Unnamed business"}
                     </Link>
@@ -168,7 +168,7 @@ export function Board({
                   <td className="px-4 py-3">{r.first_name || "—"}</td>
                   <td className="px-4 py-3">
                     {repName(r.rep_slug) ?? (
-                      <span className="rounded-full bg-amber/15 px-2.5 py-1 text-xs font-semibold text-amber-deep">
+                      <span className="rounded-full bg-leaf/15 px-2.5 py-1 text-xs font-semibold text-forest">
                         Unassigned
                       </span>
                     )}
@@ -178,7 +178,7 @@ export function Board({
                   <td className="px-4 py-3 tabular-nums">
                     {r.document_count ?? 0}
                     {(r.documents_pending_review ?? 0) > 0 && (
-                      <span className="ml-2 text-xs text-amber-deep">
+                      <span className="ml-2 text-xs text-forest">
                         {r.documents_pending_review} to review
                       </span>
                     )}
