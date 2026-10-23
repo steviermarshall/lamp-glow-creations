@@ -1,4 +1,4 @@
-// deno test supabase/functions/_shared/funder-send.test.ts
+// deno test --node-modules-dir=none tests/funder-send.test.ts
 import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
 import {
   b64,
@@ -10,7 +10,7 @@ import {
   pickFunders,
   safeFilename,
   sameSecret,
-} from "./funder-send.ts";
+} from "../src/lib/funder-send.ts";
 
 const m = (over: Partial<Match>): Match => ({
   funder_id: "f1",

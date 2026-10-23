@@ -155,6 +155,8 @@ export function Funders({ isAdmin }: { isAdmin: boolean }) {
     { mailbox: string; connected_at: string } | null | undefined
   >(undefined);
   const [mailNote, setMailNote] = useState("");
+  // Whether the server has the Google client settings (yes/no only).
+  const [googleReady, setGoogleReady] = useState<boolean | null>(null);
 
   useEffect(() => {
     const sb = getSupabase();
@@ -187,6 +189,10 @@ export function Funders({ isAdmin }: { isAdmin: boolean }) {
               ),
         ),
       );
+    void fetch("/api/funders/send", { headers: { Accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c: { google?: boolean } | null) => setGoogleReady(c ? !!c.google : null))
+      .catch(() => setGoogleReady(null));
     void sb.rpc("mailer_status").then(({ data, error: e }) => {
       setMailbox(
         e ? undefined : (((data ?? []) as { mailbox: string; connected_at: string }[])[0] ?? null),
@@ -216,13 +222,22 @@ export function Funders({ isAdmin }: { isAdmin: boolean }) {
     const sb = getSupabase();
     if (!sb) return;
     setMailNote("");
-    const { data, error: e } = await sb.functions.invoke("gmail-connect", {
-      body: { action: "start" },
-    });
-    const url = (data as { url?: string } | null)?.url;
-    if (e || !url) {
+    const session = (await sb.auth.getSession()).data.session;
+    const res = session
+      ? await fetch("/api/gmail/connect", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).catch(() => null)
+      : null;
+    const body = (res ? await res.json().catch(() => ({})) : {}) as {
+      url?: string;
+      error?: string;
+    };
+    const url = body.url;
+    if (!res || !res.ok || !url) {
       setMailNote(
-        "Couldn't start connecting the mailbox. Only an admin can, once sending is set up.",
+        body.error ||
+          "Couldn't start connecting the mailbox. Only an admin can, once sending is set up.",
       );
       return;
     }
@@ -338,6 +353,12 @@ export function Funders({ isAdmin }: { isAdmin: boolean }) {
             >
               {mailbox ? "Reconnect" : "Connect partners@getlamp.app"}
             </button>
+          )}
+          {googleReady === false && (
+            <p className="w-full text-smoke">
+              The server doesn't have the Google client settings yet, so the mailbox can't be
+              connected.
+            </p>
           )}
           {mailNote && <p className="w-full text-smoke">{mailNote}</p>}
         </div>

@@ -21,6 +21,9 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
+import { Route as ApiFundersSendRouteImport } from './routes/api.funders.send'
+import { Route as ApiGmailCallbackRouteImport } from './routes/api.gmail.callback'
+import { Route as ApiGmailConnectRouteImport } from './routes/api.gmail.connect'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -82,6 +85,21 @@ const ApplyRepRoute = ApplyRepRouteImport.update({
   path: '/apply/$rep',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiFundersSendRoute = ApiFundersSendRouteImport.update({
+  id: '/api/funders/send',
+  path: '/api/funders/send',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGmailCallbackRoute = ApiGmailCallbackRouteImport.update({
+  id: '/api/gmail/callback',
+  path: '/api/gmail/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGmailConnectRoute = ApiGmailConnectRouteImport.update({
+  id: '/api/gmail/connect',
+  path: '/api/gmail/connect',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -96,6 +114,9 @@ export interface FileRoutesByFullPath {
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/apply/$rep': typeof ApplyRepRoute
+  '/api/funders/send': typeof ApiFundersSendRoute
+  '/api/gmail/callback': typeof ApiGmailCallbackRoute
+  '/api/gmail/connect': typeof ApiGmailConnectRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -110,6 +131,9 @@ export interface FileRoutesByTo {
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/apply/$rep': typeof ApplyRepRoute
+  '/api/funders/send': typeof ApiFundersSendRoute
+  '/api/gmail/callback': typeof ApiGmailCallbackRoute
+  '/api/gmail/connect': typeof ApiGmailConnectRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,6 +149,9 @@ export interface FileRoutesById {
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/apply_/$rep': typeof ApplyRepRoute
+  '/api/funders/send': typeof ApiFundersSendRoute
+  '/api/gmail/callback': typeof ApiGmailCallbackRoute
+  '/api/gmail/connect': typeof ApiGmailConnectRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,6 +168,9 @@ export interface FileRouteTypes {
     | '/staff'
     | '/terms'
     | '/apply/$rep'
+    | '/api/funders/send'
+    | '/api/gmail/callback'
+    | '/api/gmail/connect'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -155,6 +185,9 @@ export interface FileRouteTypes {
     | '/staff'
     | '/terms'
     | '/apply/$rep'
+    | '/api/funders/send'
+    | '/api/gmail/callback'
+    | '/api/gmail/connect'
   id:
     | '__root__'
     | '/'
@@ -169,6 +202,9 @@ export interface FileRouteTypes {
     | '/staff'
     | '/terms'
     | '/apply_/$rep'
+    | '/api/funders/send'
+    | '/api/gmail/callback'
+    | '/api/gmail/connect'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +220,9 @@ export interface RootRouteChildren {
   StaffRoute: typeof StaffRoute
   TermsRoute: typeof TermsRoute
   ApplyRepRoute: typeof ApplyRepRoute
+  ApiFundersSendRoute: typeof ApiFundersSendRoute
+  ApiGmailCallbackRoute: typeof ApiGmailCallbackRoute
+  ApiGmailConnectRoute: typeof ApiGmailConnectRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -272,6 +311,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApplyRepRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/funders/send': {
+      id: '/api/funders/send'
+      path: '/api/funders/send'
+      fullPath: '/api/funders/send'
+      preLoaderRoute: typeof ApiFundersSendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/gmail/callback': {
+      id: '/api/gmail/callback'
+      path: '/api/gmail/callback'
+      fullPath: '/api/gmail/callback'
+      preLoaderRoute: typeof ApiGmailCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/gmail/connect': {
+      id: '/api/gmail/connect'
+      path: '/api/gmail/connect'
+      fullPath: '/api/gmail/connect'
+      preLoaderRoute: typeof ApiGmailConnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -288,6 +348,9 @@ const rootRouteChildren: RootRouteChildren = {
   StaffRoute: StaffRoute,
   TermsRoute: TermsRoute,
   ApplyRepRoute: ApplyRepRoute,
+  ApiFundersSendRoute: ApiFundersSendRoute,
+  ApiGmailCallbackRoute: ApiGmailCallbackRoute,
+  ApiGmailConnectRoute: ApiGmailConnectRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
