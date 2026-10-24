@@ -7,10 +7,10 @@
 --   2. The package and send record on submissions: how it went out, to which address, the
 --      Gmail message id and the attachment names.
 --   3. mailer_connections: the Gmail mailbox submissions go out from (partners@getlamp.app).
---      The refresh token is readable by the service role only (edge functions). Staff see
+--      The refresh token is readable by the service role only (the site's server routes). Staff see
 --      whether a mailbox is connected through mailer_status(), never the token.
 --   4. funders.auto_send and a trigger that, once a file's package is ready, asks the
---      send-to-funders edge function to send it to every matched funder with auto_send on.
+--      site's /api/funders/send route to send it to every matched funder with auto_send on.
 --      It does nothing until both Vault secrets below exist, and no funder starts with
 --      auto_send on, so applying this migration sends nothing.
 --
@@ -90,7 +90,7 @@ $$;
 revoke all on function public._num(text) from public, anon, authenticated;
 
 -- The matching itself, without an access check. Called by funder_matches() for staff and by
--- the service role (the edge function and the auto-send trigger).
+-- the service role (the site's send route and the auto-send trigger).
 create or replace function public._funder_matches(_application_id uuid)
 returns table (
   funder_id uuid,
@@ -344,8 +344,9 @@ revoke all on function public.funder_package_ready(uuid) from public, anon;
 grant execute on function public.funder_package_ready(uuid) to authenticated, service_role;
 
 -- 5. Automatic sending. Off until both Vault secrets exist:
---      funder_send_url     https://<project-ref>.supabase.co/functions/v1/send-to-funders
---      funder_send_secret  the same value as the edge function's FUNDER_SEND_SECRET
+--      funder_send_url     https://getlamp.app/api/funders/send
+--      funder_send_secret  the same value as the site's FUNDER_SEND_SECRET secret
+--    It also needs the pg_net extension (create extension if not exists pg_net;),
 --    and off per funder until an admin turns auto_send on. A failure here is written to the
 --    file's timeline and never blocks the upload that triggered it.
 create or replace function public.queue_auto_send()
