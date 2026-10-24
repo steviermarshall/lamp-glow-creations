@@ -211,7 +211,7 @@ export function Funders({ isAdmin }: { isAdmin: boolean }) {
       declined: "Google wasn't given permission, so nothing changed.",
       expired: "That link expired. Start again.",
       not_configured:
-        "Sending isn't set up yet: the Google client settings are missing from the function secrets.",
+        "Sending isn't set up yet: the Google client settings are missing from the site's secrets (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET).",
       no_refresh_token: "Google didn't grant lasting access. Start again and allow it.",
       send_not_allowed: "Google didn't grant permission to send email. Start again and tick it.",
     };
