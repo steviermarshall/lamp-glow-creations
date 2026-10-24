@@ -149,7 +149,7 @@ function Account() {
       <PageShell>
         <div className="mx-auto max-w-xl px-5 py-24 text-center text-smoke">
           Online accounts are being set up.{" "}
-          <Link to="/apply" className="font-semibold text-amber-deep">
+          <Link to="/apply" className="font-semibold text-forest">
             Check your options
           </Link>{" "}
           in the meantime.
@@ -468,7 +468,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
           <span
             className={cn(
               "ml-auto shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold ring-1 ring-line",
-              d.status === "rejected" ? "text-amber-deep" : "text-smoke",
+              d.status === "rejected" ? "text-forest" : "text-smoke",
             )}
           >
             {tag}
@@ -506,9 +506,9 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
                     className={cn(
                       "grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold ring-1",
                       s.done
-                        ? "bg-amber text-ink ring-amber"
+                        ? "bg-leaf text-ink ring-leaf"
                         : i === current
-                          ? "text-amber-deep ring-amber"
+                          ? "text-forest ring-leaf"
                           : "text-smoke ring-line",
                     )}
                   >
@@ -520,7 +520,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
                     {s.label}
                   </span>
                   {i === current && (
-                    <span className="ml-auto rounded-full bg-amber/15 px-2.5 py-1 text-xs font-semibold text-amber-deep">
+                    <span className="ml-auto rounded-full bg-leaf/15 px-2.5 py-1 text-xs font-semibold text-forest">
                       Next
                     </span>
                   )}
@@ -554,7 +554,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
                     <span
                       className={cn(
                         "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full ring-1",
-                        item.done ? "bg-amber text-ink ring-amber" : "ring-line",
+                        item.done ? "bg-leaf text-ink ring-leaf" : "ring-line",
                       )}
                       aria-hidden="true"
                     >
@@ -587,7 +587,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
                   onChange={(e) => {
                     if (isDocumentKind(e.target.value)) setChosenKind(e.target.value);
                   }}
-                  className="mt-2 w-full rounded-xl bg-sand px-4 py-3 text-sm ring-1 ring-line focus:outline-none focus:ring-2 focus:ring-amber"
+                  className="mt-2 w-full rounded-xl bg-sand px-4 py-3 text-sm ring-1 ring-line focus:outline-none focus:ring-2 focus:ring-leaf"
                 >
                   {REQUIRED_DOCUMENTS.map((item) => (
                     <option key={item.kind} value={item.kind}>
@@ -613,12 +613,12 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
                   type="button"
                   onClick={() => inputRef.current?.click()}
                   disabled={uploading}
-                  className="mt-4 flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line px-6 py-8 text-sm text-smoke transition hover:border-amber hover:bg-sand"
+                  className="mt-4 flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line px-6 py-8 text-sm text-smoke transition hover:border-leaf hover:bg-sand"
                 >
                   {uploading ? (
                     <Loader2 className="size-6 animate-spin" />
                   ) : (
-                    <FileUp className="size-6 text-amber-deep" />
+                    <FileUp className="size-6 text-forest" />
                   )}
                   <span className="font-semibold text-ink">
                     {uploading ? "Uploading…" : "Tap to choose files"}

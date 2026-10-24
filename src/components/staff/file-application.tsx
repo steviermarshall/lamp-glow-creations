@@ -61,7 +61,7 @@ export function FileApplication({
     <section className={cn(card, "p-6")} data-full-application={signedAt ? "signed" : "draft"}>
       <div className="flex flex-wrap items-baseline gap-2">
         <h3 className="font-display text-lg font-semibold">Full application</h3>
-        <span className={cn("text-sm", signedAt ? "font-semibold text-amber-deep" : "text-smoke")}>
+        <span className={cn("text-sm", signedAt ? "font-semibold text-forest" : "text-smoke")}>
           {signedAt ? `Signed by ${signedName} · ${stamp(signedAt)}` : "Draft, not signed yet"}
         </span>
         <button

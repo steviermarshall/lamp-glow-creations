@@ -58,8 +58,8 @@ function Login() {
               and we'll help right away.
             </p>
           ) : status === "sent" ? (
-            <div className="mt-6 rounded-2xl bg-amber/10 p-5 ring-1 ring-amber/40">
-              <Mail className="size-6 text-amber-deep" />
+            <div className="mt-6 rounded-2xl bg-leaf/10 p-5 ring-1 ring-leaf/40">
+              <Mail className="size-6 text-forest" />
               <p className="mt-3 font-semibold">Check your inbox</p>
               <p className="mt-1 text-sm text-smoke">
                 We sent a sign-in link to <strong className="text-ink">{email}</strong>.
@@ -101,7 +101,7 @@ function Login() {
 
           <p className="mt-8 text-center text-sm text-smoke">
             New to Lamp?{" "}
-            <Link to="/apply" className="font-semibold text-amber-deep">
+            <Link to="/apply" className="font-semibold text-forest">
               Check your options first
             </Link>
           </p>

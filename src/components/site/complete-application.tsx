@@ -244,7 +244,7 @@ export function CompleteApplication({
     return (
       <section className={cn(card, "p-6")} data-application="signed">
         <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-          <Check className="size-5 text-amber-deep" /> Application signed
+          <Check className="size-5 text-forest" /> Application signed
         </h2>
         <p className="mt-2 text-sm text-smoke">
           Signed by {signed.name} on{" "}
@@ -568,7 +568,7 @@ export function CompleteApplication({
           {d.owners.length < 2 && (
             <button
               type="button"
-              className="text-sm font-semibold text-amber-deep underline"
+              className="text-sm font-semibold text-forest underline"
               onClick={() => setD({ ...d, owners: [...d.owners, emptyOwner()] })}
             >
               Add a second owner (anyone with 20% or more)
@@ -624,7 +624,7 @@ export function CompleteApplication({
             {d.balances.length < 2 && (
               <button
                 type="button"
-                className="text-left text-sm font-semibold text-amber-deep underline sm:col-span-2"
+                className="text-left text-sm font-semibold text-forest underline sm:col-span-2"
                 onClick={() => setD({ ...d, balances: [...d.balances, emptyBalance()] })}
               >
                 Add a current advance

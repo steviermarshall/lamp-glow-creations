@@ -98,7 +98,7 @@ export function ApplyFlow({ search, rep }: { search: Record<string, unknown>; re
             aria-valuenow={progress}
           >
             <div
-              className="h-full rounded-full bg-amber transition-all duration-500"
+              className="h-full rounded-full bg-leaf transition-all duration-500"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -111,7 +111,7 @@ export function ApplyFlow({ search, rep }: { search: Record<string, unknown>; re
           {q && (
             <>
               {step === startStep && answers.firstName && (
-                <p className="mb-2 font-semibold text-amber-deep">Hi {answers.firstName}.</p>
+                <p className="mb-2 font-semibold text-forest">Hi {answers.firstName}.</p>
               )}
               <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
                 {q.title}
@@ -130,7 +130,7 @@ export function ApplyFlow({ search, rep }: { search: Record<string, unknown>; re
                       className={cn(
                         "flex items-center justify-between rounded-2xl px-5 py-4 text-left text-[1.05rem] font-semibold transition",
                         selected
-                          ? "bg-amber/15 ring-2 ring-amber"
+                          ? "bg-leaf/15 ring-2 ring-leaf"
                           : "bg-white ring-1 ring-line hover:ring-ink/30",
                       )}
                     >
@@ -138,7 +138,7 @@ export function ApplyFlow({ search, rep }: { search: Record<string, unknown>; re
                       <span
                         className={cn(
                           "grid size-6 place-items-center rounded-full ring-1",
-                          selected ? "bg-amber text-ink ring-amber" : "ring-line",
+                          selected ? "bg-leaf text-ink ring-leaf" : "ring-line",
                         )}
                       >
                         {selected && <Check className="size-4" />}
@@ -185,7 +185,7 @@ function RepBadge({ rep }: { rep: Rep }) {
         <img src={rep.photo} alt="" className="size-10 rounded-full object-cover" />
       ) : (
         <span
-          className="grid size-10 place-items-center rounded-full bg-ink font-display text-sm font-bold text-amber"
+          className="grid size-10 place-items-center rounded-full bg-ink font-display text-sm font-bold text-leaf"
           aria-hidden="true"
         >
           {initials}
@@ -287,7 +287,7 @@ function ContactStep({
               required
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
-              className="mt-1 size-5 shrink-0 accent-[oklch(0.52_0.12_58)]"
+              className="mt-1 size-5 shrink-0 accent-forest"
             />
             <span className="text-sm leading-relaxed text-smoke">{PHONE_CONSENT_TEXT}</span>
           </label>
@@ -381,7 +381,7 @@ function ResultStep({
       {est && (
         <div className="mt-6 rounded-2xl bg-ink p-6 text-paper">
           <p className="text-mist">Businesses like yours often see</p>
-          <p className="mt-1 font-display text-4xl font-bold tabular-nums tracking-tight text-amber">
+          <p className="mt-1 font-display text-4xl font-bold tabular-nums tracking-tight text-leaf">
             {money(est.low)} – {money(est.high)}
           </p>
           <dl className="mt-5 grid grid-cols-2 gap-3">
@@ -444,7 +444,7 @@ function ResultStep({
           </button>
         ) : status === "sent" ? (
           <div className="mt-6 rounded-2xl bg-white p-5 ring-1 ring-line" role="status">
-            <Mail className="size-6 text-amber-deep" />
+            <Mail className="size-6 text-forest" />
             <p className="mt-3 font-semibold">Check your inbox</p>
             <p className="mt-1 text-smoke">
               We sent a sign-in link to <strong className="text-ink">{email}</strong>. Tap it on
@@ -452,7 +452,7 @@ function ResultStep({
             </p>
             <button
               type="button"
-              className="mt-4 font-semibold text-amber-deep underline underline-offset-4"
+              className="mt-4 font-semibold text-forest underline underline-offset-4"
               onClick={() => setStatus("idle")}
             >
               Use a different email
@@ -514,7 +514,7 @@ function ResultStep({
         )}
 
         <p className="mt-6 flex items-center gap-2 text-sm text-smoke">
-          <ShieldCheck className="size-4 text-amber-deep" /> No cost, no obligation. Say no to any
+          <ShieldCheck className="size-4 text-forest" /> No cost, no obligation. Say no to any
           offer.
         </p>
       </div>
