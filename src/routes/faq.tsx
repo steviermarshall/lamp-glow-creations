@@ -31,7 +31,7 @@ export const Route = createFileRoute("/faq")({
 
 function Faq() {
   return (
-    <PageShell>
+    <PageShell tone="night">
       <section className="mx-auto max-w-3xl px-5 pb-24 pt-14 sm:px-6 sm:pt-20">
         <Eyebrow>FAQ</Eyebrow>
         <h1 className="mt-5 font-display text-4xl font-bold tracking-tight sm:text-5xl">

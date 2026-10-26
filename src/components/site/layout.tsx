@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { SITE, telHref } from "@/lib/site";
 import { LampField } from "@/components/site/lamp-field";
 import { LampOrb } from "@/components/site/lamp-orb";
+import { useLamplightGlass } from "@/components/site/lamp-lens";
 
 // Buttons. Primary is the lamp: leaf green with ink text. Ghost sits on dark ground, outline on paper.
 export const btnPrimary =
@@ -136,7 +137,15 @@ export function SiteHeader({
       </div>
 
       {open && (
-        <nav aria-label="Mobile" className="border-t border-white/10 px-5 pb-6 pt-2 md:hidden">
+        <nav
+          aria-label="Mobile"
+          className={cn(
+            "px-5 pb-6 pt-2 md:hidden",
+            floating
+              ? "mx-auto mt-2 max-w-6xl rounded-[1.4rem] bg-night/90 ring-1 ring-white/10 backdrop-blur-xl"
+              : "border-t border-white/10",
+          )}
+        >
           {NAV.map((n) => (
             <Link
               key={n.label}
@@ -269,20 +278,29 @@ export function PageShell({
   children: ReactNode;
   minimalHeader?: boolean;
   footer?: boolean;
-  /** "night" is the Lamplight look: green-black ground, live dot field, glass panels. */
-  tone?: "paper" | "night";
+  /**
+   * The Lamplight look (green-black ground, glass panels, the orb). "night" adds the live dot field
+   * and glass refraction (public pages, apply, login); "night-calm" keeps the same look still and
+   * with more solid panels (merchant account, staff portal), so forms and tables stay readable.
+   * Both re-map the app's light classes (white cards, ink text, hairlines) in styles.css.
+   */
+  tone?: "paper" | "night" | "night-calm";
 }) {
-  const night = tone === "night";
+  const live = tone === "night";
+  const night = live || tone === "night-calm";
+  useLamplightGlass(live);
   return (
     <div
       className={cn(
         "font-body relative flex min-h-screen flex-col overflow-x-clip antialiased",
-        night ? "isolate bg-night text-paper" : "bg-paper text-ink",
+        night
+          ? cn("ll-night isolate bg-night text-paper", live ? "ll-live" : "ll-calm")
+          : "bg-paper text-ink",
       )}
     >
       {night && (
         <>
-          <LampField />
+          {live && <LampField />}
           <div aria-hidden="true" className="ll-atmos pointer-events-none fixed inset-0 -z-20" />
         </>
       )}
@@ -314,7 +332,7 @@ export function ProsePage({
   children: ReactNode;
 }) {
   return (
-    <PageShell>
+    <PageShell tone="night">
       <section className="lamp-light text-paper">
         <div className="mx-auto max-w-3xl px-5 pb-14 pt-14 sm:px-6 sm:pt-20">
           <Eyebrow dark>{eyebrow}</Eyebrow>

@@ -193,7 +193,7 @@ function OfferCheckPage() {
   };
 
   return (
-    <PageShell>
+    <PageShell tone="night">
       <section className="lamp-light text-paper">
         <div className="mx-auto max-w-6xl px-5 pb-14 pt-14 sm:px-6 sm:pt-20">
           <Eyebrow dark>Offer Check · free · nothing saved</Eyebrow>

@@ -97,8 +97,9 @@ function makeFilter(id: string) {
   return { f, img };
 }
 
-export function useLamplightGlass() {
+export function useLamplightGlass(enabled = true) {
   useEffect(() => {
+    if (!enabled) return;
     const root = document.documentElement;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -193,5 +194,5 @@ export function useLamplightGlass() {
       });
       svg?.remove();
     };
-  }, []);
+  }, [enabled]);
 }

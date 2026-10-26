@@ -58,7 +58,7 @@ const WONT = [
 
 function HowItWorksPage() {
   return (
-    <PageShell>
+    <PageShell tone="night">
       <section className="lamp-light text-paper">
         <div className="mx-auto max-w-3xl px-5 pb-16 pt-14 sm:px-6 sm:pt-20">
           <Eyebrow dark>How it works</Eyebrow>

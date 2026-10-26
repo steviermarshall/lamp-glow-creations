@@ -19,7 +19,6 @@ import { SITE, seo } from "@/lib/site";
 import { btnGhost, btnPrimary, PageShell } from "@/components/site/layout";
 import { FAQS, FaqList } from "@/components/site/faq";
 import { LampOrb } from "@/components/site/lamp-orb";
-import { useLamplightGlass } from "@/components/site/lamp-lens";
 
 export const Route = createFileRoute("/")({
   head: () =>
@@ -33,7 +32,6 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  useLamplightGlass();
   return (
     <PageShell tone="night">
       <Hero />

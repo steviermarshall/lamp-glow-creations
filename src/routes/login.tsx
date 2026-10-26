@@ -43,7 +43,7 @@ function Login() {
   };
 
   return (
-    <PageShell minimalHeader footer={false}>
+    <PageShell minimalHeader footer={false} tone="night">
       <div className="mx-auto max-w-md px-5 pb-20 pt-12 sm:pt-20">
         <div className={cn(card, "rise p-6 sm:p-8")}>
           <h1 className="font-display text-3xl font-bold tracking-tight">Welcome back</h1>

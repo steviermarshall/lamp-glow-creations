@@ -146,7 +146,7 @@ function Account() {
 
   if (!isSupabaseConfigured) {
     return (
-      <PageShell>
+      <PageShell tone="night-calm">
         <div className="mx-auto max-w-xl px-5 py-24 text-center text-smoke">
           Online accounts are being set up.{" "}
           <Link to="/apply" className="font-semibold text-forest">
@@ -160,7 +160,7 @@ function Account() {
 
   if (loading || !user || fetching || access.state === "loading" || sendToStaff) {
     return (
-      <PageShell footer={false}>
+      <PageShell footer={false} tone="night-calm">
         <div className="grid place-items-center py-40">
           <Loader2 className="size-6 animate-spin text-smoke" />
         </div>
@@ -175,7 +175,7 @@ function Account() {
     "there";
 
   return (
-    <PageShell>
+    <PageShell tone="night-calm">
       <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-6 sm:pt-14">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

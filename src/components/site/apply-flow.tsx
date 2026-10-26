@@ -73,7 +73,7 @@ export function ApplyFlow({ search, rep }: { search: Record<string, unknown>; re
   const q = QUESTIONS[step];
 
   return (
-    <PageShell minimalHeader footer={false}>
+    <PageShell minimalHeader footer={false} tone="night">
       <div className="mx-auto flex max-w-xl flex-col px-5 pb-16 pt-6 sm:px-6 sm:pt-10">
         {rep && <RepBadge rep={rep} />}
 
