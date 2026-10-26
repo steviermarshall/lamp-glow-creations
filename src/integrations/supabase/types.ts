@@ -23,12 +23,18 @@ export type Database = {
           consent_version: string | null
           created_at: string
           owners: Json
+          real_estate: Json
           request: Json
+          signature_image: string | null
+          signature_image_2: string | null
           signed_at: string | null
           signed_name: string | null
+          signed_name_2: string | null
+          signed_via: string | null
           signer_agent: string | null
+          signer_ip: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           application_id: string
@@ -38,12 +44,18 @@ export type Database = {
           consent_version?: string | null
           created_at?: string
           owners?: Json
+          real_estate?: Json
           request?: Json
+          signature_image?: string | null
+          signature_image_2?: string | null
           signed_at?: string | null
           signed_name?: string | null
+          signed_name_2?: string | null
+          signed_via?: string | null
           signer_agent?: string | null
+          signer_ip?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           application_id?: string
@@ -53,12 +65,18 @@ export type Database = {
           consent_version?: string | null
           created_at?: string
           owners?: Json
+          real_estate?: Json
           request?: Json
+          signature_image?: string | null
+          signature_image_2?: string | null
           signed_at?: string | null
           signed_name?: string | null
+          signed_name_2?: string | null
+          signed_via?: string | null
           signer_agent?: string | null
+          signer_ip?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -77,6 +95,113 @@ export type Database = {
           },
         ]
       }
+      application_invites: {
+        Row: {
+          application_id: string | null
+          business_name: string | null
+          cancelled_at: string | null
+          channel: string
+          created_at: string
+          email: string | null
+          email_message_id: string | null
+          engine_lead_id: number | null
+          expires_at: string
+          first_name: string | null
+          id: string
+          last_error: string | null
+          last_name: string | null
+          note: string | null
+          opened_at: string | null
+          phone: string | null
+          rep_slug: string
+          sent_at: string
+          sent_by: string | null
+          started_at: string | null
+          submitted_at: string | null
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          application_id?: string | null
+          business_name?: string | null
+          cancelled_at?: string | null
+          channel: string
+          created_at?: string
+          email?: string | null
+          email_message_id?: string | null
+          engine_lead_id?: number | null
+          expires_at?: string
+          first_name?: string | null
+          id?: string
+          last_error?: string | null
+          last_name?: string | null
+          note?: string | null
+          opened_at?: string | null
+          phone?: string | null
+          rep_slug: string
+          sent_at?: string
+          sent_by?: string | null
+          started_at?: string | null
+          submitted_at?: string | null
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          application_id?: string | null
+          business_name?: string | null
+          cancelled_at?: string | null
+          channel?: string
+          created_at?: string
+          email?: string | null
+          email_message_id?: string | null
+          engine_lead_id?: number | null
+          expires_at?: string
+          first_name?: string | null
+          id?: string
+          last_error?: string | null
+          last_name?: string | null
+          note?: string | null
+          opened_at?: string | null
+          phone?: string | null
+          rep_slug?: string
+          sent_at?: string
+          sent_by?: string | null
+          started_at?: string | null
+          submitted_at?: string | null
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_invites_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_invites_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_board"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_invites_engine_lead_id_fkey"
+            columns: ["engine_lead_id"]
+            isOneToOne: false
+            referencedRelation: "engine_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_invites_rep_slug_fkey"
+            columns: ["rep_slug"]
+            isOneToOne: false
+            referencedRelation: "reps"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       applications: {
         Row: {
           amount_requested: number | null
@@ -84,6 +209,8 @@ export type Database = {
           assigned_at: string | null
           business_id: string | null
           business_name: string | null
+          claim_email: string | null
+          claim_token_hash: string | null
           closed_at: string | null
           created_at: string
           decline_reason: string | null
@@ -91,6 +218,7 @@ export type Database = {
           first_name: string | null
           funded_at: string | null
           id: string
+          invite_id: string | null
           phone: string | null
           phone_consent_at: string | null
           phone_consent_text: string | null
@@ -101,7 +229,7 @@ export type Database = {
           status: Database["public"]["Enums"]["application_stage"]
           submitted_at: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
           utm: Json
         }
         Insert: {
@@ -110,6 +238,8 @@ export type Database = {
           assigned_at?: string | null
           business_id?: string | null
           business_name?: string | null
+          claim_email?: string | null
+          claim_token_hash?: string | null
           closed_at?: string | null
           created_at?: string
           decline_reason?: string | null
@@ -117,6 +247,7 @@ export type Database = {
           first_name?: string | null
           funded_at?: string | null
           id?: string
+          invite_id?: string | null
           phone?: string | null
           phone_consent_at?: string | null
           phone_consent_text?: string | null
@@ -127,7 +258,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["application_stage"]
           submitted_at?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
           utm?: Json
         }
         Update: {
@@ -136,6 +267,8 @@ export type Database = {
           assigned_at?: string | null
           business_id?: string | null
           business_name?: string | null
+          claim_email?: string | null
+          claim_token_hash?: string | null
           closed_at?: string | null
           created_at?: string
           decline_reason?: string | null
@@ -143,6 +276,7 @@ export type Database = {
           first_name?: string | null
           funded_at?: string | null
           id?: string
+          invite_id?: string | null
           phone?: string | null
           phone_consent_at?: string | null
           phone_consent_text?: string | null
@@ -153,10 +287,17 @@ export type Database = {
           status?: Database["public"]["Enums"]["application_stage"]
           submitted_at?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
           utm?: Json
         }
         Relationships: [
+          {
+            foreignKeyName: "applications_invite_id_fkey"
+            columns: ["invite_id"]
+            isOneToOne: false
+            referencedRelation: "application_invites"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "applications_business_id_fkey"
             columns: ["business_id"]
@@ -388,7 +529,7 @@ export type Database = {
           status: Database["public"]["Enums"]["document_status"]
           storage_path: string
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           application_id: string
@@ -405,7 +546,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["document_status"]
           storage_path: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           application_id?: string
@@ -422,7 +563,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["document_status"]
           storage_path?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1244,6 +1385,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      claim_applications: { Args: { _tokens?: string[] }; Returns: number }
       can_see_application_details: {
         Args: { _application_id: string }
         Returns: boolean
@@ -1297,6 +1439,25 @@ export type Database = {
         Returns: Json
       }
       storage_object_is_indexed: { Args: { _name: string }; Returns: boolean }
+      storage_object_is_mine: { Args: { _name: string }; Returns: boolean }
+      submit_link_application: {
+        Args: {
+          _claim_email: string
+          _claim_token_hash: string
+          _consent_text: string
+          _consent_version: string
+          _details: Json
+          _rep_slug: string
+          _signature_image: string
+          _signature_image_2: string
+          _signed_name: string
+          _signed_name_2: string
+          _signer_agent: string
+          _signer_ip: string
+          _token_hash: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "merchant" | "rep" | "admin"

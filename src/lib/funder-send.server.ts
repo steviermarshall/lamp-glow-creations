@@ -22,18 +22,18 @@ import {
   shortId,
 } from "@/lib/funder-send";
 
-const env = (k: string) => (process.env[k] ?? "").trim();
-const SUPABASE_URL = () => env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
-const SERVICE_KEY = () => env("SUPABASE_SERVICE_ROLE_KEY");
+export const env = (k: string) => (process.env[k] ?? "").trim();
+export const SUPABASE_URL = () => env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
+export const SERVICE_KEY = () => env("SUPABASE_SERVICE_ROLE_KEY");
 const ANON_KEY = () =>
   env("SUPABASE_PUBLISHABLE_KEY") ||
   env("SUPABASE_ANON_KEY") ||
   env("VITE_SUPABASE_PUBLISHABLE_KEY");
-const MAILBOX = () => (env("FUNDER_MAILBOX") || "partners@getlamp.app").toLowerCase();
-const SITE_URL = () => (env("SITE_URL") || "https://getlamp.app").replace(/\/$/, "");
+export const MAILBOX = () => (env("FUNDER_MAILBOX") || "partners@getlamp.app").toLowerCase();
+export const SITE_URL = () => (env("SITE_URL") || "https://getlamp.app").replace(/\/$/, "");
 // Overridable only so the local test can point these at a stand-in; production uses the defaults.
 const GOOGLE_TOKEN_URL = () => env("GOOGLE_TOKEN_URL") || "https://oauth2.googleapis.com/token";
-const GMAIL_SEND_URL = () =>
+export const GMAIL_SEND_URL = () =>
   env("GMAIL_SEND_URL") || "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 const USERINFO_URL = () =>
   env("GOOGLE_USERINFO_URL") || "https://openidconnect.googleapis.com/v1/userinfo";
@@ -41,17 +41,17 @@ const SCOPES = ["openid", "email", "https://www.googleapis.com/auth/gmail.send"]
 const STATE_TTL_MS = 10 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const json = (status: number, body: unknown) =>
+export const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 
-const service = () =>
+export const service = () =>
   createClient(SUPABASE_URL(), SERVICE_KEY(), { auth: { persistSession: false } });
 
 /** The signed-in caller's own client, so the database's rules apply to what they ask. */
-async function caller(request: Request) {
+export async function caller(request: Request) {
   const auth = request.headers.get("Authorization") ?? "";
   if (!auth.startsWith("Bearer ") || !ANON_KEY()) return null;
   const client = createClient(SUPABASE_URL(), ANON_KEY(), {
@@ -430,7 +430,7 @@ async function download(
   };
 }
 
-async function gmailAccessToken(
+export async function gmailAccessToken(
   svc: SupabaseClient,
 ): Promise<{ access: string } | { error: string }> {
   if (!env("GOOGLE_CLIENT_ID") || !env("GOOGLE_CLIENT_SECRET")) {

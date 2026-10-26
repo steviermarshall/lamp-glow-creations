@@ -7,6 +7,15 @@ export type FullApplication = {
   details: Details;
   signedName: string | null;
   signedAt: string | null;
+  /** The second owner's typed name, when they signed too. */
+  signedName2: string | null;
+  /** Drawn signatures (PNG data URLs); null for applications signed before drawing existed. */
+  signatureImage: string | null;
+  signatureImage2: string | null;
+  /** "link": signed from an application link with no account; "account": from /account. */
+  signedVia: "link" | "account" | null;
+  signerIp: string | null;
+  signerAgent: string | null;
 };
 
 /** Staff who are neither an admin nor the file's rep get this instead of the application. */
@@ -17,14 +26,33 @@ type Row = {
   owners: unknown;
   balances: unknown;
   request: unknown;
+  real_estate?: unknown;
   signed_name: string | null;
   signed_at: string | null;
+  signed_name_2?: string | null;
+  signature_image?: string | null;
+  signature_image_2?: string | null;
+  signed_via?: string | null;
+  signer_ip?: string | null;
+  signer_agent?: string | null;
 } | null;
 
 type RpcError = { code?: string; message?: string } | null;
 
 const toFull = (r: Row): FullApplication | null =>
-  r ? { details: fromRow(r), signedName: r.signed_name, signedAt: r.signed_at } : null;
+  r
+    ? {
+        details: fromRow(r),
+        signedName: r.signed_name,
+        signedAt: r.signed_at,
+        signedName2: r.signed_name_2 ?? null,
+        signatureImage: r.signature_image ?? null,
+        signatureImage2: r.signature_image_2 ?? null,
+        signedVia: r.signed_via === "link" || r.signed_via === "account" ? r.signed_via : null,
+        signerIp: r.signer_ip ?? null,
+        signerAgent: r.signer_agent ?? null,
+      }
+    : null;
 
 // PGRST202: the function is not in the database yet (code published before the SQL ran).
 const notDeployed = (e: RpcError) => e?.code === "PGRST202";
@@ -35,7 +63,9 @@ async function readTable(fileId: string): Promise<Row> {
   if (!sb) return null;
   const { data } = await sb
     .from("application_details")
-    .select("business,owners,balances,request,signed_name,signed_at")
+    .select(
+      "business,owners,balances,request,real_estate,signed_name,signed_at,signed_name_2,signature_image,signature_image_2,signed_via,signer_ip,signer_agent",
+    )
     .eq("application_id", fileId)
     .maybeSingle();
   return data as Row;
