@@ -35,6 +35,9 @@ export type Property = {
   insured: "" | "yes" | "no";
   hoa: "" | "yes" | "no";
   hoa_dues: string;
+  /** For sale now or lately: cash-out funders want it off the market. */
+  listed: string; // LISTED id
+  condition: string; // CONDITIONS id
   free_clear: boolean;
   liens: Lien[];
 };
@@ -45,6 +48,10 @@ export type RealEstate = {
   interest: "" | "yes" | "maybe" | "no";
   /** How they'd want property-backed funding, if they want it. */
   structure: string; // STRUCTURES id
+  /** Who would receive the funds: the business (with the owner guaranteeing) or the owner. */
+  borrower: string; // BORROWERS id
+  /** In their words, what the money would be used for. */
+  purpose_note: string;
   /** Foreclosure, deed-in-lieu or short sale in the last 7 years. */
   foreclosure: "" | "yes" | "no";
   foreclosure_year: string;
@@ -65,8 +72,10 @@ export const PROPERTY_TYPES: Opt[] = [
   { id: "mixed_use", label: "Mixed-use" },
   { id: "commercial", label: "Commercial building" },
   { id: "manufactured", label: "Manufactured or mobile home" },
+  { id: "modular", label: "Modular home" },
   { id: "coop", label: "Co-op" },
   { id: "land", label: "Land" },
+  { id: "unconventional", label: "Log cabin, dome, A-frame or barndominium" },
   { id: "other", label: "Something else" },
 ];
 
@@ -86,6 +95,30 @@ export const TITLE_HOLDERS: Opt[] = [
   { id: "business", label: "My business (LLC or corporation)" },
   { id: "living_trust", label: "A living (revocable) trust" },
   { id: "irrevocable_trust", label: "An irrevocable trust" },
+  { id: "contract_for_deed", label: "Contract for deed (no deed yet)" },
+  { id: "estate", label: "Inherited, estate still open" },
+  { id: "life_estate", label: "Life estate" },
+  { id: "not_sure", label: "Not sure" },
+];
+
+export const LISTED: Opt[] = [
+  { id: "no", label: "No" },
+  { id: "listed", label: "Listed for sale now" },
+  { id: "under_contract", label: "Under contract to sell" },
+  { id: "recently", label: "Listed in the last 6 months, not now" },
+];
+
+export const CONDITIONS: Opt[] = [
+  { id: "good", label: "Good" },
+  { id: "minor", label: "Needs minor repairs" },
+  { id: "major", label: "Needs major repairs" },
+  { id: "renovation", label: "Under renovation" },
+  { id: "damage", label: "Storm or fire damage, or an open insurance claim" },
+];
+
+export const BORROWERS: Opt[] = [
+  { id: "business", label: "My business (I'd guarantee it)" },
+  { id: "personal", label: "Me personally" },
   { id: "not_sure", label: "Not sure" },
 ];
 
@@ -101,9 +134,12 @@ export const LIEN_TYPES: Opt[] = [
   { id: "first", label: "1st mortgage" },
   { id: "second", label: "2nd mortgage" },
   { id: "heloc", label: "Home equity line" },
+  { id: "equity_share", label: "Equity share (Point, Hometap, Unlock…)" },
   { id: "reverse", label: "Reverse mortgage" },
   { id: "private", label: "Private or hard-money" },
+  { id: "business", label: "Business-purpose or rental (DSCR)" },
   { id: "seller", label: "Seller financing" },
+  { id: "solar", label: "Solar or PACE" },
   { id: "tax_lien", label: "Tax lien" },
   { id: "judgment", label: "Judgment" },
   { id: "other", label: "Other balance" },
@@ -152,6 +188,8 @@ export const emptyProperty = (): Property => ({
   insured: "",
   hoa: "",
   hoa_dues: "",
+  listed: "",
+  condition: "",
   free_clear: false,
   liens: [emptyLien()],
 });
@@ -160,6 +198,8 @@ export const emptyRealEstate = (): RealEstate => ({
   owns: "",
   interest: "",
   structure: "",
+  borrower: "",
+  purpose_note: "",
   foreclosure: "",
   foreclosure_year: "",
   properties: [],
@@ -198,7 +238,7 @@ export function amount(s: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** What a funder counts as owed on one balance: an equity line at its full limit. */
+/** What a funder counts as owed on one balance at worst: an equity line at its full limit. */
 export function lienOwed(l: Lien): number {
   const bal = amount(l.balance) ?? 0;
   if (l.type === "heloc") return Math.max(bal, amount(l.limit) ?? 0);
@@ -207,25 +247,32 @@ export function lienOwed(l: Lien): number {
 
 export type Equity = {
   value: number | null;
+  /** Balances owed today (equity lines at what's drawn). */
   owed: number;
+  /** The same with every equity line at its full limit. */
+  owedAtLimits: number;
   equity: number | null;
-  /** Everything owed ÷ value, 0–1+. */
+  /** Everything owed ÷ value, 0–1+ (CLTV). */
   cltv: number | null;
-  /** How much a funder capped at `cap` of value could add on top of what's owed now. */
+  /** The same with equity lines at their full limits (HCLTV): what most funders size from. */
+  hcltv: number | null;
+  /** How much a funder capped at `cap` of value could add on top of what's owed (at limits). */
   roomAt: (cap: number) => number | null;
 };
 
 export function equityOf(p: Property): Equity {
   const value = amount(p.value);
-  const owed = p.free_clear ? 0 : p.liens.reduce((s, l) => s + lienOwed(l), 0);
-  const equity = value != null ? value - owed : null;
-  const cltv = value ? owed / value : null;
+  const liens = p.free_clear ? [] : p.liens;
+  const owed = liens.reduce((s, l) => s + (amount(l.balance) ?? 0), 0);
+  const owedAtLimits = liens.reduce((s, l) => s + lienOwed(l), 0);
   return {
     value,
     owed,
-    equity,
-    cltv,
-    roomAt: (cap) => (value ? Math.max(0, Math.round(cap * value - owed)) : null),
+    owedAtLimits,
+    equity: value != null ? value - owed : null,
+    cltv: value ? owed / value : null,
+    hcltv: value ? owedAtLimits / value : null,
+    roomAt: (cap) => (value ? Math.max(0, Math.round(cap * value - owedAtLimits)) : null),
   };
 }
 
@@ -243,14 +290,19 @@ export const labelOf = (opts: Opt[], id: string) => opts.find((o) => o.id === id
 export function flags(p: Property): string[] {
   const out: string[] = [];
   const e = equityOf(p);
-  if (e.cltv != null && e.cltv >= 0.8) out.push(`owes ${pct(e.cltv)} of value already`);
+  if (e.hcltv != null && e.hcltv >= 0.8) out.push(`owes ${pct(e.hcltv)} of value already`);
   if (p.state.toUpperCase() === "TX" && p.use === "primary")
     out.push("Texas homestead: only a state home-equity product can use it");
   if (p.title === "business" || p.title === "irrevocable_trust")
     out.push("titled to a business or irrevocable trust: equity share options won't take it");
-  if (["coop", "manufactured", "land"].includes(p.type))
+  if (["coop", "manufactured", "land", "unconventional", "commercial"].includes(p.type))
     out.push(`${labelOf(PROPERTY_TYPES, p.type).toLowerCase()}: most partners won't take it`);
+  if (["contract_for_deed", "estate", "life_estate"].includes(p.title))
+    out.push(`${labelOf(TITLE_HOLDERS, p.title).toLowerCase()}: title may not be clear`);
   if (p.all_sign === "no") out.push("not every owner on title will sign");
+  if (p.listed && p.listed !== "no") out.push(labelOf(LISTED, p.listed).toLowerCase());
+  if (["major", "renovation", "damage"].includes(p.condition))
+    out.push(labelOf(CONDITIONS, p.condition).toLowerCase());
   if (p.taxes_current === "no") out.push("property taxes behind");
   if (p.insured === "no") out.push("no homeowners insurance");
   if (!p.free_clear && p.liens.some((l) => l.status && l.status !== "current"))
@@ -258,6 +310,10 @@ export function flags(p: Property): string[] {
   if (!p.free_clear && p.liens.some((l) => l.late_12m === "2+"))
     out.push("2+ late payments in the last year");
   if (!p.free_clear && p.liens.some((l) => l.type === "reverse")) out.push("reverse mortgage");
+  if (!p.free_clear && p.liens.some((l) => l.type === "equity_share"))
+    out.push("has an equity share agreement: that company must be told before a new lien");
+  if (!p.free_clear && p.liens.some((l) => l.type === "business"))
+    out.push("a business-purpose or DSCR 1st often bars a 2nd behind it");
   if (p.purchased) {
     const [y, m] = p.purchased.split("-").map(Number);
     if (y && m) {
@@ -284,6 +340,8 @@ export function missingRealEstate(r: RealEstate): string[] {
     if (!p.title) out.push(`whose name is on ${which}'s title`);
     if (!/^\d{4}-\d{2}$/.test(p.purchased)) out.push(`when you bought ${which}`);
     if (amount(p.value) == null) out.push(`what ${which} is worth today`);
+    if (!p.listed) out.push(`whether ${which} is listed for sale`);
+    if (!p.condition) out.push(`${which}'s condition`);
     if (!p.free_clear) {
       const real = p.liens.filter((l) => l.type);
       if (real.length === 0) out.push(`what's owed on ${which} (or tick "owned free and clear")`);
@@ -295,6 +353,9 @@ export function missingRealEstate(r: RealEstate): string[] {
     }
   });
   if (!r.foreclosure) out.push("whether you've had a foreclosure or short sale in 7 years");
+  if (!r.interest) out.push("whether you'd use your property for funding");
+  if ((r.interest === "yes" || r.interest === "maybe") && !r.borrower)
+    out.push("who would receive property-backed funding");
   return out;
 }
 
