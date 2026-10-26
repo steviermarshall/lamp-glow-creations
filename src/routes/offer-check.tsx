@@ -193,7 +193,7 @@ function OfferCheckPage() {
   };
 
   return (
-    <PageShell>
+    <PageShell tone="night">
       <section className="lamp-light text-paper">
         <div className="mx-auto max-w-6xl px-5 pb-14 pt-14 sm:px-6 sm:pt-20">
           <Eyebrow dark>Offer Check · free · nothing saved</Eyebrow>
@@ -448,7 +448,7 @@ function Results({
   return (
     <div className="space-y-4">
       <div className="rounded-2xl bg-ink p-6 text-paper sm:p-8" aria-live="polite">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-leaf">
           Your offer in dollars
         </p>
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5">
@@ -478,7 +478,7 @@ function Results({
         {SHOW_YEARLY_RATE && result.apr !== null && (
           <div className="mt-6 rounded-xl bg-white/5 p-4 ring-1 ring-white/10">
             <p className="text-sm text-mist">Estimated yearly rate</p>
-            <p className="font-display text-4xl font-bold tabular-nums text-amber">
+            <p className="font-display text-4xl font-bold tabular-nums text-leaf">
               about {Math.round(result.apr * 100)}%
             </p>
             <p className="mt-2 text-sm leading-relaxed text-mist">
@@ -527,10 +527,7 @@ function Results({
           {notes.map((n) => (
             <li key={n.text} className="flex gap-3 leading-relaxed">
               {n.tone === "warn" ? (
-                <AlertTriangle
-                  className="mt-1 size-5 shrink-0 text-amber-deep"
-                  aria-hidden="true"
-                />
+                <AlertTriangle className="mt-1 size-5 shrink-0 text-forest" aria-hidden="true" />
               ) : (
                 <Info className="mt-1 size-5 shrink-0 text-sky" aria-hidden="true" />
               )}
@@ -647,7 +644,7 @@ function Compare({
           </div>
           {saved.length > 1 && (
             <p className="max-w-md text-sm text-smoke">
-              Best in each row is marked in amber. The cheapest offer is not always the right one if
+              Best in each row is marked in green. The cheapest offer is not always the right one if
               its weekly payment is too heavy for your deposits.
             </p>
           )}
@@ -676,7 +673,7 @@ function Compare({
                       {tags[i]?.map((t) => (
                         <span
                           key={t}
-                          className="rounded-full bg-amber/15 px-2 py-0.5 text-xs font-semibold text-amber-deep"
+                          className="rounded-full bg-leaf/15 px-2 py-0.5 text-xs font-semibold text-forest"
                         >
                           {t}
                         </span>
@@ -686,7 +683,7 @@ function Compare({
                       <button
                         type="button"
                         onClick={() => onLoad(s)}
-                        className="font-semibold text-amber-deep underline-offset-4 hover:underline"
+                        className="font-semibold text-forest underline-offset-4 hover:underline"
                       >
                         Edit
                       </button>
@@ -716,7 +713,7 @@ function Compare({
                       key={s.id}
                       className={cn(
                         "px-4 py-3.5 tabular-nums",
-                        row.best === i && saved.length > 1 && "font-semibold text-amber-deep",
+                        row.best === i && saved.length > 1 && "font-semibold text-forest",
                       )}
                     >
                       {row.cell(s.result, s)}

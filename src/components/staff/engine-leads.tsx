@@ -242,7 +242,7 @@ export function EngineLeads({
                     {r.phone ? (
                       <a
                         href={`tel:${tel(r.phone)}`}
-                        className="underline-offset-4 hover:text-amber-deep hover:underline"
+                        className="underline-offset-4 hover:text-forest hover:underline"
                       >
                         {r.phone}
                       </a>

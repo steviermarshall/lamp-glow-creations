@@ -4,10 +4,13 @@ import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { SITE, telHref } from "@/lib/site";
+import { LampField } from "@/components/site/lamp-field";
+import { LampOrb } from "@/components/site/lamp-orb";
+import { useLamplightGlass } from "@/components/site/lamp-lens";
 
-// Buttons. Primary is the lamp: amber with ink text. Ghost sits on dark ground, outline on paper.
+// Buttons. Primary is the lamp: leaf green with ink text. Ghost sits on dark ground, outline on paper.
 export const btnPrimary =
-  "inline-flex items-center justify-center gap-2 rounded-full bg-amber px-6 py-3.5 text-[0.95rem] font-semibold text-ink shadow-[0_8px_24px_-10px_oklch(0.8_0.145_72/0.8)] transition hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-full bg-leaf px-6 py-3.5 text-[0.95rem] font-semibold text-ink shadow-[0_8px_24px_-10px_oklch(0.615_0.117_150/0.8)] transition hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50";
 export const btnGhost =
   "inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-[0.95rem] font-semibold text-paper ring-1 ring-white/20 transition hover:bg-white/5 disabled:pointer-events-none disabled:opacity-50";
 export const btnOutline =
@@ -19,15 +22,13 @@ export const cardDark = "rounded-2xl border border-white/10 bg-ink-2";
 
 export function LampMark({ size = "lg" }: { size?: "lg" | "sm" }) {
   const box = size === "lg" ? "size-9 rounded-[11px]" : "size-7 rounded-[9px]";
-  const dot = size === "lg" ? "size-3.5" : "size-2.5";
+  const orb = size === "lg" ? "size-6" : "size-5";
   return (
     <span
-      className={cn("grid place-items-center bg-ink-2 ring-1 ring-white/10", box)}
+      className={cn("grid place-items-center bg-forest ring-1 ring-white/10", box)}
       aria-hidden="true"
     >
-      <span
-        className={cn("rounded-full bg-amber shadow-[0_0_14px_3px_oklch(0.8_0.145_72/0.65)]", dot)}
-      />
+      <LampOrb className={orb} variant="mark" />
     </span>
   );
 }
@@ -42,7 +43,7 @@ export function Wordmark({ size = "lg" }: { size?: "lg" | "sm" }) {
           size === "lg" ? "text-xl" : "text-lg",
         )}
       >
-        Lamp
+        Lamp<span className="text-leaf">.</span>
       </span>
     </span>
   );
@@ -56,13 +57,30 @@ const NAV = [
   { label: "About", to: "/about" },
 ] as const;
 
-export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
+export function SiteHeader({
+  minimal = false,
+  floating = false,
+}: {
+  minimal?: boolean;
+  /** Lamplight pages: a glass bar floating over the dot field instead of a full-width band. */
+  floating?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-ink/95 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5 sm:px-6">
+    <header
+      className={cn(
+        "sticky top-0 z-40",
+        floating ? "px-3 pt-3 sm:px-4" : "border-b border-white/10 bg-ink/95 backdrop-blur-sm",
+      )}
+    >
+      <div
+        className={cn(
+          "mx-auto flex max-w-6xl items-center justify-between",
+          floating ? "ll-glass rounded-[1.4rem] py-2.5 pl-4 pr-2.5 sm:pl-5" : "px-5 py-3.5 sm:px-6",
+        )}
+      >
         <Link to="/" aria-label="Lamp home" className="rounded-lg">
           <Wordmark />
         </Link>
@@ -70,7 +88,12 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
         {!minimal && (
           <nav
             aria-label="Main"
-            className="hidden items-center gap-8 text-[0.95rem] font-medium text-mist md:flex"
+            className={cn(
+              "hidden items-center text-mist md:flex",
+              floating
+                ? "gap-6 font-mono text-[0.72rem] font-medium uppercase tracking-[0.12em]"
+                : "gap-8 text-[0.95rem] font-medium",
+            )}
           >
             {NAV.map((n) => (
               <Link
@@ -114,7 +137,15 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
       </div>
 
       {open && (
-        <nav aria-label="Mobile" className="border-t border-white/10 px-5 pb-6 pt-2 md:hidden">
+        <nav
+          aria-label="Mobile"
+          className={cn(
+            "px-5 pb-6 pt-2 md:hidden",
+            floating
+              ? "mx-auto mt-2 max-w-6xl rounded-[1.4rem] bg-night/90 ring-1 ring-white/10 backdrop-blur-xl"
+              : "border-t border-white/10",
+          )}
+        >
           {NAV.map((n) => (
             <Link
               key={n.label}
@@ -242,20 +273,44 @@ export function PageShell({
   children,
   minimalHeader = false,
   footer = true,
+  tone = "paper",
 }: {
   children: ReactNode;
   minimalHeader?: boolean;
   footer?: boolean;
+  /**
+   * The Lamplight look (green-black ground, glass panels, the orb). "night" adds the live dot field
+   * and glass refraction (public pages, apply, login); "night-calm" keeps the same look still and
+   * with more solid panels (merchant account, staff portal), so forms and tables stay readable.
+   * Both re-map the app's light classes (white cards, ink text, hairlines) in styles.css.
+   */
+  tone?: "paper" | "night" | "night-calm";
 }) {
+  const live = tone === "night";
+  const night = live || tone === "night-calm";
+  useLamplightGlass(live);
   return (
-    <div className="font-body relative flex min-h-screen flex-col overflow-x-clip bg-paper text-ink antialiased">
+    <div
+      className={cn(
+        "font-body relative flex min-h-screen flex-col overflow-x-clip antialiased",
+        night
+          ? cn("ll-night isolate bg-night text-paper", live ? "ll-live" : "ll-calm")
+          : "bg-paper text-ink",
+      )}
+    >
+      {night && (
+        <>
+          {live && <LampField />}
+          <div aria-hidden="true" className="ll-atmos pointer-events-none fixed inset-0 -z-20" />
+        </>
+      )}
       <a
         href="#main"
-        className="sr-only z-50 rounded-full bg-amber px-4 py-2 font-semibold text-ink focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+        className="sr-only z-50 rounded-full bg-leaf px-4 py-2 font-semibold text-ink focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
       >
         Skip to content
       </a>
-      <SiteHeader minimal={minimalHeader} />
+      <SiteHeader minimal={minimalHeader} floating={night} />
       <main id="main" className="flex-1">
         {children}
       </main>
@@ -277,7 +332,7 @@ export function ProsePage({
   children: ReactNode;
 }) {
   return (
-    <PageShell>
+    <PageShell tone="night">
       <section className="lamp-light text-paper">
         <div className="mx-auto max-w-3xl px-5 pb-14 pt-14 sm:px-6 sm:pt-20">
           <Eyebrow dark>{eyebrow}</Eyebrow>
@@ -299,10 +354,10 @@ export function Eyebrow({ children, dark = false }: { children: ReactNode; dark?
     <span
       className={cn(
         "inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em]",
-        dark ? "text-amber" : "text-amber-deep",
+        dark ? "text-leaf" : "text-forest",
       )}
     >
-      <span className="size-1.5 rounded-full bg-amber shadow-[0_0_8px_2px_oklch(0.8_0.145_72/0.6)]" />
+      <span className="size-1.5 rounded-full bg-leaf shadow-[0_0_8px_2px_oklch(0.615_0.117_150/0.6)]" />
       {children}
     </span>
   );

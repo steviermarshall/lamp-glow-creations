@@ -58,7 +58,7 @@ const WONT = [
 
 function HowItWorksPage() {
   return (
-    <PageShell>
+    <PageShell tone="night">
       <section className="lamp-light text-paper">
         <div className="mx-auto max-w-3xl px-5 pb-16 pt-14 sm:px-6 sm:pt-20">
           <Eyebrow dark>How it works</Eyebrow>
@@ -77,18 +77,18 @@ function HowItWorksPage() {
           {STEPS.map((s, i) => (
             <li key={s.title} className="relative">
               <span
-                className="absolute -left-[2.85rem] top-0 grid size-9 place-items-center rounded-full bg-ink font-display text-sm font-bold tabular-nums text-amber sm:-left-[3.35rem]"
+                className="absolute -left-[2.85rem] top-0 grid size-9 place-items-center rounded-full bg-ink font-display text-sm font-bold tabular-nums text-leaf sm:-left-[3.35rem]"
                 aria-hidden="true"
               >
                 {i + 1}
               </span>
-              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-amber-deep">
+              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-forest">
                 {s.time}
               </p>
               <h2 className="mt-1 font-display text-2xl font-bold">{s.title}</h2>
               <p className="mt-2 text-lg leading-relaxed text-smoke">{s.body}</p>
               <p className="mt-2 flex items-center gap-2 font-medium">
-                <BadgeCheck className="size-5 shrink-0 text-amber-deep" /> {s.detail}
+                <BadgeCheck className="size-5 shrink-0 text-forest" /> {s.detail}
               </p>
             </li>
           ))}
@@ -115,7 +115,7 @@ function HowItWorksPage() {
             <ul className="mt-5 space-y-3.5">
               {WONT.map((w) => (
                 <li key={w} className="flex items-start gap-3 text-lg">
-                  <X className="mt-1 size-5 shrink-0 text-amber" aria-hidden="true" />
+                  <X className="mt-1 size-5 shrink-0 text-leaf" aria-hidden="true" />
                   <span>{w}</span>
                 </li>
               ))}

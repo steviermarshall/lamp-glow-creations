@@ -24,14 +24,19 @@
   --color-paper: var(--paper);
   --color-sand: var(--sand);
   --color-line: var(--line);
-  --color-amber: var(--amber);
-  --color-amber-deep: var(--amber-deep);
+  --color-leaf: var(--leaf);
+  --color-leaf-hi: var(--leaf-hi);
+  --color-forest: var(--forest);
+  --color-night: var(--night);
+  --color-dim: var(--dim);
   --color-glow: var(--glow);
   --color-smoke: var(--smoke);
   --color-mist: var(--mist);
   --color-sky: var(--sky);
   --font-display: var(--font-display-family);
   --font-body: var(--font-body-family);
+  --font-serif: var(--font-serif-family);
+  --font-mono: var(--font-mono-family);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -75,24 +80,30 @@
 }
 
 :root {
-  /* Lamp brand (Marketing & Asset Brief, section 1): warm amber leads, deep warm neutral,
-     cream ground, one cool accent for UI states only. */
-  --ink: oklch(0.2 0.012 60);
-  --ink-2: oklch(0.26 0.014 60);
-  --paper: oklch(0.982 0.008 85);
-  --sand: oklch(0.948 0.016 82);
-  --line: oklch(0.9 0.018 78);
-  --amber: oklch(0.8 0.145 72);
-  --amber-deep: oklch(0.52 0.12 58);
-  --glow: oklch(0.88 0.11 82);
-  --smoke: oklch(0.46 0.02 60);
-  --mist: oklch(0.82 0.02 75);
+  /* Lamp brand (decided 2026-10-23, from Lamp's own application and ISO agreement): forest
+     #1d3a2e and leaf #4a985e, a green-black ground, a pale green-white paper, one cool accent for
+     focus states only. The logo is the orb, a lamp's light (Matthew 5:14-16). */
+  --night: oklch(0.144 0.015 161.2);
+  --ink: oklch(0.18 0.017 159.8);
+  --ink-2: oklch(0.229 0.022 164.3);
+  --paper: oklch(0.974 0.007 115.7);
+  --sand: oklch(0.947 0.013 126.4);
+  --line: oklch(0.904 0.017 133.8);
+  --forest: oklch(0.321 0.042 165.3);
+  --leaf: oklch(0.615 0.117 150.1);
+  --leaf-hi: oklch(0.803 0.095 152.4);
+  --glow: oklch(0.803 0.095 152.4);
+  --smoke: oklch(0.454 0.021 158.5);
+  --mist: oklch(0.816 0.021 154.8);
+  --dim: oklch(0.63 0.032 153);
   --sky: oklch(0.55 0.1 235);
   --font-display-family: "Commissioner", "Avenir Next", "Segoe UI", sans-serif;
   --font-body-family: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
+  --font-serif-family: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-mono-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
   --radius: 0.625rem;
-  --background: oklch(0.982 0.008 85);
-  --foreground: oklch(0.2 0.012 60);
+  --background: oklch(0.974 0.007 115.7);
+  --foreground: oklch(0.18 0.017 159.8);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
@@ -179,11 +190,11 @@ html {
   scroll-margin-top: 6rem;
 }
 
-/* The lamp: a warm pool of light on a dark ground. Static, so it costs nothing to paint. */
+/* The lamp: a pool of green light on a dark ground. Static, so it costs nothing to paint. */
 @utility lamp-light {
   background:
-    radial-gradient(ellipse 60% 70% at 18% 0%, oklch(0.8 0.145 72 / 0.32), transparent 62%),
-    radial-gradient(ellipse 40% 50% at 85% 10%, oklch(0.88 0.11 82 / 0.1), transparent 70%),
+    radial-gradient(ellipse 60% 70% at 18% 0%, oklch(0.615 0.117 150.1 / 0.3), transparent 62%),
+    radial-gradient(ellipse 40% 50% at 85% 10%, oklch(0.803 0.095 152.4 / 0.1), transparent 70%),
     var(--ink);
 }
 
@@ -251,7 +262,363 @@ h3 {
   margin-top: 0.4rem;
 }
 .prose-lamp a {
-  color: var(--color-amber-deep);
+  color: var(--color-forest);
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Lamplight (decided 2026-10-23): the public pages' look. A green-black ground with a live dot field
+ * (components/site/lamp-field.tsx), glass panels whose rim light and highlight follow the pointer,
+ * and the orb. Pages opt in with <PageShell tone="night">.
+ * ------------------------------------------------------------------------------------------- */
+:root {
+  /* the clearest glass (Asad, 2026-10-26, from the design room's Glass slider at 1): 12% fill, 2px blur */
+  --glass-a: 0.12;
+  --glass-blur: 2px;
+  --px: 0;
+  --py: 0;
+  --spring: linear(0, 0.0027 0.9%, 0.0509 4.7%, 0.1912 9.4%, 0.4204 14.7%, 0.6741 20%, 0.8862 25.3%, 1.0087 30.1%, 1.0554 34.6%, 1.0632 38.7%, 1.0479 44.2%, 1.0157 52.1%, 0.9982 60.4%, 0.9942 70.1%, 1.0003 84.5%, 1);
+}
+
+@layer components {
+  .ll-atmos {
+    background:
+      radial-gradient(95vh at 50% 42%, transparent 30%, oklch(0 0 0 / 0.4) 100%),
+      radial-gradient(60% 55% at 70% 18%, oklch(0.7 0.13 150 / 0.14), oklch(0.45 0.08 160 / 0.05) 50%, transparent 75%);
+  }
+
+  /* glass: the one panel material on Lamplight pages */
+  .ll-glass {
+    position: relative;
+    isolation: isolate;
+    --tilt: 0deg;
+    --mx: 50%;
+    --my: 50%;
+    background: linear-gradient(170deg, oklch(0.25 0.03 158 / var(--glass-a)), oklch(0.17 0.02 160 / calc(var(--glass-a) * 0.9)));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+    box-shadow:
+      inset 0 1px 0 oklch(1 0 0 / 0.07),
+      0 30px 70px -34px oklch(0 0 0 / 0.95);
+    transition: box-shadow 0.5s var(--spring), transform 0.5s var(--spring);
+  }
+  .ll-glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: linear-gradient(calc(135deg + var(--tilt)), oklch(0.947 0.012 153.7 / 0.3), oklch(0.947 0.012 153.7 / 0.08) 38%, transparent 60%, oklch(0.947 0.012 153.7 / 0.08));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+  .ll-glass::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(260px circle at var(--mx) var(--my), oklch(0.615 0.117 150.1 / 0.12), transparent 65%);
+    transition: opacity 0.4s ease;
+  }
+  .ll-glass:hover::after {
+    opacity: 1;
+  }
+  .ll-lift:hover {
+    transform: translateY(-3px);
+  }
+
+  /* a dark pool behind the hero copy so it reads over the dots */
+  .ll-shade::before {
+    content: "";
+    position: absolute;
+    inset: -40px -60px -40px -80px;
+    z-index: -1;
+    border-radius: 60px;
+    pointer-events: none;
+    background: radial-gradient(70% 70% at 35% 45%, oklch(0.144 0.015 161.2 / 0.86), oklch(0.144 0.015 161.2 / 0.5) 55%, transparent 80%);
+    filter: blur(12px);
+  }
+
+  /* proof cards that drift a little with the pointer (--px/--py, set on <html>) */
+  .ll-float {
+    transform: translate3d(calc(var(--px) * var(--d, 20) * 1px), calc(var(--py) * var(--d, 20) * 1px), 0);
+    transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  /* the orb (components/site/lamp-orb.tsx): the bloom breathes, the light inside drifts, the core glows */
+  .lamp-orb .o-bloom {
+    transform-box: view-box;
+    transform-origin: 32px 32px;
+    animation: orb-breathe 4.2s ease-in-out infinite;
+  }
+  .lamp-orb .o-plasma {
+    transform-box: view-box;
+    transform-origin: 32px 32px;
+    animation: orb-drift 38s linear infinite;
+  }
+  .lamp-orb .o-core {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: orb-core 5.2s ease-in-out infinite;
+  }
+  .ll-hub.is-lit .lamp-orb .o-bloom {
+    animation-duration: 1.8s;
+  }
+  .ll-hub.is-lit .lamp-orb .o-core {
+    animation-duration: 2.6s;
+  }
+
+  .ll-ticker {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  }
+  .ll-ticker-row {
+    animation: ll-tick 46s linear infinite;
+  }
+  .ll-ticker:hover .ll-ticker-row {
+    animation-play-state: paused;
+  }
+
+  .ll-pulse {
+    animation: ll-pulse 1.6s cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
+  }
+  .ll-flow {
+    stroke-dasharray: 4 6;
+    animation: ll-flow 0.9s linear infinite;
+  }
+
+  /* range inputs on glass */
+  .ll-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 28px;
+    background: transparent;
+    cursor: pointer;
+    --p: 50%;
+  }
+  .ll-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--leaf) var(--p), oklch(1 0 0 / 0.16) var(--p));
+  }
+  .ll-range::-moz-range-track {
+    height: 4px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--leaf) var(--p), oklch(1 0 0 / 0.16) var(--p));
+  }
+  .ll-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    margin-top: -9px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 4px oklch(0.615 0.117 150.1 / 0.35), 0 4px 12px oklch(0 0 0 / 0.35);
+  }
+  .ll-range::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 4px oklch(0.615 0.117 150.1 / 0.35), 0 4px 12px oklch(0 0 0 / 0.35);
+  }
+}
+
+@keyframes orb-breathe {
+  0%,
+  100% {
+    opacity: 0.82;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+@keyframes orb-drift {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes orb-core {
+  0%,
+  100% {
+    opacity: 0.88;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes ll-tick {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes ll-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.615 0.117 150.1 / 0.6);
+  }
+  60% {
+    box-shadow: 0 0 0 6px oklch(0.615 0.117 150.1 / 0);
+  }
+}
+@keyframes ll-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ll-float {
+    transform: none;
+  }
+}
+
+
+/* ---------------------------------------------------------------------------------------------
+ * Lamplight for the rest of the app. Pages written for paper (white cards, ink text, sand bands,
+ * line hairlines) render on the night ground through this map instead of a rewrite of every
+ * component. Unlayered on purpose so it wins over the utilities layer. ".ll-live" pages float
+ * their cards over the dot field; ".ll-calm" pages (account, staff) use firmer panels and no blur.
+ * ------------------------------------------------------------------------------------------- */
+.ll-night {
+  --surface: oklch(0.22 0.024 160 / 0.46);
+  --surface-2: oklch(1 0 0 / 0.04);
+  --surface-blur: 10px;
+  --hair: oklch(1 0 0 / 0.11);
+  --hair-strong: oklch(1 0 0 / 0.3);
+}
+.ll-night.ll-calm {
+  --surface: oklch(0.205 0.022 160 / 0.82);
+  --surface-blur: 0px;
+}
+:root:has(.ll-night) body {
+  background: var(--night);
+}
+/* the few shared ui components (accordion, toasts, dialogs) follow, portals included */
+:root:has(.ll-night) {
+  --background: oklch(0.144 0.015 161.2);
+  --foreground: oklch(0.947 0.012 153.7);
+  --card: oklch(0.205 0.022 160);
+  --card-foreground: oklch(0.947 0.012 153.7);
+  --popover: oklch(0.205 0.022 160);
+  --popover-foreground: oklch(0.947 0.012 153.7);
+  --primary: oklch(0.615 0.117 150.1);
+  --primary-foreground: oklch(0.18 0.017 159.8);
+  --secondary: oklch(0.27 0.025 160);
+  --secondary-foreground: oklch(0.947 0.012 153.7);
+  --muted: oklch(0.27 0.025 160);
+  --muted-foreground: oklch(0.816 0.021 154.8);
+  --accent: oklch(1 0 0 / 0.08);
+  --accent-foreground: oklch(0.947 0.012 153.7);
+  --destructive: oklch(0.72 0.17 25);
+  --border: oklch(1 0 0 / 0.11);
+  --input: oklch(1 0 0 / 0.16);
+  --ring: oklch(0.615 0.117 150.1);
+}
+
+/* surfaces */
+.ll-night .bg-white {
+  background-color: var(--surface);
+  -webkit-backdrop-filter: blur(var(--surface-blur)) saturate(1.3);
+  backdrop-filter: blur(var(--surface-blur)) saturate(1.3);
+}
+.ll-night .bg-paper {
+  background-color: transparent;
+}
+.ll-night .bg-sand,
+.ll-night .bg-sand\/60 {
+  background-color: var(--surface-2);
+}
+.ll-night .hover\:bg-sand:hover {
+  background-color: oklch(1 0 0 / 0.07);
+}
+.ll-night .bg-line {
+  background-color: oklch(1 0 0 / 0.14);
+}
+.ll-night .lamp-light {
+  background: transparent;
+}
+
+/* text */
+.ll-night .text-ink,
+.ll-night .hover\:text-ink:hover {
+  color: var(--paper);
+}
+.ll-night .text-smoke,
+.ll-night [class*="[&>svg]:text-smoke"] > svg {
+  color: var(--mist);
+}
+.ll-night .placeholder\:text-smoke\/60::placeholder {
+  color: oklch(0.816 0.021 154.8 / 0.5);
+}
+.ll-night .text-forest,
+.ll-night .hover\:text-forest:hover {
+  color: var(--leaf-hi);
+}
+/* ink text that sits on the leaf buttons and fills stays dark */
+.ll-night .bg-leaf.text-ink,
+.ll-night .bg-leaf .text-ink {
+  color: var(--ink);
+}
+
+/* hairlines and rings */
+.ll-night .border-line,
+.ll-night .border-line\/60 {
+  border-color: var(--hair);
+}
+.ll-night .divide-line > :not(:last-child) {
+  border-color: var(--hair);
+}
+.ll-night .ring-line,
+.ll-night .hover\:ring-line:hover {
+  --tw-ring-color: var(--hair);
+}
+.ll-night .hover\:ring-ink\/30:hover,
+.ll-night .hover\:ring-ink\/40:hover,
+.ll-night .focus\:ring-ink\/40:focus {
+  --tw-ring-color: var(--hair-strong);
+}
+
+/* long-form copy (about, privacy, terms) */
+.ll-night .prose-lamp {
+  color: var(--mist);
+}
+.ll-night .prose-lamp h2 {
+  color: var(--paper);
+}
+.ll-night .prose-lamp a {
+  color: var(--leaf-hi);
+}
+
+/* native form controls read as dark */
+.ll-night input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+.ll-night select,
+.ll-night textarea {
+  color-scheme: dark;
+}
+.ll-night :focus-visible {
+  outline-color: var(--leaf);
+}
+/* selected states: the dark ink pill becomes a leaf pill, the white segment a lit chip */
+.ll-night .bg-ink.text-white {
+  background-color: var(--leaf);
+  color: var(--ink);
+}
+.ll-night .bg-white.shadow-sm {
+  background-color: oklch(1 0 0 / 0.14);
+}
+.ll-night input[type="checkbox"],
+.ll-night input[type="radio"] {
+  color-scheme: dark;
+  accent-color: var(--leaf);
 }

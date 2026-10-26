@@ -31,7 +31,7 @@ export const Route = createFileRoute("/faq")({
 
 function Faq() {
   return (
-    <PageShell>
+    <PageShell tone="night">
       <section className="mx-auto max-w-3xl px-5 pb-24 pt-14 sm:px-6 sm:pt-20">
         <Eyebrow>FAQ</Eyebrow>
         <h1 className="mt-5 font-display text-4xl font-bold tracking-tight sm:text-5xl">
@@ -39,7 +39,7 @@ function Faq() {
         </h1>
         <p className="mt-5 text-lg leading-relaxed text-smoke">
           Everything owners usually ask before they check their options. Still curious? Email{" "}
-          <a className="text-amber-deep underline" href="mailto:hello@getlamp.app">
+          <a className="text-forest underline" href="mailto:hello@getlamp.app">
             hello@getlamp.app
           </a>
           .
