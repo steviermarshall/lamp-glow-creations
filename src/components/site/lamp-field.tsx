@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 /**
  * The Lamplight backdrop: a fixed WebGL field of dots, one per 6px cell, sized by slowly drifting
  * 3D simplex noise, with a pool of light that follows the pointer (dots under it swell and turn
- * leaf-light; faster movement brightens it, then it settles). With no pointer for a few seconds the
+ * leaf-light, at a steady brightness so moving the mouse never pulses the page). With no pointer for a few seconds the
  * light drifts on its own, so phones see it too. Two passes: noise at one texel per cell, then the
  * dots. Pauses while the tab is hidden; under prefers-reduced-motion the noise stops drifting.
  * Without WebGL it draws nothing and the page's own ground shows.
@@ -15,10 +15,10 @@ const FIELD = {
   cellCss: 6,
   dot: [0.247, 0.604, 0.361] as Rgb, // small dots: leaf
   deep: [0.024, 0.071, 0.043] as Rgb, // large dots fade into the night ground
-  hot: [0.714, 0.941, 0.765] as Rgb, // under the light
+  hot: [0.561, 0.82, 0.631] as Rgb, // under the light: leaf-hi
   volume: 0.9,
   sides: 0.26, // dim behind the centre column so the copy reads, full at the edges
-  glow: 0.16,
+  glow: 0.08,
   lampRadius: 320,
 };
 
@@ -36,7 +36,7 @@ void main(){vec2 pix=vec2(gl_FragCoord.x,u_res.y-gl_FragCoord.y);vec2 cell=floor
 vec4 nz=texture2D(u_noise,(cell+0.5)/u_cells);float g2=(floor(nz.r*255.0+0.5)*256.0+floor(nz.g*255.0+0.5))/65535.0;
 float d=length(cc-u_mouse)/u_R;float lamp=exp(-d*d*2.4)*u_k;float lc=clamp(lamp,0.0,1.0);
 vec2 cuv=fract(pix/u_cell)-0.5;float dist=length(cuv);float aa=1.0/u_cell+1e-4;float rad=min(g2*0.5*(1.0+lc*0.55),0.5);
-float mark=1.0-smoothstep(rad-aa,rad+aa,dist);vec3 col=mix(u_c1,u_c2,clamp(g2*2.0-1.0,0.0,1.0));col=mix(col,u_hot,lc*0.85);
+float mark=1.0-smoothstep(rad-aa,rad+aa,dist);vec3 col=mix(u_c1,u_c2,clamp(g2*2.0-1.0,0.0,1.0));col=mix(col,u_hot,lc*0.6);
 float lateral=abs(suv.x-0.5)*2.0;float sides=mix(u_sides,1.0,smoothstep(0.5,0.96,lateral));sides=max(sides,lc);
 float dotA=clamp(mark*u_vol*sides*(1.0+lc*0.5),0.0,1.0);float glowA=lc*u_glow;
 gl_FragColor=vec4(u_hot*glowA*(1.0-dotA)+col*dotA,glowA*(1.0-dotA)+dotA);}`;
@@ -135,13 +135,12 @@ export function LampField() {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     };
 
-    // pointer target, eased position, energy from speed; the light drifts on its own when idle
+    // pointer target and eased position (steady brightness: speed never flares it); the light drifts on its own when idle
     let tx = window.innerWidth * 0.68,
       ty = window.innerHeight * 0.42,
       mx = tx,
       my = ty;
-    let energy = 0,
-      lastMove = -1e9,
+    let lastMove = -1e9,
       scrollNow = 0,
       scrollS = 0,
       pending = false,
@@ -158,10 +157,9 @@ export function LampField() {
         tx = window.innerWidth * (0.62 + 0.2 * Math.sin(a * 0.31));
         ty = window.innerHeight * (0.42 + 0.16 * Math.sin(a * 0.47 + 1.2));
       }
-      const ease = idle ? 0.03 : 0.14;
+      const ease = idle ? 0.03 : 0.08;
       mx += (tx - mx) * ease;
       my += (ty - my) * ease;
-      energy *= 0.94;
       scrollS += (scrollNow - scrollS) * 0.12;
       const t = reduce ? 0 : ((now - t0) / 1000) * 0.06;
 
@@ -184,7 +182,7 @@ export function LampField() {
       gl.uniform1f(D.cell, cell);
       gl.uniform2f(D.mouse, mx * dpr, my * dpr);
       gl.uniform1f(D.R, FIELD.lampRadius * dpr);
-      gl.uniform1f(D.k, 0.75 + energy);
+      gl.uniform1f(D.k, 0.85);
       gl.uniform1f(D.vol, FIELD.volume);
       gl.uniform1f(D.sides, FIELD.sides);
       gl.uniform1f(D.glow, FIELD.glow);
@@ -194,9 +192,7 @@ export function LampField() {
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       const settling =
-        Math.abs(tx - mx) + Math.abs(ty - my) > 0.5 ||
-        energy > 0.01 ||
-        Math.abs(scrollNow - scrollS) > 0.001;
+        Math.abs(tx - mx) + Math.abs(ty - my) > 0.5 || Math.abs(scrollNow - scrollS) > 0.001;
       if (!reduce || settling || idle) raf();
     };
     const raf = () => {
@@ -207,12 +203,9 @@ export function LampField() {
     };
 
     const onMove = (e: PointerEvent) => {
-      const dx = e.clientX - tx,
-        dy = e.clientY - ty;
       tx = e.clientX;
       ty = e.clientY;
       lastMove = performance.now();
-      if (!reduce) energy = Math.min(energy + Math.hypot(dx, dy) * 0.0035, 0.9);
       raf();
     };
     const onScroll = () => {
