@@ -27,7 +27,7 @@ export function LampMark({ size = "lg" }: { size?: "lg" | "sm" }) {
       className={cn("grid place-items-center bg-forest ring-1 ring-white/10", box)}
       aria-hidden="true"
     >
-      <LampOrb className={orb} />
+      <LampOrb className={orb} variant="mark" />
     </span>
   );
 }

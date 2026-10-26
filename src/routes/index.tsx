@@ -556,9 +556,9 @@ function FundingOptions() {
               />
             ))}
           </svg>
-          <div className="ll-glass absolute left-1/2 top-1/2 grid aspect-square w-[38%] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full p-5 text-center">
+          <div className="ll-glass absolute left-1/2 top-1/2 grid aspect-square w-[41%] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full p-5 text-center">
             <div>
-              <LampOrb className="mx-auto size-20" />
+              <LampOrb className="mx-auto -mb-1 -mt-3 size-[6.5rem]" />
               <p className="mt-1.5 font-display text-[0.95rem] font-bold" aria-live="polite">
                 {shown ? shown.title : "One application"}
               </p>

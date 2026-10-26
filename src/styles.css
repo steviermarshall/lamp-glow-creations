@@ -351,31 +351,27 @@ h3 {
     transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
   }
 
-  /* the orb */
-  .lamp-orb .o-halo {
-    fill: var(--leaf);
-    opacity: 0.55;
-  }
-  .lamp-orb .o-glow {
-    fill: var(--leaf);
-    opacity: 0.45;
-    transform-box: fill-box;
-    transform-origin: center;
+  /* the orb (components/site/lamp-orb.tsx): the bloom breathes, the light inside drifts, the core flickers */
+  .lamp-orb .o-bloom {
+    transform-box: view-box;
+    transform-origin: 32px 32px;
     animation: orb-breathe 4.2s ease-in-out infinite;
   }
-  .lamp-orb .o-body {
-    fill: var(--leaf);
+  .lamp-orb .o-plasma {
+    transform-box: view-box;
+    transform-origin: 32px 32px;
+    animation: orb-drift 38s linear infinite;
   }
   .lamp-orb .o-core {
-    fill: var(--leaf-hi);
-    opacity: 0.85;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: orb-core 3.1s ease-in-out infinite;
   }
-  .lamp-orb .o-hl {
-    fill: #fff;
-    opacity: 0.8;
-  }
-  .ll-hub.is-lit .lamp-orb .o-glow {
+  .ll-hub.is-lit .lamp-orb .o-bloom {
     animation-duration: 1.8s;
+  }
+  .ll-hub.is-lit .lamp-orb .o-core {
+    animation-duration: 1.4s;
   }
 
   .ll-ticker {
@@ -439,12 +435,32 @@ h3 {
 @keyframes orb-breathe {
   0%,
   100% {
-    opacity: 0.34;
+    opacity: 0.82;
     transform: scale(1);
   }
   50% {
-    opacity: 0.52;
-    transform: scale(1.08);
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+@keyframes orb-drift {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes orb-core {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1.07);
+  }
+  70% {
+    opacity: 0.92;
+    transform: scale(0.98);
   }
 }
 @keyframes ll-tick {
