@@ -9,6 +9,7 @@ import { PageShell } from "@/components/site/layout";
 import { Board } from "@/components/staff/board";
 import { FileView } from "@/components/staff/file-view";
 import { EngineLeads } from "@/components/staff/engine-leads";
+import { SentApplications } from "@/components/staff/sent-applications";
 import { Funders } from "@/components/staff/funders";
 import { Money } from "@/components/staff/money";
 
@@ -19,10 +20,11 @@ type StaffSearch = {
   file?: string | undefined;
 };
 
-type View = "engine" | "funders" | "money";
-const VIEWS: readonly View[] = ["engine", "funders", "money"];
+type View = "engine" | "sent" | "funders" | "money";
+const VIEWS: readonly View[] = ["engine", "sent", "funders", "money"];
 const VIEW_TITLE: Record<View, string> = {
   engine: "Engine leads",
+  sent: "Applications",
   funders: "Funders",
   money: "Money",
 };
@@ -133,6 +135,8 @@ function Staff() {
           />
         ) : search.view === "engine" ? (
           <EngineLeads isAdmin={access.isAdmin} repSlug={access.repSlug} reps={reps} />
+        ) : search.view === "sent" ? (
+          <SentApplications isAdmin={access.isAdmin} repSlug={access.repSlug} reps={reps} />
         ) : search.view === "funders" ? (
           <Funders isAdmin={access.isAdmin} />
         ) : search.view === "money" ? (

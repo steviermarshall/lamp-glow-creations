@@ -23,6 +23,8 @@ import { FileSend } from "@/components/staff/file-send";
 
 type FileRow = {
   id: string;
+  /** null: signed from an application link, and the merchant hasn't signed in yet. */
+  user_id: string | null;
   status: Stage;
   rep_slug: string | null;
   answers: Answers;
@@ -65,7 +67,7 @@ type DocRow = {
 };
 
 const FILE_COLUMNS =
-  "id,status,rep_slug,answers,first_name,business_name,phone,email,amount_requested,purpose,phone_consent_at,phone_consent_text,staff_notes,created_at,assigned_at,submitted_at,funded_at,closed_at";
+  "id,user_id,status,rep_slug,answers,first_name,business_name,phone,email,amount_requested,purpose,phone_consent_at,phone_consent_text,staff_notes,created_at,assigned_at,submitted_at,funded_at,closed_at";
 const SIGNED_URL_SECONDS = 60;
 
 const DOC_TAG: Record<DocStatus, string> = {
@@ -283,6 +285,17 @@ export function FileView({
                 full && full !== RESTRICTED
                   ? await revealFullApplication(fileId, "application_pdf")
                   : null;
+              // the drawn signatures and how it was signed go on the PDF too
+              const signature = pdfFull && {
+                name: pdfFull.signedName,
+                at: pdfFull.signedAt,
+                image: pdfFull.signatureImage,
+                name2: pdfFull.signedName2,
+                image2: pdfFull.signatureImage2,
+                via: pdfFull.signedVia,
+                ip: pdfFull.signerIp,
+                agent: pdfFull.signerAgent,
+              };
               await downloadApplicationPdf(
                 {
                   answers: file.answers,
@@ -293,10 +306,10 @@ export function FileView({
                   amount_requested: file.amount_requested,
                   repName: file.rep_slug ? repName(file.rep_slug) : null,
                 },
-                pdfFull
+                pdfFull && signature
                   ? detailsToPdf(
                       pdfFull.details,
-                      { name: pdfFull.signedName, at: pdfFull.signedAt },
+                      signature,
                       file.rep_slug ? repName(file.rep_slug) : null,
                     )
                   : undefined,
@@ -315,6 +328,21 @@ export function FileView({
               : "Application PDF"}
         </button>
       </div>
+
+      {file.user_id === null && (
+        <p className="mt-4 rounded-xl bg-sand px-4 py-3 text-sm" data-unclaimed>
+          <span className="font-semibold">No Lamp account yet: signed from a link.</span>{" "}
+          <span className="text-smoke">
+            It moves into their account when they sign in with{" "}
+            {file.email ? (
+              <span className="font-medium text-ink">{file.email}</span>
+            ) : (
+              "the email on the application"
+            )}
+            .
+          </span>
+        </p>
+      )}
 
       {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 

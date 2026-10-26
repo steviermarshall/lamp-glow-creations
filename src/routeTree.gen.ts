@@ -20,7 +20,12 @@ import { Route as OfferCheckRouteImport } from './routes/offer-check'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as ApiApplicationInvitesRouteImport } from './routes/api.application-invites'
+import { Route as ApplicationRepRouteImport } from './routes/application.$rep'
 import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
+import { Route as ApiApplicationOpenRouteImport } from './routes/api.application.open'
+import { Route as ApiApplicationSubmitRouteImport } from './routes/api.application.submit'
+import { Route as ApiApplicationUploadRouteImport } from './routes/api.application.upload'
 import { Route as ApiFundersSendRouteImport } from './routes/api.funders.send'
 import { Route as ApiGmailCallbackRouteImport } from './routes/api.gmail.callback'
 import { Route as ApiGmailConnectRouteImport } from './routes/api.gmail.connect'
@@ -80,9 +85,34 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiApplicationInvitesRoute = ApiApplicationInvitesRouteImport.update({
+  id: '/api/application-invites',
+  path: '/api/application-invites',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApplicationRepRoute = ApplicationRepRouteImport.update({
+  id: '/application/$rep',
+  path: '/application/$rep',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApplyRepRoute = ApplyRepRouteImport.update({
   id: '/apply_/$rep',
   path: '/apply/$rep',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiApplicationOpenRoute = ApiApplicationOpenRouteImport.update({
+  id: '/api/application/open',
+  path: '/api/application/open',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiApplicationSubmitRoute = ApiApplicationSubmitRouteImport.update({
+  id: '/api/application/submit',
+  path: '/api/application/submit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiApplicationUploadRoute = ApiApplicationUploadRouteImport.update({
+  id: '/api/application/upload',
+  path: '/api/application/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiFundersSendRoute = ApiFundersSendRouteImport.update({
@@ -113,7 +143,12 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
+  '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
+  '/api/application/open': typeof ApiApplicationOpenRoute
+  '/api/application/submit': typeof ApiApplicationSubmitRoute
+  '/api/application/upload': typeof ApiApplicationUploadRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
@@ -130,7 +165,12 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
+  '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
+  '/api/application/open': typeof ApiApplicationOpenRoute
+  '/api/application/submit': typeof ApiApplicationSubmitRoute
+  '/api/application/upload': typeof ApiApplicationUploadRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
@@ -148,7 +188,12 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
+  '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/application/$rep': typeof ApplicationRepRoute
   '/apply_/$rep': typeof ApplyRepRoute
+  '/api/application/open': typeof ApiApplicationOpenRoute
+  '/api/application/submit': typeof ApiApplicationSubmitRoute
+  '/api/application/upload': typeof ApiApplicationUploadRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
@@ -167,7 +212,12 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/staff'
     | '/terms'
+    | '/api/application-invites'
+    | '/application/$rep'
     | '/apply/$rep'
+    | '/api/application/open'
+    | '/api/application/submit'
+    | '/api/application/upload'
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
@@ -184,7 +234,12 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/staff'
     | '/terms'
+    | '/api/application-invites'
+    | '/application/$rep'
     | '/apply/$rep'
+    | '/api/application/open'
+    | '/api/application/submit'
+    | '/api/application/upload'
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
@@ -201,7 +256,12 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/staff'
     | '/terms'
+    | '/api/application-invites'
+    | '/application/$rep'
     | '/apply_/$rep'
+    | '/api/application/open'
+    | '/api/application/submit'
+    | '/api/application/upload'
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
@@ -219,7 +279,12 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   StaffRoute: typeof StaffRoute
   TermsRoute: typeof TermsRoute
+  ApiApplicationInvitesRoute: typeof ApiApplicationInvitesRoute
+  ApplicationRepRoute: typeof ApplicationRepRoute
   ApplyRepRoute: typeof ApplyRepRoute
+  ApiApplicationOpenRoute: typeof ApiApplicationOpenRoute
+  ApiApplicationSubmitRoute: typeof ApiApplicationSubmitRoute
+  ApiApplicationUploadRoute: typeof ApiApplicationUploadRoute
   ApiFundersSendRoute: typeof ApiFundersSendRoute
   ApiGmailCallbackRoute: typeof ApiGmailCallbackRoute
   ApiGmailConnectRoute: typeof ApiGmailConnectRoute
@@ -304,11 +369,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/application-invites': {
+      id: '/api/application-invites'
+      path: '/api/application-invites'
+      fullPath: '/api/application-invites'
+      preLoaderRoute: typeof ApiApplicationInvitesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/application/$rep': {
+      id: '/application/$rep'
+      path: '/application/$rep'
+      fullPath: '/application/$rep'
+      preLoaderRoute: typeof ApplicationRepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/apply_/$rep': {
       id: '/apply_/$rep'
       path: '/apply/$rep'
       fullPath: '/apply/$rep'
       preLoaderRoute: typeof ApplyRepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/application/open': {
+      id: '/api/application/open'
+      path: '/api/application/open'
+      fullPath: '/api/application/open'
+      preLoaderRoute: typeof ApiApplicationOpenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/application/submit': {
+      id: '/api/application/submit'
+      path: '/api/application/submit'
+      fullPath: '/api/application/submit'
+      preLoaderRoute: typeof ApiApplicationSubmitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/application/upload': {
+      id: '/api/application/upload'
+      path: '/api/application/upload'
+      fullPath: '/api/application/upload'
+      preLoaderRoute: typeof ApiApplicationUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/funders/send': {
@@ -347,7 +447,12 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   StaffRoute: StaffRoute,
   TermsRoute: TermsRoute,
+  ApiApplicationInvitesRoute: ApiApplicationInvitesRoute,
+  ApplicationRepRoute: ApplicationRepRoute,
   ApplyRepRoute: ApplyRepRoute,
+  ApiApplicationOpenRoute: ApiApplicationOpenRoute,
+  ApiApplicationSubmitRoute: ApiApplicationSubmitRoute,
+  ApiApplicationUploadRoute: ApiApplicationUploadRoute,
   ApiFundersSendRoute: ApiFundersSendRoute,
   ApiGmailCallbackRoute: ApiGmailCallbackRoute,
   ApiGmailConnectRoute: ApiGmailConnectRoute,
