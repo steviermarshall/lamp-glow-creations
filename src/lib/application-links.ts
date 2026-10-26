@@ -51,6 +51,9 @@ export type OpenState = "open" | "signed" | "expired" | "cancelled" | "not_found
 
 export type OpenResponse = {
   state: OpenState;
+  /** A personal link's invite id: the browser keys its saved draft by it, so a resent link
+   *  (new token, same invite) opens the merchant's progress. Null for a rep's public link. */
+  draft?: string | null;
   rep: { slug: string; name: string; title: string | null } | null;
   /** What the rep already knows, so the merchant doesn't type it twice. */
   prefill: {
@@ -67,7 +70,16 @@ export type SubmitResponse = {
   claim_token: string;
   rep_name: string;
   email: string;
+  /** What the database stamped, for the signed PDF's signature record. */
+  signed_at: string;
+  signer_ip: string | null;
 };
+
+/**
+ * What the page sends to /api/application/upload as "kind": bank statements (several), or the
+ * signed application PDF it builds after submit with the database's signed_at and IP (one).
+ */
+export type UploadKind = "bank_statement" | "funder_application";
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
