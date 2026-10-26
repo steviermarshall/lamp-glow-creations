@@ -441,6 +441,80 @@ export type Database = {
           },
         ]
       }
+      engine_leads: {
+        Row: {
+          city: string | null
+          email: string | null
+          first_found: string | null
+          id: number
+          industry: string | null
+          name: string | null
+          need: number | null
+          notes: string
+          phone: string | null
+          pushed_at: string
+          reason: string | null
+          rep_slug: string | null
+          signals: Json
+          source: string
+          source_key: string
+          state: string | null
+          status: string
+          tier: string | null
+          worked_at: string | null
+        }
+        Insert: {
+          city?: string | null
+          email?: string | null
+          first_found?: string | null
+          id?: number
+          industry?: string | null
+          name?: string | null
+          need?: number | null
+          notes?: string
+          phone?: string | null
+          pushed_at?: string
+          reason?: string | null
+          rep_slug?: string | null
+          signals?: Json
+          source: string
+          source_key: string
+          state?: string | null
+          status?: string
+          tier?: string | null
+          worked_at?: string | null
+        }
+        Update: {
+          city?: string | null
+          email?: string | null
+          first_found?: string | null
+          id?: number
+          industry?: string | null
+          name?: string | null
+          need?: number | null
+          notes?: string
+          phone?: string | null
+          pushed_at?: string
+          reason?: string | null
+          rep_slug?: string | null
+          signals?: Json
+          source?: string
+          source_key?: string
+          state?: string | null
+          status?: string
+          tier?: string | null
+          worked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "engine_leads_rep_slug_fkey"
+            columns: ["rep_slug"]
+            isOneToOne: false
+            referencedRelation: "reps"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       events: {
         Row: {
           actor_user_id: string | null
@@ -586,80 +660,6 @@ export type Database = {
         }
         Relationships: []
       }
-      engine_leads: {
-        Row: {
-          city: string | null
-          email: string | null
-          first_found: string | null
-          id: number
-          industry: string | null
-          name: string | null
-          need: number | null
-          notes: string
-          phone: string | null
-          pushed_at: string
-          reason: string | null
-          rep_slug: string | null
-          signals: Json
-          source: string
-          source_key: string
-          state: string | null
-          status: string
-          tier: string | null
-          worked_at: string | null
-        }
-        Insert: {
-          city?: string | null
-          email?: string | null
-          first_found?: string | null
-          id?: number
-          industry?: string | null
-          name?: string | null
-          need?: number | null
-          notes?: string
-          phone?: string | null
-          pushed_at?: string
-          reason?: string | null
-          rep_slug?: string | null
-          signals?: Json
-          source: string
-          source_key: string
-          state?: string | null
-          status?: string
-          tier?: string | null
-          worked_at?: string | null
-        }
-        Update: {
-          city?: string | null
-          email?: string | null
-          first_found?: string | null
-          id?: number
-          industry?: string | null
-          name?: string | null
-          need?: number | null
-          notes?: string
-          phone?: string | null
-          pushed_at?: string
-          reason?: string | null
-          rep_slug?: string | null
-          signals?: Json
-          source?: string
-          source_key?: string
-          state?: string | null
-          status?: string
-          tier?: string | null
-          worked_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "engine_leads_rep_slug_fkey"
-            columns: ["rep_slug"]
-            isOneToOne: false
-            referencedRelation: "reps"
-            referencedColumns: ["slug"]
-          },
-        ]
-      }
       leads: {
         Row: {
           answers: Json
@@ -723,6 +723,48 @@ export type Database = {
             referencedColumns: ["slug"]
           },
         ]
+      }
+      mailer_connections: {
+        Row: {
+          connected_at: string
+          connected_by: string | null
+          mailbox: string
+          refresh_token: string
+          scope: string | null
+        }
+        Insert: {
+          connected_at?: string
+          connected_by?: string | null
+          mailbox: string
+          refresh_token: string
+          scope?: string | null
+        }
+        Update: {
+          connected_at?: string
+          connected_by?: string | null
+          mailbox?: string
+          refresh_token?: string
+          scope?: string | null
+        }
+        Relationships: []
+      }
+      oauth_states: {
+        Row: {
+          created_at: string
+          state: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          state: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       offers: {
         Row: {
@@ -929,6 +971,48 @@ export type Database = {
           },
         ]
       }
+      sensitive_access_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_user_id: string | null
+          application_id: string | null
+          id: number
+          occurred_at: string
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_user_id?: string | null
+          application_id?: string | null
+          id?: never
+          occurred_at?: string
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_user_id?: string | null
+          application_id?: string | null
+          id?: never
+          occurred_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sensitive_access_log_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sensitive_access_log_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_board"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       submissions: {
         Row: {
           application_id: string
@@ -1113,6 +1197,20 @@ export type Database = {
       }
     }
     Functions: {
+      _funder_matches: {
+        Args: { _application_id: string }
+        Returns: {
+          already_sent: boolean
+          auto_send: boolean
+          blockers: string[]
+          checks: string[]
+          eligible: boolean
+          funder_id: string
+          funder_name: string
+          submission_email: string
+        }[]
+      }
+      _num: { Args: { _t: string }; Returns: number }
       accept_offer: {
         Args: { _offer_id: string }
         Returns: {
@@ -1145,6 +1243,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      can_see_application_details: {
+        Args: { _application_id: string }
+        Returns: boolean
       }
       current_rep_slug: { Args: { _user_id?: string }; Returns: string }
       funder_matches: {
@@ -1179,6 +1281,13 @@ export type Database = {
           mailbox: string
         }[]
       }
+      mask_owner: { Args: { _owner: Json }; Returns: Json }
+      rep_can_read_file: { Args: { _name: string }; Returns: boolean }
+      rep_can_see_application: {
+        Args: { _application_id: string }
+        Returns: boolean
+      }
+      rep_can_see_user: { Args: { _user_id: string }; Returns: boolean }
       reveal_application_details: {
         Args: { _application_id: string; _purpose?: string }
         Returns: Json
@@ -1187,6 +1296,7 @@ export type Database = {
         Args: { _application_id: string }
         Returns: Json
       }
+      storage_object_is_indexed: { Args: { _name: string }; Returns: boolean }
     }
     Enums: {
       app_role: "merchant" | "rep" | "admin"
