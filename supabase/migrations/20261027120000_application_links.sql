@@ -55,6 +55,10 @@ alter table public.application_details
   add column if not exists signer_ip text,
   add column if not exists signed_via text;
 
+-- the per-network limit in submit_link_application reads this
+create index if not exists application_details_link_ip_idx
+  on public.application_details (signer_ip, signed_at) where signed_via = 'link';
+
 do $$
 begin
   alter table public.application_details add constraint application_details_real_estate_object
@@ -270,6 +274,7 @@ declare
   owner0 jsonb := coalesce(_details -> 'owners' -> 0, '{}'::jsonb);
   biz jsonb := coalesce(_details -> 'business', '{}'::jsonb);
   recent int;
+  amt numeric;
 begin
   if _claim_token_hash is null or _claim_token_hash !~ '^[0-9a-f]{64}$' then
     raise exception 'bad_request: claim token' using errcode = 'invalid_parameter_value';
@@ -319,18 +324,30 @@ begin
   end if;
   select name into rep_name from public.reps where slug = rep;
 
+  -- the amount is typed freely on the form ("0", "75.000,00"); a value the column can't hold
+  -- is left empty for the rep to confirm rather than failing a signed application
+  begin
+    amt := round(public._num(_details -> 'request' ->> 'amount'), 2);
+    if amt <= 0 or amt >= 1e12 then
+      amt := null;
+    end if;
+  exception when others then
+    amt := null;
+  end;
+
   insert into public.applications (
-    user_id, rep_slug, source_rep_slug, answers, utm, first_name, business_name, phone, email,
-    amount_requested, phone_consent_at, phone_consent_text, claim_email, claim_token_hash, invite_id
+    user_id, rep_slug, source_rep_slug, assigned_at, answers, utm, first_name, business_name, phone,
+    email, amount_requested, phone_consent_at, phone_consent_text, claim_email, claim_token_hash,
+    invite_id
   ) values (
-    null, rep, rep, '{}'::jsonb,
+    null, rep, rep, now(), '{}'::jsonb,
     jsonb_build_object('ref', rep, 'source', 'application_link')
       || case when inv.id is not null then jsonb_build_object('invite', inv.id) else '{}'::jsonb end,
     nullif(trim(coalesce(owner0 ->> 'first', '')), ''),
     nullif(trim(coalesce(biz ->> 'legal_name', '')), ''),
     nullif(trim(coalesce(owner0 ->> 'mobile', biz ->> 'phone', '')), ''),
     lower(nullif(trim(coalesce(_claim_email, '')), '')),
-    public._num(_details -> 'request' ->> 'amount'),
+    amt,
     case when coalesce(owner0 ->> 'mobile', '') <> '' then now() end,
     case when coalesce(owner0 ->> 'mobile', '') <> ''
       then 'Signed application, ' || coalesce(_consent_version, '') || ': contact consent clause' end,
@@ -480,7 +497,8 @@ begin
     'signature_image', r.signature_image,
     'signature_image_2', r.signature_image_2,
     'signer_ip', r.signer_ip,
-    'signer_agent', r.signer_agent
+    'signer_agent', r.signer_agent,
+    'consent_version', r.consent_version
   );
 end;
 $$;
@@ -523,7 +541,8 @@ begin
     'signature_image', r.signature_image,
     'signature_image_2', r.signature_image_2,
     'signer_ip', r.signer_ip,
-    'signer_agent', r.signer_agent
+    'signer_agent', r.signer_agent,
+    'consent_version', r.consent_version
   );
 end;
 $$;

@@ -148,7 +148,21 @@ export function FileSend({
         if (full) {
           const bytes = await applicationPdfBytes(
             { ...file, repName },
-            detailsToPdf(full.details, { name: full.signedName, at: full.signedAt }, repName),
+            detailsToPdf(
+              full.details,
+              {
+                name: full.signedName,
+                at: full.signedAt,
+                image: full.signatureImage,
+                name2: full.signedName2,
+                image2: full.signatureImage2,
+                via: full.signedVia,
+                ip: full.signerIp,
+                agent: full.signerAgent,
+                consent: full.consentVersion,
+              },
+              repName,
+            ),
           );
           application_pdf = toBase64(bytes);
         }

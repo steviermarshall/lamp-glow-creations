@@ -3,6 +3,7 @@
 // form's boxes map one to one. Pure functions only. The real estate part lives in
 // real-estate.ts.
 import {
+  amount,
   cleanRealEstate,
   emptyRealEstate,
   missingRealEstate,
@@ -125,10 +126,58 @@ export const BANKRUPTCY: { id: Business["bankruptcy"]; label: string }[] = [
 ];
 
 export const US_STATES = [
-  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA",
-  "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM",
-  "NY", "NC", "ND", "OH", "OK", "OR", "PA", "PR", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA",
-  "WA", "WV", "WI", "WY",
+  "AL",
+  "AK",
+  "AZ",
+  "AR",
+  "CA",
+  "CO",
+  "CT",
+  "DE",
+  "DC",
+  "FL",
+  "GA",
+  "HI",
+  "ID",
+  "IL",
+  "IN",
+  "IA",
+  "KS",
+  "KY",
+  "LA",
+  "ME",
+  "MD",
+  "MA",
+  "MI",
+  "MN",
+  "MS",
+  "MO",
+  "MT",
+  "NE",
+  "NV",
+  "NH",
+  "NJ",
+  "NM",
+  "NY",
+  "NC",
+  "ND",
+  "OH",
+  "OK",
+  "OR",
+  "PA",
+  "PR",
+  "RI",
+  "SC",
+  "SD",
+  "TN",
+  "TX",
+  "UT",
+  "VT",
+  "VA",
+  "WA",
+  "WV",
+  "WI",
+  "WY",
 ];
 
 export const USES: { id: string; label: string }[] = [
@@ -292,7 +341,7 @@ export function missing(d: Details): string[] {
   need(!!b.entity_type, "entity type");
   need(!!b.monthly_revenue.trim(), "average monthly revenue");
   need(!!b.bankruptcy, "whether the business or an owner has filed for bankruptcy");
-  need(!!d.request.amount.trim(), "amount requested");
+  need((amount(d.request.amount) ?? 0) > 0, "amount requested");
   d.owners.forEach((o, i) => {
     const who = i === 0 ? "owner" : "second owner";
     need(!!o.first.trim() && !!o.last.trim(), `${who}'s first and last name`);
@@ -348,12 +397,76 @@ const usDate = (iso: string) => {
   return m ? `${m[2]}/${m[3]}/${m[1]}` : iso;
 };
 
-/** The completed application mapped onto the PDF's boxes (see application-pdf.ts). */
-export function detailsToPdf(
-  d: Details,
-  signed: { name: string | null; at: string | null },
-  repName: string | null,
-): { text: Record<string, string>; checked: Record<string, boolean> } {
+/** How the application was signed, as FullApplication carries it. Only name and at are needed. */
+export type PdfSignature = {
+  name: string | null;
+  at: string | null;
+  /** Drawn signatures (PNG data URLs); without one the line reads "/s/ name". */
+  image?: string | null;
+  name2?: string | null;
+  image2?: string | null;
+  via?: "link" | "account" | null;
+  ip?: string | null;
+  agent?: string | null;
+  /** The consent version stored with the signature, when the caller has it. */
+  consent?: string | null;
+};
+
+/** The electronic signature record printed on the application PDF's last page. */
+export type PdfAudit = {
+  signer: string;
+  signer2: string | null;
+  /** ISO timestamp. */
+  signedAt: string;
+  via: "link" | "account" | null;
+  ip: string | null;
+  agent: string | null;
+  consentVersion: string | null;
+  /** The authorization wording, only when it's known to be the version they signed. */
+  consentText: string | null;
+  drawn: boolean;
+};
+
+/** What detailsToPdf gives application-pdf.ts (its ApplicationValues). */
+type PdfFill = {
+  text: Record<string, string>;
+  checked: Record<string, boolean>;
+  images?: { owner1_signature?: string; owner2_signature?: string };
+  realEstate?: RealEstate;
+  extra?: { label: string; value: string }[];
+  audit?: PdfAudit;
+};
+
+/** The signing day as Lamp's office (New Jersey) counts it, so a late-evening signature
+ *  doesn't print as tomorrow's UTC date. */
+const officeDay = (iso: string) => {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return usDate(iso.slice(0, 10));
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(t);
+};
+
+/** "50000" prints as "$50,000" and "50k" as "$50k"; anything already marked or worded stays. */
+const dollars = (s: string) => {
+  const t = s.trim();
+  if (/^\d+(\.\d+)?$/.test(t)) return `$${Number(t).toLocaleString("en-US")}`;
+  return /^\d/.test(t) ? `$${t}` : t;
+};
+
+/** The form's "daily / weekly payment" column: "$350 daily". */
+const paymentText = (x: Balance) =>
+  x.payment.trim() ? [dollars(x.payment), x.frequency].filter(Boolean).join(" ") : "";
+
+/**
+ * The completed application mapped onto the PDF's boxes (see application-pdf.ts), plus what
+ * page 2 prints: drawn signatures, the real estate schedule, answers the paper form has no box
+ * for (website, bankruptcy, a third balance) and the electronic signature record.
+ */
+export function detailsToPdf(d: Details, signed: PdfSignature, repName: string | null): PdfFill {
   const b = d.business;
   const text: Record<string, string> = {
     legal_name: b.legal_name,
@@ -398,18 +511,69 @@ export function detailsToPdf(
     const p = `balance${i + 1}_`;
     Object.assign(text, {
       [`${p}funder`]: x.funder,
-      [`${p}original`]: x.original,
-      [`${p}current`]: x.current,
-      [`${p}payment`]: x.payment,
+      [`${p}original`]: dollars(x.original),
+      [`${p}current`]: dollars(x.current),
+      [`${p}payment`]: paymentText(x),
       [`${p}payoff`]: x.payoff,
     });
   });
+  const images: NonNullable<PdfFill["images"]> = {};
+  let audit: PdfAudit | undefined;
   if (signed.name && signed.at) {
-    const day = usDate(signed.at.slice(0, 10));
-    text["owner1_print_name"] = `${d.owners[0]?.first ?? ""} ${d.owners[0]?.last ?? ""}`.trim();
-    text["owner1_signature"] = `/s/ ${signed.name} (signed electronically)`;
+    const day = officeDay(signed.at);
+    const fullName = (o: Owner | undefined) => `${o?.first ?? ""} ${o?.last ?? ""}`.trim();
+    // A drawn signature is placed as an image; the printed name and date stay as text.
+    text["owner1_print_name"] = fullName(d.owners[0]) || signed.name;
     text["owner1_sign_date"] = day;
+    if (signed.image) images.owner1_signature = signed.image;
+    else text["owner1_signature"] = `/s/ ${signed.name} (signed electronically)`;
+    if (signed.name2) {
+      text["owner2_print_name"] = fullName(d.owners[1]) || signed.name2;
+      text["owner2_sign_date"] = day;
+      if (signed.image2) images.owner2_signature = signed.image2;
+      else text["owner2_signature"] = `/s/ ${signed.name2} (signed electronically)`;
+    }
+    // Signatures from before signed_via existed have no known consent version.
+    const consentVersion = signed.consent ?? (signed.via ? CONSENT_VERSION : null);
+    audit = {
+      signer: signed.name,
+      signer2: signed.name2 ?? null,
+      signedAt: signed.at,
+      via: signed.via ?? null,
+      ip: signed.ip ?? null,
+      agent: signed.agent ?? null,
+      consentVersion,
+      consentText: consentVersion === CONSENT_VERSION ? CONSENT_TEXT : null,
+      drawn: !!signed.image,
+    };
   }
+  const extra: { label: string; value: string }[] = [];
+  if (b.website.trim()) extra.push({ label: "Business website", value: b.website.trim() });
+  if (b.bankruptcy) {
+    const filed = BANKRUPTCY.find((x) => x.id === b.bankruptcy)?.label ?? b.bankruptcy;
+    extra.push({
+      label: "Bankruptcy, business or owner",
+      value:
+        b.bankruptcy !== "none" && b.bankruptcy_year.trim()
+          ? `${filed}, ${b.bankruptcy_year.trim()}`
+          : filed,
+    });
+  }
+  d.balances.slice(2).forEach((x, i) =>
+    extra.push({
+      label: `Balance ${i + 3} (no room on page 1)`,
+      value: [
+        x.funder,
+        x.original && `original ${dollars(x.original)}`,
+        x.current && `current ${dollars(x.current)}`,
+        x.payment && `payment ${paymentText(x)}`,
+        x.payoff && `est. payoff ${x.payoff}`,
+      ]
+        .filter(Boolean)
+        .join(", "),
+    }),
+  );
+  if (d.real_estate.owns === "no") extra.push({ label: "Owns real estate", value: "No" });
   const checked: Record<string, boolean> = {
     use_working_capital: d.request.uses.includes("working_capital"),
     use_inventory: d.request.uses.includes("inventory"),
@@ -425,5 +589,10 @@ export function detailsToPdf(
     term_9: d.request.term === "9",
     term_12: d.request.term === "12",
   };
-  return { text, checked };
+  const out: PdfFill = { text, checked };
+  if (images.owner1_signature || images.owner2_signature) out.images = images;
+  if (d.real_estate.owns === "yes") out.realEstate = d.real_estate;
+  if (extra.length) out.extra = extra;
+  if (audit) out.audit = audit;
+  return out;
 }

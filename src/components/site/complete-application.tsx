@@ -45,6 +45,7 @@ type Row = {
   signed_name_2: string | null;
   signature_image_2: string | null;
   signed_via: string | null;
+  consent_version: string | null;
 };
 
 type Signed = {
@@ -54,6 +55,7 @@ type Signed = {
   name2: string | null;
   image2: string | null;
   via: "link" | "account" | null;
+  consent: string | null;
 };
 
 const unsigned: Signed = {
@@ -63,6 +65,7 @@ const unsigned: Signed = {
   name2: null,
   image2: null,
   via: null,
+  consent: null,
 };
 
 export function CompleteApplication({
@@ -91,7 +94,7 @@ export function CompleteApplication({
         sb
           .from("application_details")
           .select(
-            "business,owners,balances,request,real_estate,signed_name,signed_at,signature_image,signed_name_2,signature_image_2,signed_via",
+            "business,owners,balances,request,real_estate,signed_name,signed_at,signature_image,signed_name_2,signature_image_2,signed_via,consent_version",
           )
           .eq("application_id", applicationId)
           .maybeSingle(),
@@ -121,6 +124,7 @@ export function CompleteApplication({
           name2: r.signed_name_2,
           image2: r.signature_image_2,
           via: r.signed_via === "link" || r.signed_via === "account" ? r.signed_via : null,
+          consent: r.consent_version,
         });
       } else {
         setD(
@@ -195,7 +199,8 @@ export function CompleteApplication({
           }
         : {}),
     };
-    const cols = "signed_name,signed_at,signature_image,signed_name_2,signature_image_2,signed_via";
+    const cols =
+      "signed_name,signed_at,signature_image,signed_name_2,signature_image_2,signed_via,consent_version";
     const res = exists
       ? await sb
           .from("application_details")
@@ -223,6 +228,7 @@ export function CompleteApplication({
       | "signed_name_2"
       | "signature_image_2"
       | "signed_via"
+      | "consent_version"
     >;
     if (r.signed_at) {
       const s: Signed = {
@@ -232,6 +238,7 @@ export function CompleteApplication({
         name2: r.signed_name_2,
         image2: r.signature_image_2,
         via: r.signed_via === "link" ? "link" : "account",
+        consent: r.consent_version,
       };
       setSigned(s);
       setOpen(false);

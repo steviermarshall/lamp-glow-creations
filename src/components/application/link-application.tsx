@@ -265,6 +265,7 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
       via: "link" as const,
       ip: null,
       agent: navigator.userAgent,
+      consent: CONSENT_VERSION,
     };
     const src = {
       answers: null,

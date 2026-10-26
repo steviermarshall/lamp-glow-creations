@@ -16,6 +16,8 @@ export type FullApplication = {
   signedVia: "link" | "account" | null;
   signerIp: string | null;
   signerAgent: string | null;
+  /** The authorization wording they agreed to (CONSENT_VERSION at the time). */
+  consentVersion: string | null;
 };
 
 /** Staff who are neither an admin nor the file's rep get this instead of the application. */
@@ -35,6 +37,7 @@ type Row = {
   signed_via?: string | null;
   signer_ip?: string | null;
   signer_agent?: string | null;
+  consent_version?: string | null;
 } | null;
 
 type RpcError = { code?: string; message?: string } | null;
@@ -51,6 +54,7 @@ const toFull = (r: Row): FullApplication | null =>
         signedVia: r.signed_via === "link" || r.signed_via === "account" ? r.signed_via : null,
         signerIp: r.signer_ip ?? null,
         signerAgent: r.signer_agent ?? null,
+        consentVersion: r.consent_version ?? null,
       }
     : null;
 
@@ -64,7 +68,7 @@ async function readTable(fileId: string): Promise<Row> {
   const { data } = await sb
     .from("application_details")
     .select(
-      "business,owners,balances,request,real_estate,signed_name,signed_at,signed_name_2,signature_image,signature_image_2,signed_via,signer_ip,signer_agent",
+      "business,owners,balances,request,real_estate,signed_name,signed_at,signed_name_2,signature_image,signature_image_2,signed_via,signer_ip,signer_agent,consent_version",
     )
     .eq("application_id", fileId)
     .maybeSingle();

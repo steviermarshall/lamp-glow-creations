@@ -295,6 +295,7 @@ export function FileView({
                 via: pdfFull.signedVia,
                 ip: pdfFull.signerIp,
                 agent: pdfFull.signerAgent,
+                consent: pdfFull.consentVersion,
               };
               await downloadApplicationPdf(
                 {
