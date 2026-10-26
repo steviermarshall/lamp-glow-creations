@@ -74,7 +74,14 @@ function clientIp(request: Request): string | null {
 
 async function gmailSend(
   access: string,
-  msg: { to: string; fromName: string; replyTo: string | null; subject: string; text: string; html?: string },
+  msg: {
+    to: string;
+    fromName: string;
+    replyTo: string | null;
+    subject: string;
+    text: string;
+    html?: string;
+  },
 ): Promise<{ id: string } | { error: string }> {
   let raw: string;
   try {
@@ -99,7 +106,13 @@ async function gmailSend(
   return { id: out.id ?? "" };
 }
 
-type Rep = { slug: string; name: string; title: string | null; user_id: string | null; active: boolean };
+type Rep = {
+  slug: string;
+  name: string;
+  title: string | null;
+  user_id: string | null;
+  active: boolean;
+};
 
 async function repBySlug(svc: Svc, slug: string): Promise<Rep | null> {
   const r = await svc
@@ -198,7 +211,7 @@ export async function applicationInvites(request: Request): Promise<Response> {
     const rep = await repBySlug(svc, inv.rep_slug);
     if (!rep) return json(409, { error: "That rep is gone." });
     const token = newToken();
-    const note = typeof body.note === "string" ? body.note.slice(0, MAX_NOTE) : inv.note ?? "";
+    const note = typeof body.note === "string" ? body.note.slice(0, MAX_NOTE) : (inv.note ?? "");
     const upd = await svc
       .from("application_invites")
       .update({
@@ -216,7 +229,15 @@ export async function applicationInvites(request: Request): Promise<Response> {
     const url = applicationUrl(SITE_URL(), rep.slug, token);
     if (channel === "link") {
       return json(200, {
-        results: [{ index: 0, status: "link", detail: "New link made; the old one stopped working.", invite_id: inv.id, url }],
+        results: [
+          {
+            index: 0,
+            status: "link",
+            detail: "New link made; the old one stopped working.",
+            invite_id: inv.id,
+            url,
+          },
+        ],
       });
     }
     const access = await gmailAccessToken(svc);
@@ -250,7 +271,9 @@ export async function applicationInvites(request: Request): Promise<Response> {
         .from("application_invites")
         .update({ last_error: sent.error, cancelled_at: new Date().toISOString() })
         .eq("id", inv.id);
-      return json(200, { results: [{ index: 0, status: "failed", detail: sent.error, invite_id: inv.id }] });
+      return json(200, {
+        results: [{ index: 0, status: "failed", detail: sent.error, invite_id: inv.id }],
+      });
     }
     await svc.from("application_invites").update({ email_message_id: sent.id }).eq("id", inv.id);
     return json(200, {
@@ -331,7 +354,11 @@ export async function applicationInvites(request: Request): Promise<Response> {
       continue;
     }
     if (channel === "email" && !email) {
-      results.push({ index, status: "skipped", detail: "No email address; copy the link instead." });
+      results.push({
+        index,
+        status: "skipped",
+        detail: "No email address; copy the link instead.",
+      });
       continue;
     }
     if (email && isLampAddress(email, staff)) {
@@ -350,7 +377,11 @@ export async function applicationInvites(request: Request): Promise<Response> {
         .gte("sent_at", since)
         .limit(1);
       if ((dup.data ?? []).length) {
-        results.push({ index, status: "skipped", detail: "Already emailed in the last few minutes." });
+        results.push({
+          index,
+          status: "skipped",
+          detail: "Already emailed in the last few minutes.",
+        });
         continue;
       }
     }
@@ -381,7 +412,13 @@ export async function applicationInvites(request: Request): Promise<Response> {
     const url = applicationUrl(SITE_URL(), rep.slug, token);
 
     if (channel === "link") {
-      results.push({ index, status: "link", detail: "Link ready to copy.", invite_id: inviteId, url });
+      results.push({
+        index,
+        status: "link",
+        detail: "Link ready to copy.",
+        invite_id: inviteId,
+        url,
+      });
       continue;
     }
 
@@ -532,7 +569,10 @@ const ERR: Record<string, [number, string]> = {
   link_cancelled: [410, "This link was replaced. Use the newest one your rep sent."],
   link_expired: [410, "This link has expired. Ask your rep for a new one."],
   unknown_rep: [404, "We couldn't find that rep's page."],
-  too_many: [429, "Too many applications from this network. Try again in an hour or call your rep."],
+  too_many: [
+    429,
+    "Too many applications from this network. Try again in an hour or call your rep.",
+  ],
 };
 
 /**
@@ -725,11 +765,15 @@ export async function uploadToApplication(request: Request): Promise<Response> {
     .eq("application_id", appId)
     .like("storage_path", "link/%");
   if ((count.count ?? 0) >= MAX_LINK_UPLOADS + 1)
-    return json(429, { error: "That's the most files we take here. Add the rest from your account." });
+    return json(429, {
+      error: "That's the most files we take here. Add the rest from your account.",
+    });
 
   const path = `link/${appId}/${Date.now()}-${safeFilename(file.name).replace(/\s+/g, "-").slice(-80)}`;
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const up = await svc.storage.from("documents").upload(path, bytes, { contentType: type, upsert: false });
+  const up = await svc.storage
+    .from("documents")
+    .upload(path, bytes, { contentType: type, upsert: false });
   if (up.error) return json(500, { error: "Couldn't store the file. Try again." });
   const idx = await svc.from("documents").insert({
     application_id: appId,

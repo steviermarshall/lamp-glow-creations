@@ -368,7 +368,9 @@ export function cleanRealEstate(r: RealEstate): RealEstate {
       ...p,
       liens: p.free_clear
         ? []
-        : p.liens.filter((l) => l.type && (l.holder.trim() || l.balance.trim() || l.payment.trim())),
+        : p.liens.filter(
+            (l) => l.type && (l.holder.trim() || l.balance.trim() || l.payment.trim()),
+          ),
     })),
   };
 }

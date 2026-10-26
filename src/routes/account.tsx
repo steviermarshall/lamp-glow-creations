@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Check, FileUp, Loader2, LogOut, Paperclip, Trash2 } from "lucide-react";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth, saveDraftToAccount } from "@/hooks/use-auth";
+import { clearClaims, loadClaims } from "@/lib/application-links";
 import { labelFor, loadDraft, QUESTIONS, type Answers, type Draft } from "@/lib/apply";
 import {
   checklistFor,
@@ -125,6 +126,11 @@ function Account() {
         // Only a finished draft becomes an application. A half-answered one (say, from
         // tapping "Check my options" while signed in) waits in /apply instead.
         if (isFinished(loadDraft())) await saveDraftToAccount(user.id, user.email);
+        // An application signed from a link on this device (or emailed to this address) moves
+        // into this account now. The database checks the proof; see claim_applications.
+        const claims = loadClaims();
+        const claimed = await sb.rpc("claim_applications", { _tokens: claims });
+        if (!claimed.error && (claimed.data ?? 0) > 0) clearClaims();
         const { data, error: err } = await sb
           .from("applications")
           .select("id,status,answers,first_name,business_name,created_at,updated_at,submitted_at")
