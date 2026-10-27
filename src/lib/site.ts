@@ -11,7 +11,7 @@ export const SITE = {
   phone: "",
   /** Mailing address for the footer, e.g. "123 Main St, Roselle, NJ 07203". Empty = hidden. */
   address: "",
-  areaServed: ["New Jersey", "New York City"],
+  areaServed: ["United States"],
 } as const;
 
 /** Copied on the email every signed application sends to its rep: Asad and Stevie. */

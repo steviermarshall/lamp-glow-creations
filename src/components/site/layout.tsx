@@ -211,8 +211,7 @@ export function SiteFooter() {
         <div>
           <Wordmark size="sm" />
           <p className="mt-4 max-w-xs text-[0.95rem] leading-relaxed">
-            Working capital for owner-operators in New Jersey and New York City, explained in plain
-            English.
+            Working capital for owner-operators across the U.S., explained in plain English.
           </p>
           <ul className="mt-5 space-y-1.5 text-[0.95rem]">
             <li>

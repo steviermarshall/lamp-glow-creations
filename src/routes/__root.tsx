@@ -19,7 +19,7 @@ import { track } from "../lib/track";
 
 const SITE_URL = SITE.url;
 
-// Tells search engines what Lamp is: a financial service brokering in NJ and NYC.
+// Tells search engines what Lamp is: a financial service brokering for businesses across the U.S.
 const ORG_JSON_LD = {
   "@context": "https://schema.org",
   "@type": "FinancialService",
@@ -32,7 +32,7 @@ const ORG_JSON_LD = {
   ...(SITE.phone ? { telephone: SITE.phone } : {}),
   description:
     "Small-business working capital brokerage. Lamp shops a merchant's file to third-party funders and lays the offers out side by side in plain English.",
-  areaServed: SITE.areaServed.map((name) => ({ "@type": "AdministrativeArea", name })),
+  areaServed: SITE.areaServed.map((name) => ({ "@type": "Country", name })),
 };
 
 function NotFoundComponent() {
