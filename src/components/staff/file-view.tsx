@@ -9,7 +9,13 @@ import { labelFor, QUESTIONS, type Answers } from "@/lib/apply";
 import { downloadApplicationPdf, type PdfPages } from "@/lib/application-pdf";
 import { detailsToPdf } from "@/lib/application-details";
 import { FileApplication } from "@/components/staff/file-application";
-import { RESTRICTED, revealFullApplication, useFullApplication } from "@/lib/full-application";
+import {
+  RESTRICTED,
+  revealFullApplication,
+  useFullApplication,
+  useVersions,
+} from "@/lib/full-application";
+import { sendHold } from "@/lib/application-changes";
 import {
   EVENT_LABEL,
   STAGE_LABEL,
@@ -22,6 +28,8 @@ import {
 import { btnOutline, btnPrimary, card } from "@/components/site/layout";
 import { FileOffers } from "@/components/staff/file-offers";
 import { FileSend } from "@/components/staff/file-send";
+import { FileChanges } from "@/components/staff/file-changes";
+import { FileNotes } from "@/components/staff/file-notes";
 
 type FileRow = {
   id: string;
@@ -98,7 +106,10 @@ export function FileView({
   const [busy, setBusy] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [notesSaved, setNotesSaved] = useState(false);
-  const full = useFullApplication(fileId);
+  // bumped after a send-back, a cancel or a review, to read the application and its versions again
+  const [changeTick, setChangeTick] = useState(0);
+  const full = useFullApplication(fileId, changeTick);
+  const versions = useVersions(fileId, changeTick);
   // Bumped after a send so the funders-and-offers panel reloads its "Sent to" list.
   const [sentTick, setSentTick] = useState(0);
 
@@ -273,6 +284,8 @@ export function FileView({
         ip: pdfFull.signerIp,
         agent: pdfFull.signerAgent,
         consent: pdfFull.consentVersion,
+        version: pdfFull.version,
+        replaces: pdfFull.replaces,
       };
       await downloadApplicationPdf(
         {
@@ -446,6 +459,23 @@ export function FileView({
             </div>
           </section>
 
+          {full && full !== RESTRICTED && (
+            <FileChanges
+              fileId={file.id}
+              full={full}
+              versions={versions && versions !== RESTRICTED ? versions : null}
+              stage={file.status}
+              claimed={file.user_id !== null}
+              sendTo={file.email}
+              repName={file.rep_slug ? repName(file.rep_slug) : null}
+              canAct
+              onChanged={() => {
+                setChangeTick((n) => n + 1);
+                void load();
+              }}
+            />
+          )}
+
           <section className={cn(card, "p-6")}>
             <h3 className="font-display text-lg font-semibold">Documents</h3>
             {docs.length === 0 ? (
@@ -508,6 +538,7 @@ export function FileView({
               }}
               repName={file.rep_slug ? repName(file.rep_slug) : null}
               signedAt={full?.signedAt ?? null}
+              hold={sendHold(versions && versions !== RESTRICTED ? versions : null)}
               onSent={() => {
                 setSentTick((n) => n + 1);
                 void load();
@@ -552,6 +583,15 @@ export function FileView({
 
         <div className="space-y-5">
           <FileApplication fileId={fileId} full={full} />
+
+          {full !== undefined && full !== RESTRICTED && (
+            <FileNotes
+              fileId={file.id}
+              userId={userId}
+              isAdmin={isAdmin}
+              onChange={() => void load()}
+            />
+          )}
 
           <section className={cn(card, "p-6")}>
             <h3 className="font-display text-lg font-semibold">Contact</h3>

@@ -30,7 +30,8 @@ import {
  * it is signed and when, and what is still missing. Only an admin or the file's rep sees it at
  * all. The database sends SSNs cut to the last four and dates of birth hidden; Show SSN asks for
  * the full numbers, and the database logs who asked before answering.
- * Admins can correct a signed application in the database; this screen does not edit it.
+ * Nobody edits a signed application, admins included: a correction is "Send back for changes"
+ * (the merchant signs the update as a new version) or a staff note.
  * A signed one shows the drawn signatures and how it was signed (from a link or their account,
  * with the address and device) for the audit trail.
  */
@@ -140,7 +141,9 @@ export function FileApplication({
       <div className="flex flex-wrap items-baseline gap-2">
         <h3 className="font-display text-lg font-semibold">Full application</h3>
         <span className={cn("text-sm", signedAt ? "font-semibold text-forest" : "text-smoke")}>
-          {signedAt ? `Signed by ${signedName} · ${stamp(signedAt)}` : "Draft, not signed yet"}
+          {signedAt
+            ? `Signed by ${signedName} · ${stamp(signedAt)}${full.version && full.version > 1 ? ` · version ${full.version} (updated)` : ""}`
+            : "Draft, not signed yet"}
         </span>
         <button
           type="button"

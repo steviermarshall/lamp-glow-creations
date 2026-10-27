@@ -29,6 +29,7 @@ import { Route as ApiServerCheckRouteImport } from './routes/api.server-check'
 import { Route as ApiTrackRouteImport } from './routes/api.track'
 import { Route as ApplicationRepRouteImport } from './routes/application.$rep'
 import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
+import { Route as ApiApplicationChangesRouteImport } from './routes/api.application.changes'
 import { Route as ApiApplicationNotifyRouteImport } from './routes/api.application.notify'
 import { Route as ApiApplicationOpenRouteImport } from './routes/api.application.open'
 import { Route as ApiApplicationStartRouteImport } from './routes/api.application.start'
@@ -38,6 +39,7 @@ import { Route as ApiDocumentsUploadRouteImport } from './routes/api.documents.u
 import { Route as ApiFundersSendRouteImport } from './routes/api.funders.send'
 import { Route as ApiGmailCallbackRouteImport } from './routes/api.gmail.callback'
 import { Route as ApiGmailConnectRouteImport } from './routes/api.gmail.connect'
+import { Route as ApplicationRepChangesRouteImport } from './routes/application.$rep_.changes'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -139,6 +141,11 @@ const ApplyRepRoute = ApplyRepRouteImport.update({
   path: '/apply/$rep',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiApplicationChangesRoute = ApiApplicationChangesRouteImport.update({
+  id: '/api/application/changes',
+  path: '/api/application/changes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiApplicationNotifyRoute = ApiApplicationNotifyRouteImport.update({
   id: '/api/application/notify',
   path: '/api/application/notify',
@@ -184,6 +191,11 @@ const ApiGmailConnectRoute = ApiGmailConnectRouteImport.update({
   path: '/api/gmail/connect',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApplicationRepChangesRoute = ApplicationRepChangesRouteImport.update({
+  id: '/application/$rep_/changes',
+  path: '/application/$rep/changes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -206,6 +218,7 @@ export interface FileRoutesByFullPath {
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
+  '/api/application/changes': typeof ApiApplicationChangesRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/start': typeof ApiApplicationStartRoute
@@ -215,6 +228,7 @@ export interface FileRoutesByFullPath {
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
+  '/application/$rep/changes': typeof ApplicationRepChangesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -237,6 +251,7 @@ export interface FileRoutesByTo {
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
+  '/api/application/changes': typeof ApiApplicationChangesRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/start': typeof ApiApplicationStartRoute
@@ -246,6 +261,7 @@ export interface FileRoutesByTo {
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
+  '/application/$rep/changes': typeof ApplicationRepChangesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -269,6 +285,7 @@ export interface FileRoutesById {
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply_/$rep': typeof ApplyRepRoute
+  '/api/application/changes': typeof ApiApplicationChangesRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/start': typeof ApiApplicationStartRoute
@@ -278,6 +295,7 @@ export interface FileRoutesById {
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
+  '/application/$rep_/changes': typeof ApplicationRepChangesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -302,6 +320,7 @@ export interface FileRouteTypes {
     | '/api/track'
     | '/application/$rep'
     | '/apply/$rep'
+    | '/api/application/changes'
     | '/api/application/notify'
     | '/api/application/open'
     | '/api/application/start'
@@ -311,6 +330,7 @@ export interface FileRouteTypes {
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
+    | '/application/$rep/changes'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -333,6 +353,7 @@ export interface FileRouteTypes {
     | '/api/track'
     | '/application/$rep'
     | '/apply/$rep'
+    | '/api/application/changes'
     | '/api/application/notify'
     | '/api/application/open'
     | '/api/application/start'
@@ -342,6 +363,7 @@ export interface FileRouteTypes {
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
+    | '/application/$rep/changes'
   id:
     | '__root__'
     | '/'
@@ -364,6 +386,7 @@ export interface FileRouteTypes {
     | '/api/track'
     | '/application/$rep'
     | '/apply_/$rep'
+    | '/api/application/changes'
     | '/api/application/notify'
     | '/api/application/open'
     | '/api/application/start'
@@ -373,6 +396,7 @@ export interface FileRouteTypes {
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
+    | '/application/$rep_/changes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -396,6 +420,7 @@ export interface RootRouteChildren {
   ApiTrackRoute: typeof ApiTrackRoute
   ApplicationRepRoute: typeof ApplicationRepRoute
   ApplyRepRoute: typeof ApplyRepRoute
+  ApiApplicationChangesRoute: typeof ApiApplicationChangesRoute
   ApiApplicationNotifyRoute: typeof ApiApplicationNotifyRoute
   ApiApplicationOpenRoute: typeof ApiApplicationOpenRoute
   ApiApplicationStartRoute: typeof ApiApplicationStartRoute
@@ -404,6 +429,7 @@ export interface RootRouteChildren {
   ApiFundersSendRoute: typeof ApiFundersSendRoute
   ApiGmailCallbackRoute: typeof ApiGmailCallbackRoute
   ApiGmailConnectRoute: typeof ApiGmailConnectRoute
+  ApplicationRepChangesRoute: typeof ApplicationRepChangesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -548,6 +574,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApplyRepRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/application/changes': {
+      id: '/api/application/changes'
+      path: '/api/application/changes'
+      fullPath: '/api/application/changes'
+      preLoaderRoute: typeof ApiApplicationChangesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/application/notify': {
       id: '/api/application/notify'
       path: '/api/application/notify'
@@ -611,6 +644,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGmailConnectRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/application/$rep_/changes': {
+      id: '/application/$rep_/changes'
+      path: '/application/$rep/changes'
+      fullPath: '/application/$rep/changes'
+      preLoaderRoute: typeof ApplicationRepChangesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -647,6 +687,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiTrackRoute: ApiTrackRoute,
   ApplicationRepRoute: ApplicationRepRoute,
   ApplyRepRoute: ApplyRepRoute,
+  ApiApplicationChangesRoute: ApiApplicationChangesRoute,
   ApiApplicationNotifyRoute: ApiApplicationNotifyRoute,
   ApiApplicationOpenRoute: ApiApplicationOpenRoute,
   ApiApplicationStartRoute: ApiApplicationStartRoute,
@@ -655,6 +696,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiFundersSendRoute: ApiFundersSendRoute,
   ApiGmailCallbackRoute: ApiGmailCallbackRoute,
   ApiGmailConnectRoute: ApiGmailConnectRoute,
+  ApplicationRepChangesRoute: ApplicationRepChangesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

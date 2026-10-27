@@ -25,14 +25,31 @@ import {
 } from "@/components/application/sections";
 import { SignBlock } from "@/components/application/sign-block";
 import { emptySigning, type Signing } from "@/components/application/form-kit";
+import { ChangeForm } from "@/components/application/change-form";
+import type { ChangeItem, ChangesSubmitResponse } from "@/lib/application-changes";
 
 /**
  * The full application on the merchant's account page: business, owners, real estate, current
  * advances and the request, saved as a draft as often as they like, then signed once with their
  * typed name and drawn signature. The database stamps the signature time and refuses edits after
  * signing (application_details). The same sections as the application link page.
+ * When their rep sends a signed application back for changes, it opens here again with what the
+ * rep asked for, and they sign the update (a new version; the one they signed before is kept).
  * Merchant copy: never the word "loan".
  */
+
+/** What my_application_changes returns: an open request, and the dates they signed. */
+type Changes = {
+  open: {
+    id: string;
+    items: ChangeItem[];
+    message: string | null;
+    base_version: number;
+    asked_at: string;
+  } | null;
+  rep: { name: string | null } | null;
+  versions: { version: number; signed_at: string }[];
+};
 
 type Row = {
   business: unknown;
@@ -91,13 +108,19 @@ export function CompleteApplication({
   const [error, setError] = useState("");
   const [sig, setSig] = useState<Signing>(emptySigning);
   const [repName, setRepName] = useState<string | null>(null);
+  const [changes, setChanges] = useState<Changes | null>(null);
+  const [updating, setUpdating] = useState(false);
+  // the confirmation after an update is signed (until the page is left)
+  const [justUpdated, setJustUpdated] = useState(false);
+  // bumped after an update is signed, to read everything again
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     const sb = getSupabase();
     if (!sb) return;
     let live = true;
     (async () => {
-      const [row, app] = await Promise.all([
+      const [row, app, chg] = await Promise.all([
         sb
           .from("application_details")
           .select(
@@ -110,8 +133,11 @@ export function CompleteApplication({
           .select("business_name,first_name,phone,email,answers,rep_slug")
           .eq("id", applicationId)
           .maybeSingle(),
+        // not in the database yet (or a hiccup): the page works without it
+        sb.rpc("my_application_changes", { _application_id: applicationId }),
       ]);
       if (!live) return;
+      setChanges(chg.error ? null : ((chg.data as unknown as Changes | null) ?? null));
       const r = row.data as Row | null;
       const a = app.data as {
         business_name: string | null;
@@ -154,7 +180,7 @@ export function CompleteApplication({
     return () => {
       live = false;
     };
-  }, [applicationId]);
+  }, [applicationId, tick]);
 
   if (!d) return null;
   const todo = missing(d);
@@ -289,13 +315,114 @@ export function CompleteApplication({
   async function copy() {
     if (!d) return;
     try {
-      await downloadApplicationPdf(pdfSource(d), detailsToPdf(d, signed, repName));
+      // an update says which version it is and what it replaced
+      const v = changes?.versions ?? [];
+      await downloadApplicationPdf(
+        pdfSource(d),
+        detailsToPdf(
+          d,
+          { ...signed, version: v[0]?.version ?? null, replaces: v[1]?.signed_at ?? null },
+          repName,
+        ),
+      );
     } catch {
       setError("Couldn't build your copy. Try again.");
     }
   }
 
+  /** Signs the update through Lamp's server, which checks it's theirs and the request is open. */
+  async function signUpdate(next: Details, s: Signing) {
+    const sb = getSupabase();
+    const open = changes?.open;
+    if (!sb || !open) return;
+    setUpdating(true);
+    setError("");
+    const session = (await sb.auth.getSession()).data.session;
+    if (!session) {
+      setUpdating(false);
+      return setError("Sign in again to sign your update.");
+    }
+    const second = s.second && !!next.owners[1];
+    try {
+      const res = await fetch("/api/application/changes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: "submit",
+          request_id: open.id,
+          base_version: open.base_version,
+          details: next,
+          signature: {
+            name: s.typed.trim(),
+            image: s.image,
+            name2: second ? s.typed2.trim() : null,
+            image2: second ? s.image2 : null,
+          },
+          consent_version: CONSENT_VERSION,
+        }),
+      });
+      const out = (await res.json().catch(() => ({}))) as Partial<ChangesSubmitResponse> & {
+        error?: string;
+        missing?: string[];
+      };
+      // a second tap while the first was saving finds it signed already: that's a success
+      const alreadySigned =
+        res.status === 409 && (out as { code?: string }).code === "already_signed";
+      if (!res.ok && !alreadySigned) {
+        setError(
+          out.missing?.length
+            ? `Still needed: ${out.missing.join(", ")}.`
+            : (out.error ?? "Couldn't sign your update. Try again, or call your rep."),
+        );
+        setUpdating(false);
+        return;
+      }
+      // leave the form at once, then read the signed version back
+      setError("");
+      setJustUpdated(true);
+      setChanges((c) => (c ? { ...c, open: null } : c));
+      setTick((n) => n + 1);
+    } catch {
+      setError("Couldn't reach Lamp. Check your connection and try again.");
+    }
+    setUpdating(false);
+  }
+
+  if (signed.at && changes?.open) {
+    return (
+      <section className={cn(card, "p-6")} data-application="update">
+        <h2 className="font-display text-lg font-semibold">Update your application</h2>
+        <p className="mt-2 text-sm text-smoke">
+          You signed it on{" "}
+          {new Date(signed.at).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}
+          . Your rep needs one more thing before it goes further.
+        </p>
+        <div className="mt-6">
+          <ChangeForm
+            base={d}
+            items={changes.open.items}
+            message={changes.open.message}
+            repName={changes.rep?.name ?? repName}
+            secondSignedBefore={!!signed.name2}
+            busy={updating}
+            error={error}
+            onSign={(next, s) => void signUpdate(next, s)}
+            cta="Sign my update"
+          />
+        </div>
+      </section>
+    );
+  }
+
   if (signed.at) {
+    const updated = (changes?.versions.length ?? 0) > 1;
     return (
       <section className={cn(card, "p-6")} data-application="signed">
         <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
@@ -311,8 +438,14 @@ export function CompleteApplication({
             hour: "numeric",
             minute: "2-digit",
           })}
-          . Your rep has it. To change anything now, call or text your rep.
+          {updated ? " (updated)" : ""}. Your rep has it. To change anything now, call or text your
+          rep.
         </p>
+        {justUpdated && (
+          <p className="mt-3 rounded-xl bg-sand px-4 py-3 text-sm font-semibold" role="status">
+            Signed. Your rep has your update.
+          </p>
+        )}
         {signed.image && (
           <div className="mt-4 inline-block rounded-xl bg-[#fbfaf5] px-4 py-2 ring-1 ring-black/10">
             <img

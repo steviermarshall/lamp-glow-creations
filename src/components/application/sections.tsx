@@ -8,6 +8,8 @@ import {
   emptyOwner,
   ENTITY_TYPES,
   INDUSTRIES,
+  isMaskedDob,
+  isMaskedSsn,
   MAX_BALANCES,
   USES,
   type Balance,
@@ -299,17 +301,34 @@ export function OwnersSection({
               autoComplete={i === 0 ? "email" : "off"}
             />
           </F>
-          <F label="Date of birth">
-            <Text
-              value={o.dob}
-              onChange={(v) => setO(i, "dob", v)}
-              type="date"
-              autoComplete="off"
+          {isMaskedDob(o.dob) ? (
+            <OnFile
+              label="Date of birth"
+              what="date of birth"
+              onChange={() => setO(i, "dob", "")}
             />
-          </F>
-          <F label="Social Security number">
-            <SsnInput value={o.ssn} onChange={(v) => setO(i, "ssn", v)} />
-          </F>
+          ) : (
+            <F label="Date of birth">
+              <Text
+                value={o.dob}
+                onChange={(v) => setO(i, "dob", v)}
+                type="date"
+                autoComplete="off"
+              />
+            </F>
+          )}
+          {isMaskedSsn(o.ssn) ? (
+            <OnFile
+              label="Social Security number"
+              what="Social Security number"
+              last4={o.ssn.slice(-4)}
+              onChange={() => setO(i, "ssn", "")}
+            />
+          ) : (
+            <F label="Social Security number">
+              <SsnInput value={o.ssn} onChange={(v) => setO(i, "ssn", v)} />
+            </F>
+          )}
           <F label="Credit score, your best guess">
             <Select
               value={o.credit}
@@ -337,6 +356,42 @@ export function OwnersSection({
           <Plus className="size-4" /> Add a second owner
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * An SSN or date of birth Lamp already has, on the update page: shown as on file (never the
+ * number), kept unless they choose to type a new one. Not inside a <label> like other fields:
+ * tapping a label would press its Change button and clear what's on file.
+ */
+function OnFile({
+  label,
+  what,
+  last4,
+  onChange,
+}: {
+  label: string;
+  what: string;
+  last4?: string;
+  onChange: () => void;
+}) {
+  return (
+    <div className="block" data-on-file={what}>
+      <span className="mb-1.5 flex items-baseline gap-2 text-[0.8rem] font-semibold text-smoke">
+        {label}
+      </span>
+      <div className={cn(inputCls, "flex items-center justify-between gap-3")}>
+        <span className="text-smoke">On file{last4 ? `, ending ${last4}` : ""}</span>
+        <button
+          type="button"
+          onClick={onChange}
+          aria-label={`Type a new ${what}`}
+          className="shrink-0 text-sm font-semibold text-forest underline-offset-4 hover:underline"
+        >
+          Change
+        </button>
+      </div>
     </div>
   );
 }

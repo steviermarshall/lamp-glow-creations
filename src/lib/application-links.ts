@@ -109,6 +109,47 @@ export function applicationUrl(site: string, repSlug: string, token?: string | n
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+/**
+ * Lamp's branded email body, shared by every email a merchant gets: the greeting, the paragraphs,
+ * one button, the rep's sign-off and the footer, with every string escaped.
+ */
+export function brandedHtml(o: {
+  hi: string;
+  paragraphs: string[];
+  button: string;
+  url: string;
+  repName: string;
+  footer: string[];
+}): string {
+  const p = (s: string) =>
+    `<p style="margin:0 0 16px;font-size:16px;line-height:1.55;color:#1f2a24">${esc(s)}</p>`;
+  return `<!doctype html><html><body style="margin:0;padding:0;background:#eef2ee">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2ee;padding:24px 12px">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:18px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+<tr><td style="background:#0f1f17;padding:22px 28px">
+<span style="display:inline-block;width:14px;height:14px;border-radius:7px;background:#4a985e;box-shadow:0 0 12px 3px rgba(74,152,94,.7);vertical-align:middle"></span>
+<span style="font-size:20px;font-weight:700;color:#f3f6f2;vertical-align:middle;margin-left:10px;letter-spacing:-.3px">Lamp<span style="color:#4a985e">.</span></span>
+</td></tr>
+<tr><td style="padding:30px 28px 8px">
+${p(o.hi)}
+${o.paragraphs.map(p).join("\n")}
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px"><tr><td style="border-radius:999px;background:#4a985e">
+<a href="${esc(o.url)}" style="display:inline-block;padding:15px 30px;font-size:16px;font-weight:700;color:#0f1f17;text-decoration:none;border-radius:999px">${esc(o.button)}</a>
+</td></tr></table>
+${p("Any questions, just reply to this email.")}
+<p style="margin:0 0 4px;font-size:16px;font-weight:700;color:#1f2a24">${esc(o.repName)}</p>
+<p style="margin:0 0 28px;font-size:14px;color:#5b6b61">Lamp · getlamp.app</p>
+</td></tr>
+<tr><td style="padding:16px 28px 22px;border-top:1px solid #e3e9e4">
+${o.footer.map((f) => `<p style="margin:0 0 6px;font-size:12px;line-height:1.5;color:#7a887f">${esc(f)}</p>`).join("\n")}
+<p style="margin:0;font-size:12px;line-height:1.5;color:#7a887f">If the button doesn't work, paste this into your browser: ${esc(o.url)}</p>
+</td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+}
+
 /** The email a merchant gets. Plain text and a simple branded HTML version of the same words. */
 export function inviteEmail(opts: {
   firstName: string;
@@ -146,33 +187,14 @@ export function inviteEmail(opts: {
     ...footer,
   ].join("\r\n");
 
-  const p = (s: string) =>
-    `<p style="margin:0 0 16px;font-size:16px;line-height:1.55;color:#1f2a24">${esc(s)}</p>`;
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#eef2ee">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2ee;padding:24px 12px">
-<tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:18px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
-<tr><td style="background:#0f1f17;padding:22px 28px">
-<span style="display:inline-block;width:14px;height:14px;border-radius:7px;background:#4a985e;box-shadow:0 0 12px 3px rgba(74,152,94,.7);vertical-align:middle"></span>
-<span style="font-size:20px;font-weight:700;color:#f3f6f2;vertical-align:middle;margin-left:10px;letter-spacing:-.3px">Lamp<span style="color:#4a985e">.</span></span>
-</td></tr>
-<tr><td style="padding:30px 28px 8px">
-${p(hi)}
-${body.map(p).join("\n")}
-<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px"><tr><td style="border-radius:999px;background:#4a985e">
-<a href="${esc(opts.url)}" style="display:inline-block;padding:15px 30px;font-size:16px;font-weight:700;color:#0f1f17;text-decoration:none;border-radius:999px">Open my application</a>
-</td></tr></table>
-${p("Any questions, just reply to this email.")}
-<p style="margin:0 0 4px;font-size:16px;font-weight:700;color:#1f2a24">${esc(opts.repName)}</p>
-<p style="margin:0 0 28px;font-size:14px;color:#5b6b61">Lamp · getlamp.app</p>
-</td></tr>
-<tr><td style="padding:16px 28px 22px;border-top:1px solid #e3e9e4">
-${footer.map((f) => `<p style="margin:0 0 6px;font-size:12px;line-height:1.5;color:#7a887f">${esc(f)}</p>`).join("\n")}
-<p style="margin:0;font-size:12px;line-height:1.5;color:#7a887f">If the button doesn't work, paste this into your browser: ${esc(opts.url)}</p>
-</td></tr>
-</table>
-</td></tr></table>
-</body></html>`;
+  const html = brandedHtml({
+    hi,
+    paragraphs: body,
+    button: "Open my application",
+    url: opts.url,
+    repName: opts.repName,
+    footer,
+  });
   return { subject, text, html };
 }
 

@@ -27,6 +27,8 @@ import {
   CONSENT_VERSION,
   fromRow,
   cleanDetails,
+  isMaskedDob,
+  isMaskedSsn,
   missing,
   signatureMatches,
 } from "@/lib/application-details";
@@ -53,6 +55,7 @@ import {
   type SendResult,
   type SubmitResponse,
 } from "@/lib/application-links";
+import type { SendBackRequest } from "@/lib/application-changes";
 import { NEW_APPLICATION_COPY, SITE } from "@/lib/site";
 import {
   einVariants,
@@ -61,23 +64,24 @@ import {
   type Duplicate,
 } from "@/lib/new-application-email";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SLUG = /^[a-z0-9][a-z0-9-]{1,31}$/;
-const PNG = /^data:image\/png;base64,[A-Za-z0-9+/]+=*$/;
+export const PNG = /^data:image\/png;base64,[A-Za-z0-9+/]+=*$/;
 const MAX_OPEN_BYTES = 16 * 1024;
 /** Two drawn signatures (400 KB each at most) and the answers; the signed PDF comes by upload. */
 const MAX_SUBMIT_BYTES = 2 * 1024 * 1024;
 const SIGNED = "That application is already signed; open the file instead.";
+const MASKED = "Enter the full SSN and date of birth.";
 
-type Svc = ReturnType<typeof service>;
+export type Svc = ReturnType<typeof service>;
 
-const notReady = () =>
+export const notReady = () =>
   !SUPABASE_URL() || !SERVICE_KEY()
     ? json(500, { error: "The server is missing its database settings." })
     : null;
 
 /** A lookup failed (not "there's none"): the caller can try again. */
-const tryAgain = () => json(503, { error: "Try again in a moment." });
+export const tryAgain = () => json(503, { error: "Try again in a moment." });
 
 /**
  * The request body, read up to max bytes; null when it's larger. Content-Length is only a hint (a
@@ -182,7 +186,7 @@ export function clientIp(request: Request): string | null {
 }
 
 /** Never throws: a failure comes back as { error } for the caller to record, and a batch goes on. */
-async function gmailSend(
+export async function gmailSend(
   access: string,
   msg: {
     to: string;
@@ -230,7 +234,7 @@ type Rep = {
 };
 
 /** The rep, or null when there's none. Throws when the lookup itself failed. */
-async function repBySlug(svc: Svc, slug: string): Promise<Rep | null> {
+export async function repBySlug(svc: Svc, slug: string): Promise<Rep | null> {
   const r = await svc
     .from("reps")
     .select("slug,name,title,user_id,active")
@@ -240,14 +244,14 @@ async function repBySlug(svc: Svc, slug: string): Promise<Rep | null> {
   return (r.data as Rep | null) ?? null;
 }
 
-async function emailOf(svc: Svc, userId: string | null): Promise<string | null> {
+export async function emailOf(svc: Svc, userId: string | null): Promise<string | null> {
   if (!userId) return null;
   const r = await svc.from("profiles").select("email").eq("id", userId).maybeSingle();
   return ((r.data as { email?: string | null } | null)?.email ?? "").toLowerCase() || null;
 }
 
 /** Addresses that belong to Lamp's own team: they never get a merchant link. */
-async function staffEmails(svc: Svc): Promise<Set<string>> {
+export async function staffEmails(svc: Svc): Promise<Set<string>> {
   const roles = await svc.from("user_roles").select("user_id").in("role", ["admin", "rep"]);
   const ids = [...new Set(((roles.data ?? []) as { user_id: string }[]).map((r) => r.user_id))];
   if (!ids.length) return new Set();
@@ -259,14 +263,18 @@ async function staffEmails(svc: Svc): Promise<Set<string>> {
   );
 }
 
-const isLampAddress = (email: string, staff: Set<string>) =>
+export const isLampAddress = (email: string, staff: Set<string>) =>
   staff.has(email) || email.endsWith("@getlamp.app");
 
 /**
  * Whether a lead with this email or phone is marked do not contact, on any rep's list. Null when
  * the list couldn't be read: callers refuse rather than guess.
  */
-async function doNotContact(svc: Svc, email: string, phone: string): Promise<boolean | null> {
+export async function doNotContact(
+  svc: Svc,
+  email: string,
+  phone: string,
+): Promise<boolean | null> {
   const digits = phone.replace(/\D/g, "").slice(-10);
   const [byEmail, byPhone] = await Promise.all([
     email
@@ -316,20 +324,31 @@ export async function applicationInvites(request: Request): Promise<Response> {
   if (!isAdmin && !held.has("rep")) return json(403, { error: "Staff only." });
   const ownSlug = (mine.data as string | null) ?? null;
 
-  let body: SendRequest;
+  let body: SendRequest | SendBackRequest;
   try {
-    body = (await request.json()) as SendRequest;
+    body = (await request.json()) as SendRequest | SendBackRequest;
   } catch {
     return json(400, { error: "Send JSON." });
   }
   const svc = service();
+
+  if (
+    body.action === "send_back" ||
+    body.action === "send_back_again" ||
+    body.action === "cancel_send_back"
+  ) {
+    const { sendBack } = await import("@/lib/application-changes.server");
+    return sendBack({ who, svc }, body);
+  }
 
   if (body.action === "cancel" || body.action === "resend") {
     if (!UUID.test(body.invite_id ?? "")) return json(400, { error: "invite_id is required." });
     // the caller's own client: a rep only finds links sent for them
     const found = await who.client
       .from("application_invites" as never)
-      .select("id,rep_slug,email,phone,first_name,business_name,submitted_at,note,engine_lead_id")
+      .select(
+        "id,rep_slug,email,phone,first_name,business_name,submitted_at,note,engine_lead_id,kind",
+      )
       .eq("id", body.invite_id)
       .maybeSingle();
     const inv = found.data as {
@@ -342,9 +361,15 @@ export async function applicationInvites(request: Request): Promise<Response> {
       submitted_at: string | null;
       note: string | null;
       engine_lead_id: number | null;
+      kind?: string;
     } | null;
     if (!inv) return json(404, { error: "That link isn't one of yours." });
     if (inv.submitted_at) return json(409, { error: SIGNED });
+    // an update link is managed from its file (Email again, Cancel), never turned into a new link
+    if (inv.kind === "changes")
+      return json(409, {
+        error: "This is an update link. Open the file to send it again or cancel it.",
+      });
 
     // both writes skip a link signed since the read above (Postgres re-checks the condition
     // after waiting on submit's row lock), so a signed invite never changes channel or address
@@ -553,6 +578,7 @@ export async function applicationInvites(request: Request): Promise<Response> {
         .eq("email", email)
         .eq("rep_slug", rep.slug)
         .eq("channel", "email")
+        .eq("kind", "new")
         .is("submitted_at", null)
         .is("cancelled_at", null)
         .gte("sent_at", since)
@@ -671,6 +697,7 @@ async function inviteByToken(svc: Svc, token: string): Promise<InviteRow | null>
       "id,rep_slug,first_name,last_name,business_name,email,phone,opened_at,started_at,submitted_at,cancelled_at,expires_at",
     )
     .eq("token_hash", await hashToken(token))
+    .eq("kind", "new")
     .maybeSingle();
   if (r.error) throw r.error;
   return (r.data as InviteRow | null) ?? null;
@@ -764,6 +791,7 @@ const ERR: Record<string, [number, string]> = {
     429,
     "We're getting a lot of applications from here right now. Try again in an hour or call your rep.",
   ],
+  "bad_request: masked value": [422, MASKED],
 };
 
 /**
@@ -790,6 +818,8 @@ export async function submitApplication(request: Request): Promise<Response> {
   const d = cleanDetails(fromRow((body.details ?? {}) as Record<string, unknown>));
   const todo = missing(d);
   if (todo.length) return json(422, { error: "Some answers are missing.", missing: todo });
+  if (d.owners.some((o) => isMaskedSsn(o.ssn) || isMaskedDob(o.dob)))
+    return json(422, { error: MASKED });
   const owner = d.owners[0]!;
   const sig = body.signature ?? {};
   const name = typeof sig.name === "string" ? sig.name.trim().slice(0, 120) : "";

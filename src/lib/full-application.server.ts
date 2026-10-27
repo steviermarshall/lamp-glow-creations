@@ -10,13 +10,21 @@ import { readJson } from "@/lib/application-links.server";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PURPOSES = ["reveal_ssn", "application_pdf", "funder_submission"] as const;
 
-type Body = { application_id?: string; purpose?: (typeof PURPOSES)[number] };
+type Body = {
+  application_id?: string;
+  purpose?: (typeof PURPOSES)[number];
+  /** Every signed version and change request, masked (20261028120000_send_back_for_changes). */
+  versions?: true;
+  /** One signed version with the full numbers, for its PDF; logged as 'version_pdf'. */
+  version?: number;
+};
 
 /**
  * POST /api/application-details { application_id } for the masked application (SSNs cut to the
  * last four, dates of birth hidden), or with a purpose for the full numbers, which the database
  * records first. Answers { details } (null when the merchant hasn't started it), 403 { refused }
- * for anyone but an admin or the file's rep.
+ * for anyone but an admin or the file's rep. With versions: true it answers { versions } instead,
+ * and with version: n that version's { details }.
  */
 export async function fullApplication(request: Request): Promise<Response> {
   const who = await caller(request);
@@ -27,12 +35,28 @@ export async function fullApplication(request: Request): Promise<Response> {
   if (!UUID.test(appId)) return json(400, { error: "application_id is required." });
   if (body.purpose !== undefined && !PURPOSES.includes(body.purpose))
     return json(400, { error: "Unknown purpose." });
-  const r = body.purpose
-    ? await who.client.rpc("reveal_application_details", {
-        _application_id: appId,
-        _purpose: body.purpose,
-      })
-    : await who.client.rpc("staff_application_details", { _application_id: appId });
+  if (body.version !== undefined && !(Number.isInteger(body.version) && body.version >= 1))
+    return json(400, { error: "Unknown version." });
+  if (body.versions) {
+    const v = await who.client.rpc("staff_application_versions", { _application_id: appId });
+    if (v.error) {
+      if (v.error.code === "42501") return json(403, { refused: true, error: "Not your file." });
+      return json(500, { error: "Couldn't open the versions." });
+    }
+    return json(200, { versions: v.data ?? null });
+  }
+  const r =
+    body.version !== undefined
+      ? await who.client.rpc("reveal_application_version", {
+          _application_id: appId,
+          _version: body.version,
+        })
+      : body.purpose
+        ? await who.client.rpc("reveal_application_details", {
+            _application_id: appId,
+            _purpose: body.purpose,
+          })
+        : await who.client.rpc("staff_application_details", { _application_id: appId });
   if (r.error) {
     if (r.error.code === "42501")
       return json(403, {

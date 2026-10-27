@@ -14,6 +14,8 @@ import { applicationUrl, type SendRequest, type SendResult } from "@/lib/applica
  * opened, started, signed, stopped or expired). The database shows a rep only their own links
  * and an admin everyone's. A signed one opens as a file. Email again and New link both make a
  * fresh link, so the one sent before stops working; Stop ends a link without a new one.
+ * Update links from "Send back for changes" live on their file, not here; a signed row says when
+ * its file is waiting on an update or has one to review.
  */
 
 type Invite = {
@@ -115,19 +117,28 @@ export function SentApplications({
   // What the last action on each link did, kept across reloads so a new link stays copyable.
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   const [composing, setComposing] = useState<number | null>(null);
+  // per signed file: an update asked for, or an update signed and not reviewed yet
+  const [changes, setChanges] = useState<Record<string, "asked" | "received">>({});
 
   const load = useCallback(async () => {
     const sb = getSupabase();
     if (!sb) return;
     const now = new Date().toISOString();
-    let q = sb.from("application_invites").select(COLUMNS);
-    if (isAdmin && rep) q = q.eq("rep_slug", rep);
-    if (filter === "signed") q = q.not("submitted_at", "is", null);
-    if (filter === "waiting")
-      q = q.is("submitted_at", null).is("cancelled_at", null).gte("expires_at", now);
-    if (filter === "stopped")
-      q = q.is("submitted_at", null).or(`cancelled_at.not.is.null,expires_at.lt."${now}"`);
-    const { data, error: err } = await q.order("sent_at", { ascending: false }).limit(LIMIT);
+    // update links ("Send back for changes") live on their file; the kind column comes with
+    // that SQL, so without it the list still loads
+    const query = (newOnly: boolean) => {
+      let q = sb.from("application_invites").select(COLUMNS);
+      if (newOnly) q = q.eq("kind", "new");
+      if (isAdmin && rep) q = q.eq("rep_slug", rep);
+      if (filter === "signed") q = q.not("submitted_at", "is", null);
+      if (filter === "waiting")
+        q = q.is("submitted_at", null).is("cancelled_at", null).gte("expires_at", now);
+      if (filter === "stopped")
+        q = q.is("submitted_at", null).or(`cancelled_at.not.is.null,expires_at.lt."${now}"`);
+      return q.order("sent_at", { ascending: false }).limit(LIMIT);
+    };
+    let { data, error: err } = await query(true);
+    if (err?.code === "42703") ({ data, error: err } = await query(false));
     if (err) {
       setError(
         err.code === "42P01" || err.code === "PGRST205"
@@ -139,6 +150,26 @@ export function SentApplications({
     }
     setError("");
     setRows(data as Invite[]);
+    const files = (data as Invite[]).map((r) => r.application_id).filter((x): x is string => !!x);
+    if (files.length) {
+      const c = await sb
+        .from("application_change_requests")
+        .select("application_id,status,reviewed_at,created_at")
+        .in("application_id", files)
+        .order("created_at", { ascending: false });
+      // an open request wins; otherwise any signed update not reviewed yet
+      const next: Record<string, "asked" | "received"> = {};
+      for (const x of (c.data ?? []) as {
+        application_id: string;
+        status: string;
+        reviewed_at: string | null;
+      }[]) {
+        if (x.status === "open") next[x.application_id] = "asked";
+        else if (x.status === "submitted" && !x.reviewed_at && !next[x.application_id])
+          next[x.application_id] = "received";
+      }
+      setChanges(next);
+    } else setChanges({});
   }, [filter, rep, isAdmin]);
 
   useEffect(() => {
@@ -336,6 +367,21 @@ export function SentApplications({
                       >
                         {STATUS_LABEL[st]}
                       </span>
+                      {st === "signed" && r.application_id && changes[r.application_id] && (
+                        <span
+                          className={cn(
+                            "ml-2 inline-block rounded-full px-2.5 py-1 text-xs font-semibold ring-1",
+                            changes[r.application_id] === "asked"
+                              ? "text-smoke ring-line"
+                              : "text-forest ring-leaf/50",
+                          )}
+                          data-changes={changes[r.application_id]}
+                        >
+                          {changes[r.application_id] === "asked"
+                            ? "Update asked"
+                            : "Update to review"}
+                        </span>
+                      )}
                       {st === "signed" && r.application_id && (
                         <Link
                           to="/staff"

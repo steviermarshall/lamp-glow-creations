@@ -95,6 +95,89 @@ export type Database = {
           },
         ]
       }
+      application_change_requests: {
+        Row: {
+          application_id: string
+          base_version: number
+          base_version_id: string
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          channel: string
+          created_at: string
+          id: string
+          invite_id: string | null
+          items: Json
+          message: string | null
+          notified_at: string | null
+          requested_by: string | null
+          result_version_id: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sends: number
+          status: string
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: { [_ in never]: never }
+        Update: { [_ in never]: never }
+        Relationships: []
+      }
+      application_staff_additions: {
+        Row: {
+          about: string
+          application_id: string
+          author_id: string | null
+          author_name: string | null
+          body: string
+          created_at: string
+          id: string
+          share_with_funders: boolean
+          source: string
+          withdrawn_at: string | null
+          withdrawn_by: string | null
+        }
+        Insert: {
+          about?: string
+          application_id: string
+          body: string
+          share_with_funders?: boolean
+          source?: string
+        }
+        Update: {
+          withdrawn_at?: string | null
+        }
+        Relationships: []
+      }
+      application_versions: {
+        Row: {
+          application_id: string
+          balances: Json
+          business: Json
+          change_request_id: string | null
+          consent_text: string | null
+          consent_version: string | null
+          created_at: string
+          id: string
+          owners: Json
+          real_estate: Json
+          recorded_by: string
+          request: Json
+          signature_image: string | null
+          signature_image_2: string | null
+          signed_at: string
+          signed_name: string
+          signed_name_2: string | null
+          signed_via: string | null
+          signer_agent: string | null
+          signer_ip: string | null
+          snapshot_sha256: string
+          version: number
+        }
+        Insert: { [_ in never]: never }
+        Update: { [_ in never]: never }
+        Relationships: []
+      }
       application_invites: {
         Row: {
           application_id: string | null
@@ -120,6 +203,11 @@ export type Database = {
           submitted_at: string | null
           token_hash: string
           updated_at: string
+          change_request_id: string | null
+          failed_checks: number
+          kind: string
+          locked_at: string | null
+          verified_at: string | null
         }
         Insert: {
           application_id?: string | null
@@ -145,6 +233,11 @@ export type Database = {
           submitted_at?: string | null
           token_hash: string
           updated_at?: string
+          change_request_id?: string | null
+          failed_checks?: number
+          kind?: string
+          locked_at?: string | null
+          verified_at?: string | null
         }
         Update: {
           application_id?: string | null
@@ -170,6 +263,11 @@ export type Database = {
           submitted_at?: string | null
           token_hash?: string
           updated_at?: string
+          change_request_id?: string | null
+          failed_checks?: number
+          kind?: string
+          locked_at?: string | null
+          verified_at?: string | null
         }
         Relationships: [
           {
@@ -1386,6 +1484,48 @@ export type Database = {
         }
       }
       claim_applications: { Args: { _tokens?: string[] }; Returns: number }
+      cancel_change_request: {
+        Args: { _reason?: string | null; _request_id: string }
+        Returns: Json
+      }
+      issue_change_link: {
+        Args: { _actor: string; _request_id: string; _token_hash: string | null }
+        Returns: Json
+      }
+      mark_changes_reviewed: { Args: { _request_id: string }; Returns: Json }
+      my_application_changes: { Args: { _application_id: string }; Returns: Json }
+      open_change_link: {
+        Args: { _dob?: string | null; _event?: string | null; _token_hash: string }
+        Returns: Json
+      }
+      request_changes: {
+        Args: { _application_id: string; _items: Json; _message?: string | null }
+        Returns: Json
+      }
+      resubmit_change_request: {
+        Args: {
+          _base_version: number
+          _consent_text: string
+          _consent_version: string
+          _details: Json
+          _dob: string | null
+          _request_id: string | null
+          _signature_image: string
+          _signature_image_2: string | null
+          _signed_name: string
+          _signed_name_2: string | null
+          _signer_agent: string
+          _signer_ip: string | null
+          _token_hash: string | null
+          _user_id: string | null
+        }
+        Returns: Json
+      }
+      reveal_application_version: {
+        Args: { _application_id: string; _version: number }
+        Returns: Json
+      }
+      staff_application_versions: { Args: { _application_id: string }; Returns: Json }
       can_see_application_details: {
         Args: { _application_id: string }
         Returns: boolean

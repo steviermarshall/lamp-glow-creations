@@ -75,10 +75,33 @@ export type FileSummary = {
   requested: number | null;
   openPositions: number | null;
   repName: string | null;
+  /** Which signed version goes out (2 and up: an update the merchant signed after a send-back). */
+  version?: number;
+  /** Notes staff added and ticked for funders: not part of what the merchant signed. */
+  additions?: { at: string; source: string; body: string }[];
 };
 
 const money = (n: number | null) =>
   n === null || !Number.isFinite(n) ? "not stated" : `$${Math.round(n).toLocaleString("en-US")}`;
+
+const SOURCE: Record<string, string> = {
+  phone: "by phone with the merchant",
+  email: "by email from the merchant",
+  text: "by text from the merchant",
+  document: "from a document",
+  other: "noted",
+};
+
+const noteDay = (iso: string) => {
+  const t = new Date(iso);
+  return Number.isNaN(t.getTime())
+    ? iso.slice(0, 10)
+    : t.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        timeZone: "America/New_York",
+      });
+};
 
 export const shortId = (id: string) => id.replace(/-/g, "").slice(0, 8).toUpperCase();
 
@@ -90,11 +113,14 @@ export function emailText(
   mailbox: string,
 ): { subject: string; body: string } {
   const name = s.legalName || "Unnamed business";
-  const subject = `New submission: ${name} – ${money(s.requested)} – Lamp`;
+  const updated = (s.version ?? 1) > 1;
+  const subject = `${updated ? "Updated application" : "New submission"}: ${name} – ${money(s.requested)} – Lamp`;
   const lines = [
     `Hi ${funderContact?.trim() || "team"},`,
     "",
-    "Please find a new working capital submission from Lamp attached.",
+    updated
+      ? "The merchant signed an updated application; it replaces any version of it Lamp sent before. It's attached with the statements."
+      : "Please find a new working capital submission from Lamp attached.",
     "",
     `Business: ${name}${s.dba ? ` (DBA ${s.dba})` : ""}`,
     `State: ${s.state || "not stated"}`,
@@ -104,6 +130,15 @@ export function emailText(
     `Amount requested: ${money(s.requested)}`,
     `Open positions: ${s.openPositions === null ? "not stated" : String(s.openPositions)}`,
     "",
+    ...(s.additions?.length
+      ? [
+          "Added by Lamp staff (not part of the merchant's signed application):",
+          ...s.additions.map(
+            (a) => `- ${noteDay(a.at)}, ${SOURCE[a.source] ?? "noted"}: ${a.body}`,
+          ),
+          "",
+        ]
+      : []),
     "Attached:",
     ...attachmentNames.map((n) => `- ${n}`),
     "",
