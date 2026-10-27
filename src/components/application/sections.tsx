@@ -8,6 +8,8 @@ import {
   emptyOwner,
   ENTITY_TYPES,
   INDUSTRIES,
+  isMaskedDob,
+  isMaskedSsn,
   MAX_BALANCES,
   USES,
   type Balance,
@@ -300,12 +302,16 @@ export function OwnersSection({
             />
           </F>
           <F label="Date of birth">
-            <Text
-              value={o.dob}
-              onChange={(v) => setO(i, "dob", v)}
-              type="date"
-              autoComplete="off"
-            />
+            {isMaskedDob(o.dob) ? (
+              <OnFile what="date of birth" onChange={() => setO(i, "dob", "")} />
+            ) : (
+              <Text
+                value={o.dob}
+                onChange={(v) => setO(i, "dob", v)}
+                type="date"
+                autoComplete="off"
+              />
+            )}
           </F>
           <F label="Social Security number">
             <SsnInput value={o.ssn} onChange={(v) => setO(i, "ssn", v)} />
@@ -341,9 +347,33 @@ export function OwnersSection({
   );
 }
 
+/**
+ * An SSN or date of birth Lamp already has, on the update page: shown as on file (never the
+ * number), kept unless they choose to type a new one.
+ */
+function OnFile({ what, last4, onChange }: { what: string; last4?: string; onChange: () => void }) {
+  return (
+    <div className={cn(inputCls, "flex items-center justify-between gap-3")} data-on-file={what}>
+      <span className="text-smoke">On file{last4 ? `, ending ${last4}` : ""}</span>
+      <button
+        type="button"
+        onClick={onChange}
+        aria-label={`Type a new ${what}`}
+        className="shrink-0 text-sm font-semibold text-forest underline-offset-4 hover:underline"
+      >
+        Change
+      </button>
+    </div>
+  );
+}
+
 /** SSN with its dashes put in, hidden by default like a password, with a Show switch. */
 function SsnInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [show, setShow] = useState(false);
+  if (isMaskedSsn(value))
+    return (
+      <OnFile what="Social Security number" last4={value.slice(-4)} onChange={() => onChange("")} />
+    );
   const fmt = (raw: string) => {
     const x = raw.replace(/\D/g, "").slice(0, 9);
     return x.length > 5

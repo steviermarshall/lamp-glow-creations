@@ -202,7 +202,11 @@ export async function sendToFunders(request: Request): Promise<Response> {
         funder: f.funder_name,
         status: "skipped",
         detail:
-          lock.error.code === "23505" ? "already sent this file" : "couldn't record the submission",
+          lock.error.code === "23505"
+            ? "already sent this file"
+            : lock.error.message === "changes_requested"
+              ? "sent back for changes: waiting on the merchant"
+              : "couldn't record the submission",
       });
       continue;
     }
@@ -299,7 +303,7 @@ async function buildPackage(
   mode: "manual" | "auto",
   body: Body,
 ): Promise<Package | { error: string }> {
-  const [app, det, docs] = await Promise.all([
+  const [app, det, docs, open, newest, notes] = await Promise.all([
     svc
       .from("applications")
       .select("id,business_name,amount_requested,rep_slug")
@@ -316,8 +320,49 @@ async function buildPackage(
       .eq("application_id", appId)
       .in("status", ["received", "accepted"])
       .order("created_at", { ascending: true }),
+    svc
+      .from("application_change_requests")
+      .select("id")
+      .eq("application_id", appId)
+      .eq("status", "open")
+      .limit(1),
+    svc
+      .from("application_versions")
+      .select("id,version")
+      .eq("application_id", appId)
+      .order("version", { ascending: false })
+      .limit(1),
+    svc
+      .from("application_staff_additions")
+      .select("created_at,source,body")
+      .eq("application_id", appId)
+      .eq("share_with_funders", true)
+      .is("withdrawn_at", null)
+      .order("created_at", { ascending: true })
+      .limit(10),
   ]);
   if (app.error || !app.data) return { error: "file not found" };
+  // "Send back for changes": nothing goes out while the merchant is updating, and an update goes
+  // out only by hand, after the rep reviewed what changed, with the PDF built from it just now
+  if (open.error || newest.error) return { error: "couldn't check whether the file was sent back" };
+  if ((open.data ?? []).length)
+    return { error: "sent back for changes: waiting on the merchant to sign the update" };
+  const latest = (newest.data ?? [])[0] as { id: string; version: number } | undefined;
+  if (latest && latest.version >= 2) {
+    if (mode === "auto")
+      return { error: "an updated application goes out by hand: send it from the file" };
+    const answered = await svc
+      .from("application_change_requests")
+      .select("reviewed_at")
+      .eq("result_version_id", latest.id)
+      .maybeSingle();
+    if (!(answered.data as { reviewed_at: string | null } | null)?.reviewed_at)
+      return {
+        error: "review what changed in the merchant's update first (Mark reviewed on the file)",
+      };
+    if (!body.application_pdf)
+      return { error: "the updated application's PDF didn't arrive: send it again from the file" };
+  }
   const a = app.data as {
     business_name: string | null;
     amount_requested: number | null;
@@ -351,6 +396,13 @@ async function buildPackage(
       ? balances.filter((x) => (num(x.current) ?? 0) > 0 || (num(x.payment) ?? 0) > 0).length
       : null,
     repName,
+    additions: ((notes.data ?? []) as { created_at: string; source: string; body: string }[]).map(
+      (n) => ({
+        at: n.created_at,
+        source: n.source,
+        body: n.body,
+      }),
+    ),
   };
 
   type Doc = {

@@ -69,12 +69,15 @@ export function FileSend({
   file,
   repName,
   signedAt,
+  hold = null,
   onSent,
 }: {
   fileId: string;
   file: SendFile;
   repName: string | null;
   signedAt: string | null;
+  /** Why it can't go out right now ("Send back for changes"), or null. */
+  hold?: string | null;
   onSent: () => void;
 }) {
   const [matches, setMatches] = useState<Match[] | null>(null);
@@ -125,7 +128,7 @@ export function FileSend({
   const statements = counts("bank_statement");
   const uploadedApp = counts("funder_application") > 0;
   const hasApplication = !!signedAt || uploadedApp;
-  const packageReady = hasApplication && statements >= 3;
+  const packageReady = hasApplication && statements >= 3 && !hold;
   const chosen = (matches ?? []).filter((m) => picked.has(m.funder_id));
 
   async function run(dryRun: boolean) {
@@ -160,6 +163,8 @@ export function FileSend({
                 ip: full.signerIp,
                 agent: full.signerAgent,
                 consent: full.consentVersion,
+                version: full.version,
+                replaces: full.replaces,
               },
               repName,
             ),
@@ -226,6 +231,11 @@ export function FileSend({
       </div>
 
       <ul className="mt-3 space-y-1 text-sm" data-package>
+        {hold && (
+          <li className="font-semibold text-destructive" data-hold>
+            {hold}
+          </li>
+        )}
         <li className={hasApplication ? "" : "text-destructive"}>
           Signed application:{" "}
           {signedAt
@@ -344,7 +354,7 @@ export function FileSend({
             )}
             Send to {chosen.length} funder{chosen.length === 1 ? "" : "s"}
           </button>
-          {!packageReady && (
+          {!packageReady && !hold && (
             <span className="text-sm text-smoke">
               Needs the signed application and 3 statements first.
             </span>

@@ -397,6 +397,10 @@ export function signatureMatches(typed: string, owner: Owner): boolean {
 /** What staff are sent instead of an SSN until they reveal it (see staff_application_details). */
 export const isMaskedSsn = (s: string) => /^\*{3}-\*{2}-\d{4}$/.test(s);
 
+/** A date of birth on file that isn't shown (staff screens, the update link); see mask_owner. */
+export const MASKED_DOB = "**/**/****";
+export const isMaskedDob = (s: string) => s === MASKED_DOB;
+
 export const maskSsn = (s: string) => {
   const d = digits(s);
   return d.length >= 4 ? `***-**-${d.slice(-4)}` : "";
@@ -430,6 +434,10 @@ export type PdfSignature = {
   agent?: string | null;
   /** The consent version stored with the signature, when the caller has it. */
   consent?: string | null;
+  /** Which signed version this is (2 and up: an update the merchant signed after a send-back). */
+  version?: number | null;
+  /** When the version it replaces was signed (ISO), for the record on an update. */
+  replaces?: string | null;
 };
 
 /** The electronic signature record printed on the application PDF's last page. */
@@ -445,6 +453,8 @@ export type PdfAudit = {
   /** The authorization wording, only when it's known to be the version they signed. */
   consentText: string | null;
   drawn: boolean;
+  version?: number | null;
+  replaces?: string | null;
 };
 
 /** What detailsToPdf gives application-pdf.ts (its ApplicationValues). */
@@ -565,6 +575,8 @@ export function detailsToPdf(d: Details, signed: PdfSignature, repName: string |
       consentVersion,
       consentText: consentVersion === CONSENT_VERSION ? CONSENT_TEXT : null,
       drawn: !!signed.image,
+      version: signed.version ?? null,
+      replaces: signed.replaces ?? null,
     };
   }
   const extra: { label: string; value: string }[] = [];

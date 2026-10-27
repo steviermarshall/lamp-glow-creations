@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { fromRow, type Details } from "@/lib/application-details";
+import type { StaffVersions } from "@/lib/application-changes";
 
 /** The merchant's full application for one file, as staff see it (null when not started). */
 export type FullApplication = {
@@ -18,6 +19,10 @@ export type FullApplication = {
   signerAgent: string | null;
   /** The authorization wording they agreed to (CONSENT_VERSION at the time). */
   consentVersion: string | null;
+  /** Which signed version this is (2 and up after "Send back for changes"), when recorded. */
+  version: number | null;
+  /** When the version it replaced was signed (ISO). */
+  replaces: string | null;
 };
 
 /** Staff who are neither an admin nor the file's rep get this instead of the application. */
@@ -38,6 +43,8 @@ type Row = {
   signer_ip?: string | null;
   signer_agent?: string | null;
   consent_version?: string | null;
+  version?: number | null;
+  replaces?: string | null;
 } | null;
 
 type RpcError = { code?: string; message?: string } | null;
@@ -55,6 +62,8 @@ const toFull = (r: Row): FullApplication | null =>
         signerIp: r.signer_ip ?? null,
         signerAgent: r.signer_agent ?? null,
         consentVersion: r.consent_version ?? null,
+        version: typeof r.version === "number" ? r.version : null,
+        replaces: r.replaces ?? null,
       }
     : null;
 
@@ -99,6 +108,49 @@ export function useFullApplication(fileId: string, reload = 0) {
     };
   }, [fileId, reload]);
   return full;
+}
+
+/** Every signed version of a file and every change request, for staff (masked). */
+export function useVersions(fileId: string, reload = 0) {
+  const [out, setOut] = useState<StaffVersions | typeof RESTRICTED | null | undefined>(undefined);
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    let live = true;
+    (async () => {
+      const { data, error } = await sb.rpc("staff_application_versions", {
+        _application_id: fileId,
+      });
+      let next: StaffVersions | typeof RESTRICTED | null;
+      if (refused(error)) next = RESTRICTED;
+      // not in the database yet, or a hiccup: the file screen works without it
+      else if (error) next = null;
+      else next = data as unknown as StaffVersions;
+      if (live) setOut(next);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [fileId, reload]);
+  return out;
+}
+
+/** One version with the full SSNs, for that version's PDF. Logged by the database first. */
+export async function revealVersion(
+  fileId: string,
+  version: number,
+): Promise<FullApplication | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb.rpc("reveal_application_version", {
+    _application_id: fileId,
+    _version: version,
+  });
+  if (error) throw new Error(error.message || "Couldn't open that version.");
+  const r = data as unknown as (Row & { version: number }) | null;
+  if (!r) return null;
+  const full = toFull(r);
+  return full && { ...full, version: r.version };
 }
 
 /**

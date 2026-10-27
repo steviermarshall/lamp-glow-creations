@@ -1120,6 +1120,17 @@ function signatureRecord(s: Sheet, a: PdfAudit) {
       ...(agent ? { note: agent } : {}),
     },
     { label: "Consent version", value: a.consentVersion || "Not recorded" },
+    // only on an update the merchant signed after a send-back, so earlier PDFs read the same
+    ...(a.version && a.version > 1
+      ? [
+          {
+            label: "Version",
+            value: a.replaces
+              ? `${a.version}, an update replacing the application signed ${signedAtText(a.replaces)}`
+              : `${a.version}, an update the merchant signed`,
+          },
+        ]
+      : []),
   ];
   const valueW = WIDTH - RECORD_LABEL - 20;
   const measured = rows.map((r) => ({

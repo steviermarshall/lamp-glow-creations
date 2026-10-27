@@ -75,10 +75,31 @@ export type FileSummary = {
   requested: number | null;
   openPositions: number | null;
   repName: string | null;
+  /** Notes staff added and ticked for funders: not part of what the merchant signed. */
+  additions?: { at: string; source: string; body: string }[];
 };
 
 const money = (n: number | null) =>
   n === null || !Number.isFinite(n) ? "not stated" : `$${Math.round(n).toLocaleString("en-US")}`;
+
+const SOURCE: Record<string, string> = {
+  phone: "by phone with the merchant",
+  email: "by email from the merchant",
+  text: "by text from the merchant",
+  document: "from a document",
+  other: "noted",
+};
+
+const noteDay = (iso: string) => {
+  const t = new Date(iso);
+  return Number.isNaN(t.getTime())
+    ? iso.slice(0, 10)
+    : t.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        timeZone: "America/New_York",
+      });
+};
 
 export const shortId = (id: string) => id.replace(/-/g, "").slice(0, 8).toUpperCase();
 
@@ -104,6 +125,15 @@ export function emailText(
     `Amount requested: ${money(s.requested)}`,
     `Open positions: ${s.openPositions === null ? "not stated" : String(s.openPositions)}`,
     "",
+    ...(s.additions?.length
+      ? [
+          "Added by Lamp staff (not part of the merchant's signed application):",
+          ...s.additions.map(
+            (a) => `- ${noteDay(a.at)}, ${SOURCE[a.source] ?? "noted"}: ${a.body}`,
+          ),
+          "",
+        ]
+      : []),
     "Attached:",
     ...attachmentNames.map((n) => `- ${n}`),
     "",
