@@ -1,14 +1,20 @@
 import { getSupabase } from "@/lib/supabase";
 import { authRedirectUrl } from "@/hooks/use-auth";
+import { lovable } from "@/integrations/lovable";
 
+/**
+ * Google sign-in through Lovable Cloud's OAuth broker. The project holds no Google client
+ * secret, so asking Supabase directly fails with "Unsupported provider: missing OAuth secret".
+ * On the published site the broker takes over the whole page and comes back to `next` with the
+ * session; inside Lovable's preview it uses a popup and hands the session back here.
+ */
 export async function signInWithGoogle(next = "/account") {
-  const sb = getSupabase();
-  if (!sb) throw new Error("Sign-in isn't available yet.");
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: authRedirectUrl(next) },
+  if (!getSupabase()) throw new Error("Sign-in isn't available yet.");
+  const result = await lovable.auth.signInWithOAuth("google", {
+    redirect_uri: authRedirectUrl(next),
   });
-  if (error) throw error;
+  if (result.error) throw result.error;
+  if (!result.redirected) window.location.assign(authRedirectUrl(next));
 }
 
 export async function sendMagicLink(email: string, firstName?: string, next = "/account") {
