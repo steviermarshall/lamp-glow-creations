@@ -21,6 +21,7 @@ import {
   type StaffVersions,
 } from "@/lib/application-changes";
 import { revealVersion, type FullApplication } from "@/lib/full-application";
+import { logActivity } from "@/lib/track";
 import { btnOutline, btnPrimary, card } from "@/components/site/layout";
 import { chip, input, textarea } from "@/components/staff/field-styles";
 
@@ -132,6 +133,7 @@ export function FileChanges({
   async function pdf(v: StaffVersion) {
     if (busy) return;
     setBusy(`pdf:${v.version}`);
+    void logActivity("download_pdf", { applicationId: fileId, detail: `version ${v.version}` });
     try {
       const x = await revealVersion(fileId, v.version);
       if (!x) throw new Error("That version isn't there.");
@@ -163,6 +165,8 @@ export function FileChanges({
           },
           repName,
         ),
+        "all",
+        ` (version ${v.version})`,
       );
     } catch (e) {
       setNote({ ok: false, text: e instanceof Error ? e.message : "Couldn't build that PDF." });

@@ -55,6 +55,11 @@ export function ChangeApplication({ repSlug }: { repSlug: string }) {
   );
   const honeypot = useRef<HTMLInputElement | null>(null);
 
+  // always the light look, like the application link (the head script does it on a fresh load)
+  useEffect(() => {
+    document.documentElement.dataset["theme"] = "light";
+  }, []);
+
   useEffect(() => {
     if (!token) {
       setState({ state: "not_found" });
@@ -143,7 +148,7 @@ export function ChangeApplication({ repSlug }: { repSlug: string }) {
   const repFirst = repName?.split(" ")[0] || null;
 
   return (
-    <PageShell minimalHeader footer={false} tone="night">
+    <PageShell member themeToggle={false} minimalHeader footer={false} tone="night">
       <div className="mx-auto max-w-3xl px-4 pb-20 pt-6 sm:px-6 sm:pt-12">
         {state === null ? (
           <div className="grid place-items-center py-40">

@@ -40,6 +40,14 @@ exception when undefined_function then
   raise exception 'Run 20261027120000_application_links.sql before this one.';
 end;
 $$;
+-- the staff reads below keep that migration's "only through getlamp.app" check
+do $$
+begin
+  perform 'public.via_lamp_server()'::regprocedure;
+exception when undefined_function then
+  raise exception 'Run 20261027190000_server_stamp.sql before this one.';
+end;
+$$;
 
 -- ---------- 1. Signed versions ----------
 create table if not exists public.application_versions (
@@ -143,7 +151,8 @@ $$;
 create index if not exists application_invites_change_idx
   on public.application_invites (change_request_id) where change_request_id is not null;
 
--- A version's PDF is logged under its own reason (as 20261024120000_funder_send.sql extends it).
+-- A version's PDF is logged under its own reason (as 20261024120000_funder_send.sql and
+-- 20261027190000_server_stamp.sql extend it; their reasons stay).
 do $$
 declare c text;
 begin
@@ -154,7 +163,8 @@ begin
     execute format('alter table public.sensitive_access_log drop constraint %I', c);
   end if;
   alter table public.sensitive_access_log add constraint sensitive_access_log_action_check
-    check (action in ('reveal_ssn', 'application_pdf', 'funder_submission', 'version_pdf'));
+    check (action in ('reveal_ssn', 'application_pdf', 'funder_submission', 'open_document',
+                      'version_pdf'));
 exception when duplicate_object then null;
 end;
 $$;
@@ -1677,6 +1687,10 @@ language plpgsql volatile security definer
 set search_path = public
 as $$
 begin
+  if not public.via_lamp_server() then
+    raise exception 'the full application opens only through getlamp.app'
+      using errcode = 'insufficient_privilege';
+  end if;
   if not public.can_see_application_details(_application_id) then
     raise exception 'the full application is visible to admins and the assigned rep'
       using errcode = 'insufficient_privilege';
@@ -1738,6 +1752,10 @@ as $$
 declare
   r public.application_details;
 begin
+  if not public.via_lamp_server() then
+    raise exception 'the full application opens only through getlamp.app'
+      using errcode = 'insufficient_privilege';
+  end if;
   if not public.can_see_application_details(_application_id) then
     raise exception 'the full application is visible to admins and the assigned rep'
       using errcode = 'insufficient_privilege';
@@ -1785,6 +1803,10 @@ as $$
 declare
   r public.application_details;
 begin
+  if not public.via_lamp_server() then
+    raise exception 'the full application opens only through getlamp.app'
+      using errcode = 'insufficient_privilege';
+  end if;
   if _purpose is null or _purpose not in ('reveal_ssn', 'application_pdf', 'funder_submission') then
     raise exception 'unknown purpose' using errcode = 'invalid_parameter_value';
   end if;
@@ -1834,6 +1856,10 @@ as $$
 declare
   v public.application_versions;
 begin
+  if not public.via_lamp_server() then
+    raise exception 'the full application opens only through getlamp.app'
+      using errcode = 'insufficient_privilege';
+  end if;
   if not public.can_see_application_details(_application_id) then
     raise exception 'the full application is visible to admins and the assigned rep'
       using errcode = 'insufficient_privilege';
