@@ -22,10 +22,11 @@
 -- Order: merge and Publish first (the staff file keeps using the old column until this runs),
 -- then paste this. Safe to run again.
 --
--- Locks: nothing here takes an exclusive lock, so staff reading files and reviewing documents
--- carry on while it runs (saves to a file wait a moment). Applications comes before documents,
--- the same order as claiming a file. If it ever stops on a lock timeout or "deadlock detected",
--- paste it again.
+-- It runs as two short transactions. Part 1 first waits for any change to a file already under
+-- way (a re-sign, a funder send) to finish, then holds changes to files, and new rows that point
+-- at a file, for the few milliseconds it takes; reading files carries on. Part 2 then adds the
+-- documents check, which waits only for document writes in progress. If it stops on a lock
+-- timeout, paste it again.
 
 set lock_timeout = '5s';
 
@@ -40,6 +41,11 @@ end;
 $$;
 
 -- ---------- 1. Staff notes, staff only ----------
+begin;
+-- Taken first, so nothing that has locked a file's row (resubmit_change_request, the submissions
+-- guard) can end up waiting on this part while this part waits on it.
+lock table public.applications in exclusive mode;
+
 create table if not exists public.application_internal_notes (
   application_id uuid primary key references public.applications (id) on delete cascade,
   body text not null check (char_length(btrim(body)) between 1 and 100000),
@@ -111,8 +117,8 @@ create policy "Staff clear internal notes" on public.application_internal_notes
   );
 
 -- Every note written so far moves over (a re-run finds the column empty and copies nothing).
--- Creating the table above locked applications against writes until this commits, so no note
--- can be saved between this copy and the clear below.
+-- The lock above holds every write to applications until this part commits, so no note can be
+-- saved between this copy and the clear below.
 insert into public.application_internal_notes (application_id, body, updated_by)
 select a.id, a.staff_notes, null
 from public.applications a
@@ -160,8 +166,10 @@ create or replace trigger applications_staff_notes_moved
 
 comment on column public.applications.staff_notes is
   'Retired 2026-10-28, always empty: merchants can read this row. Staff notes live in application_internal_notes (applications_staff_notes_moved).';
+commit;
 
 -- ---------- 2. Only a document's review changes from a browser ----------
+begin;
 create or replace function public.documents_fields_guard()
 returns trigger
 language plpgsql
@@ -193,5 +201,6 @@ revoke all on function public.documents_fields_guard() from public, anon, authen
 create or replace trigger documents_fields_guard
   before update on public.documents
   for each row execute function public.documents_fields_guard();
+commit;
 
 reset lock_timeout;
