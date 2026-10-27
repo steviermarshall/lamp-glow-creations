@@ -17,9 +17,9 @@ export const SITE = {
 export const telHref = (phone: string) => `tel:+1${phone.replace(/\D/g, "").slice(-10)}`;
 
 // ---------- Sign-in ----------
-// Off: merchants sign in with an emailed link only. Google sign-in on Lovable Cloud has ended on
-// an error page since about 10-05; turn this on once "Continue with Google" works end to end.
-export const GOOGLE_SIGN_IN = false;
+// On: "Continue with Google" shows next to the emailed link and goes through Lovable Cloud's
+// sign-in broker (signInWithGoogle in components/site/auth.tsx). Off: emailed sign-in links only.
+export const GOOGLE_SIGN_IN = true;
 
 // ---------- Rep links: /apply/<slug> ----------
 // Anything that comes in through a rep's link is tagged with ref=<slug> on the application.
