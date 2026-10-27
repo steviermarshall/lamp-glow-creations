@@ -22,6 +22,13 @@ const FIELD = {
   lampRadius: 320,
 };
 
+// Light mode: darker green dots on the paper ground; the large ones fade into the paper instead.
+const DAY = {
+  dot: [0.204, 0.478, 0.302] as Rgb,
+  deep: [0.965, 0.969, 0.949] as Rgb,
+  hot: [0.247, 0.604, 0.361] as Rgb,
+};
+
 const NOISE = `precision highp float;uniform vec2 u_res;uniform float u_cell;uniform float u_time;uniform float u_scroll;
 vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
 float snoise(vec3 v){const vec2 C=vec2(1.0/6.0,1.0/3.0);const vec4 D=vec4(0.0,0.5,1.0,2.0);vec3 i=floor(v+dot(v,C.yyy));vec3 x0=v-i+dot(i,C.xxx);vec3 g=step(x0.yzx,x0.xyz);vec3 l=1.0-g;vec3 i1=min(g.xyz,l.zxy);vec3 i2=max(g.xyz,l.zxy);vec3 x1=x0-i1+C.xxx;vec3 x2=x0-i2+C.yyy;vec3 x3=x0-D.yyy;i=mod289(i);vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));float n_=0.142857142857;vec3 ns=n_*D.wyz-D.xzx;vec4 j=p-49.0*floor(p*ns.z*ns.z);vec4 x_=floor(j*ns.z);vec4 y_=floor(j-7.0*x_);vec4 x=x_*ns.x+ns.yyyy;vec4 y=y_*ns.x+ns.yyyy;vec4 h=1.0-abs(x)-abs(y);vec4 b0=vec4(x.xy,y.xy);vec4 b1=vec4(x.zw,y.zw);vec4 s0=floor(b0)*2.0+1.0;vec4 s1=floor(b1)*2.0+1.0;vec4 sh=-step(h,vec4(0.0));vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;vec3 p0=vec3(a0.xy,h.x);vec3 p1=vec3(a0.zw,h.y);vec3 p2=vec3(a1.xy,h.z);vec3 p3=vec3(a1.zw,h.w);vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);m=m*m;return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));}
@@ -44,18 +51,26 @@ gl_FragColor=vec4(u_hot*glowA*(1.0-dotA)+col*dotA,glowA*(1.0-dotA)+dotA);}`;
 const VERT = "attribute vec2 a_pos;void main(){gl_Position=vec4(a_pos,0.0,1.0);}";
 
 export function LampField() {
-  const ref = useRef<HTMLCanvasElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
+    const host = ref.current;
+    if (!host) return;
+    // A new canvas on every mount: React's dev double-mount would otherwise reuse the one whose
+    // context the first cleanup just lost, and the field would show Chrome's broken-WebGL face.
+    const canvas = document.createElement("canvas");
+    canvas.className = "block h-full w-full";
+    host.appendChild(canvas);
     const gl = canvas.getContext("webgl", {
       antialias: false,
       alpha: true,
       premultipliedAlpha: true,
       powerPreference: "low-power",
     });
-    if (!gl) return;
+    if (!gl) {
+      canvas.remove();
+      return;
+    }
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const prog = (frag: string) => {
@@ -186,9 +201,10 @@ export function LampField() {
       gl.uniform1f(D.vol, FIELD.volume);
       gl.uniform1f(D.sides, FIELD.sides);
       gl.uniform1f(D.glow, FIELD.glow);
-      gl.uniform3fv(D.c1, FIELD.dot);
-      gl.uniform3fv(D.c2, FIELD.deep);
-      gl.uniform3fv(D.hot, FIELD.hot);
+      const pal = document.documentElement.dataset["theme"] === "light" ? DAY : FIELD;
+      gl.uniform3fv(D.c1, pal.dot);
+      gl.uniform3fv(D.c2, pal.deep);
+      gl.uniform3fv(D.hot, pal.hot);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       const settling =
@@ -223,6 +239,7 @@ export function LampField() {
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onResize, { passive: true });
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("lamp-theme", raf);
     onScroll();
     scrollS = scrollNow;
     raf();
@@ -233,15 +250,11 @@ export function LampField() {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("lamp-theme", raf);
       gl.getExtension("WEBGL_lose_context")?.loseContext();
+      canvas.remove();
     };
   }, []);
 
-  return (
-    <canvas
-      ref={ref}
-      aria-hidden="true"
-      className="pointer-events-none fixed inset-0 -z-10 block h-full w-full"
-    />
-  );
+  return <div ref={ref} aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10" />;
 }

@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 import { SITE } from "../lib/site";
+import { THEME_SCRIPT } from "../lib/theme";
 
 const SITE_URL = SITE.url;
 
@@ -124,7 +125,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:image", content: `${SITE_URL}/og.png` },
       { property: "og:image:alt", content: "Lamp: working capital, made clear." },
     ],
-    scripts: [{ type: "application/ld+json", children: JSON.stringify(ORG_JSON_LD) }],
+    scripts: [
+      { children: THEME_SCRIPT },
+      { type: "application/ld+json", children: JSON.stringify(ORG_JSON_LD) },
+    ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
@@ -149,7 +153,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // data-theme is set by THEME_SCRIPT before React hydrates
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

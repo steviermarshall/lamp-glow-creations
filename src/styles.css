@@ -622,3 +622,140 @@ h3 {
   color-scheme: dark;
   accent-color: var(--leaf);
 }
+
+/* ---------------------------------------------------------------------------------------------
+ * Lamplight by day: the light mode (src/lib/theme.ts sets <html data-theme="light">). The same
+ * pages and components, repainted by swapping the night tokens for paper ones: light text on the
+ * dark ground becomes ink, ink panels become sand, the bright greens become forest. The literal
+ * white hairlines and fills that the dark look uses get ink equivalents.
+ * ------------------------------------------------------------------------------------------- */
+:root:not([data-theme="light"]) .ll-when-light,
+[data-theme="light"] .ll-when-dark {
+  display: none;
+}
+[data-theme="light"] .ll-night {
+  --night: oklch(0.974 0.007 115.7);
+  --paper: oklch(0.18 0.017 159.8);
+  --ink: oklch(0.947 0.013 126.4);
+  --ink-2: oklch(0.947 0.013 126.4);
+  --mist: oklch(0.454 0.021 158.5);
+  --dim: oklch(0.53 0.02 158);
+  --leaf-hi: oklch(0.321 0.042 165.3);
+  --surface: oklch(1 0 0 / 0.74);
+  --surface-2: oklch(0.18 0.017 159.8 / 0.035);
+  --surface-blur: 10px;
+  --hair: oklch(0.18 0.017 159.8 / 0.12);
+  --hair-strong: oklch(0.18 0.017 159.8 / 0.3);
+}
+[data-theme="light"]:root:has(.ll-night) body {
+  background: var(--paper);
+}
+[data-theme="light"]:root:has(.ll-night) {
+  --background: oklch(0.974 0.007 115.7);
+  --foreground: oklch(0.18 0.017 159.8);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.017 159.8);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.017 159.8);
+  --primary: oklch(0.615 0.117 150.1);
+  --primary-foreground: oklch(0.18 0.017 159.8);
+  --secondary: oklch(0.947 0.013 126.4);
+  --secondary-foreground: oklch(0.18 0.017 159.8);
+  --muted: oklch(0.947 0.013 126.4);
+  --muted-foreground: oklch(0.454 0.021 158.5);
+  --accent: oklch(0.18 0.017 159.8 / 0.05);
+  --accent-foreground: oklch(0.18 0.017 159.8);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.18 0.017 159.8 / 0.12);
+  --input: oklch(0.18 0.017 159.8 / 0.16);
+  --ring: oklch(0.615 0.117 150.1);
+}
+
+/* the glass and the light around it */
+[data-theme="light"] .ll-night .ll-glass {
+  background: linear-gradient(170deg, oklch(1 0 0 / calc(0.62 + var(--glass-a))), oklch(0.985 0.006 140 / calc(0.5 + var(--glass-a))));
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.9),
+    0 26px 60px -32px oklch(0.321 0.042 165.3 / 0.38);
+}
+[data-theme="light"] .ll-night .ll-glass::before {
+  background: linear-gradient(calc(135deg + var(--tilt)), oklch(0.321 0.042 165.3 / 0.24), oklch(0.321 0.042 165.3 / 0.07) 38%, transparent 60%, oklch(0.321 0.042 165.3 / 0.07));
+}
+[data-theme="light"] .ll-atmos {
+  background: radial-gradient(60% 55% at 70% 18%, oklch(0.8 0.1 150 / 0.2), oklch(0.9 0.05 150 / 0.06) 50%, transparent 75%);
+}
+[data-theme="light"] .ll-shade::before {
+  background: radial-gradient(70% 70% at 35% 45%, oklch(0.974 0.007 115.7 / 0.9), oklch(0.974 0.007 115.7 / 0.55) 55%, transparent 80%);
+}
+
+/* text that has to stay readable on paper */
+[data-theme="light"] .ll-night .text-leaf {
+  color: oklch(0.48 0.11 152);
+}
+[data-theme="light"] .ll-night .bg-leaf.text-ink,
+[data-theme="light"] .ll-night .bg-leaf .text-ink,
+[data-theme="light"] .ll-night .bg-ink.text-white {
+  color: oklch(0.18 0.017 159.8);
+}
+[data-theme="light"] .ll-night .placeholder\:text-smoke\/60::placeholder {
+  color: oklch(0.454 0.021 158.5 / 0.6);
+}
+
+/* fills, hairlines and rings that are literal white in the dark look */
+[data-theme="light"] .ll-night .bg-line {
+  background-color: oklch(0.18 0.017 159.8 / 0.1);
+}
+[data-theme="light"] .ll-night .hover\:bg-sand:hover,
+[data-theme="light"] .ll-night .hover\:bg-white\/5:hover {
+  background-color: oklch(0.18 0.017 159.8 / 0.05);
+}
+[data-theme="light"] .ll-night .bg-white.shadow-sm {
+  background-color: oklch(1 0 0);
+  box-shadow: 0 1px 3px oklch(0.18 0.017 159.8 / 0.14);
+}
+[data-theme="light"] .ll-night .bg-white\/5 {
+  background-color: oklch(0.18 0.017 159.8 / 0.04);
+}
+[data-theme="light"] .ll-night .bg-white\/10 {
+  background-color: oklch(0.18 0.017 159.8 / 0.06);
+}
+[data-theme="light"] .ll-night .bg-white\/15 {
+  background-color: oklch(0.18 0.017 159.8 / 0.08);
+}
+[data-theme="light"] .ll-night .border-white\/10,
+[data-theme="light"] .ll-night .divide-white\/10 > :not(:last-child) {
+  border-color: var(--hair);
+}
+[data-theme="light"] .ll-night .ring-white\/5 {
+  --tw-ring-color: oklch(0.18 0.017 159.8 / 0.06);
+}
+[data-theme="light"] .ll-night .ring-white\/10,
+[data-theme="light"] .ll-night .ring-white\/12 {
+  --tw-ring-color: oklch(0.18 0.017 159.8 / 0.12);
+}
+[data-theme="light"] .ll-night .ring-white\/15,
+[data-theme="light"] .ll-night .ring-white\/20,
+[data-theme="light"] .ll-night .ring-white\/25 {
+  --tw-ring-color: oklch(0.18 0.017 159.8 / 0.2);
+}
+[data-theme="light"] .ll-night .stroke-white\/25 {
+  stroke: oklch(0.18 0.017 159.8 / 0.25);
+}
+[data-theme="light"] .ll-night .stroke-white\/40 {
+  stroke: oklch(0.18 0.017 159.8 / 0.4);
+}
+[data-theme="light"] .ll-night .ll-range::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg, var(--leaf) var(--p), oklch(0.18 0.017 159.8 / 0.14) var(--p));
+}
+[data-theme="light"] .ll-night .ll-range::-moz-range-track {
+  background: linear-gradient(90deg, var(--leaf) var(--p), oklch(0.18 0.017 159.8 / 0.14) var(--p));
+}
+
+/* native form controls read as light again */
+[data-theme="light"] .ll-night input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+[data-theme="light"] .ll-night select,
+[data-theme="light"] .ll-night textarea,
+[data-theme="light"] .ll-night input[type="checkbox"],
+[data-theme="light"] .ll-night input[type="radio"] {
+  color-scheme: light;
+}
