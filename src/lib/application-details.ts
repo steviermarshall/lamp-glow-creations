@@ -4,6 +4,7 @@
 // real-estate.ts.
 import {
   amount,
+  strings,
   cleanRealEstate,
   emptyRealEstate,
   missingRealEstate,
@@ -277,15 +278,28 @@ export function fromRow(row: {
   const base = emptyDetails();
   const obj = (v: unknown) =>
     v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
-  const arr = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
-  const owners = arr(row.owners).map((o) => ({ ...emptyOwner(), ...o }) as Owner);
+  const arr = (v: unknown) => (Array.isArray(v) ? (v as unknown[]).map(obj) : []);
+  // Rebuilt key by key (see strings()): a stored row can come from an anonymous submit, so a
+  // field that isn't a string falls back to "" instead of breaking the staff screen or the PDF.
+  const owners = arr(row.owners).map((o) => strings(emptyOwner(), o, { email: 254 }));
+  const req = obj(row.request);
   return {
-    business: { ...base.business, ...obj(row.business) } as Business,
+    business: strings(base.business, obj(row.business), {
+      legal_name: 200,
+      dba: 200,
+      email: 254,
+      website: 200,
+    }),
     owners: owners.length ? owners.slice(0, 2) : base.owners,
     balances: arr(row.balances)
-      .map((b) => ({ ...emptyBalance(), ...b }) as Balance)
+      .map((b) => strings(emptyBalance(), b))
       .slice(0, MAX_BALANCES),
-    request: { ...base.request, ...obj(row.request) } as Request,
+    request: {
+      ...strings(base.request, req),
+      uses: Array.isArray(req["uses"])
+        ? (req["uses"] as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 8)
+        : [],
+    },
     real_estate: realEstateFromRow(row.real_estate),
   };
 }
@@ -364,7 +378,13 @@ export function missing(d: Details): string[] {
 
 /** The typed signature has to be the first owner's name, so the record says who signed. */
 export function signatureMatches(typed: string, owner: Owner): boolean {
-  const n = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+  // accents folded, not dropped: "Maria Garcia" signs for García, "Pena" for Peña
+  const n = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .replace(/[^a-z]/g, "");
   const t = n(typed);
   return (
     t.length >= 3 &&

@@ -10,7 +10,7 @@ import type { Opt } from "@/lib/real-estate";
  */
 
 export const inputCls =
-  "w-full rounded-xl bg-white px-3.5 py-3 text-[0.95rem] text-ink ring-1 ring-line placeholder:text-smoke/60 focus:outline-none focus:ring-2 focus:ring-leaf/70";
+  "w-full rounded-xl bg-white px-3.5 py-3 text-base text-ink sm:text-[0.95rem] ring-1 ring-line placeholder:text-smoke/60 focus:outline-none focus:ring-2 focus:ring-leaf/70";
 
 export function Group({
   title,
@@ -220,5 +220,72 @@ export function Address({
         </F>
       </div>
     </>
+  );
+}
+
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/**
+ * Month and year as two selects, stored as "YYYY-MM". Not <input type="month">: desktop Safari
+ * and Firefox show that as a plain text box, and a typed "03/2019" would never validate.
+ */
+export function MonthYear({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  // a half-picked value ("2019-") is kept so the other select can finish it
+  const [py = "", pm = ""] = value.split("-");
+  const y = /^\d{4}$/.test(py) ? py : "";
+  const m = /^\d{2}$/.test(pm) ? pm : "";
+  const thisYear = new Date().getFullYear();
+  const years = Array.from({ length: 80 }, (_, i) => String(thisYear - i));
+  const put = (year: string, month: string) => onChange(year || month ? `${year}-${month}` : "");
+  return (
+    <div className="grid grid-cols-[1.4fr_1fr] gap-2" role="group" aria-label={label}>
+      <select
+        className={inputCls}
+        aria-label={`${label}: month`}
+        value={m}
+        onChange={(e) => put(y, e.target.value)}
+      >
+        <option value="">Month</option>
+        {MONTHS.map((name, i) => (
+          <option key={name} value={String(i + 1).padStart(2, "0")}>
+            {name}
+          </option>
+        ))}
+      </select>
+      <select
+        className={inputCls}
+        aria-label={`${label}: year`}
+        value={y}
+        onChange={(e) => put(e.target.value, m)}
+      >
+        <option value="">Year</option>
+        {years.map((x) => (
+          <option key={x} value={x}>
+            {x}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }

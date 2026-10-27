@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { findRep } from "@/lib/site";
-import { b64 } from "@/lib/funder-send";
 import {
   cleanDetails,
   CONSENT_VERSION,
@@ -31,6 +30,7 @@ import { applicationPdfBytes, downloadApplicationPdf } from "@/lib/application-p
 import {
   MAX_UPLOAD_BYTES,
   saveClaim,
+  UPLOAD_TYPES,
   type OpenResponse,
   type SubmitResponse,
 } from "@/lib/application-links";
@@ -44,7 +44,7 @@ import {
   type Update,
 } from "@/components/application/sections";
 import { SignBlock } from "@/components/application/sign-block";
-import { emptySigning, type Signing } from "@/components/application/form-kit";
+import { emptySigning, uploadType, type Signing } from "@/components/application/form-kit";
 import { inputCls } from "@/components/application/fields";
 
 /**
@@ -90,9 +90,12 @@ function missingByStep(d: Details): Record<StepId, string[]> {
   return out;
 }
 
-/** Saved in this browser between visits: the answers without SSNs or dates of birth. */
-const draftKey = (token: string | null, rep: string) =>
-  token ? `lamp.application.draft.${token.slice(0, 16)}` : `lamp.application.draft.rep.${rep}`;
+/**
+ * Saved in this browser between visits: the answers without SSNs or dates of birth. A personal
+ * link keys it by the invite (the same across a resent link), a public link by the rep.
+ */
+const draftKey = (invite: string | null | undefined, rep: string) =>
+  invite ? `lamp.application.draft.${invite}` : `lamp.application.draft.rep.${rep}`;
 
 function loadDraft(key: string): { d: Details; step: number } | null {
   try {
@@ -140,12 +143,14 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
   const honeypot = useRef<HTMLInputElement | null>(null);
   const started = useRef(false);
   const topRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
   // what was signed, kept for the download button on the done screen
   const lastSigned = useRef<{
     src: Parameters<typeof downloadApplicationPdf>[0];
     values: Parameters<typeof downloadApplicationPdf>[1];
   } | null>(null);
-  const key = draftKey(token, repSlug);
+  const key = draftKey(open && open !== "error" ? open.draft : null, repSlug);
 
   useEffect(() => {
     let live = true;
@@ -156,14 +161,22 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(token ? { token } : { rep: repSlug }),
         });
-        const o = (await res.json()) as OpenResponse;
+        const o = (await res.json().catch(() => null)) as OpenResponse | null;
         if (!live) return;
+        if (!res.ok || !o || typeof o.state !== "string") {
+          setOpen("error");
+          return;
+        }
         setOpen(o);
         if (o.state !== "open") return;
-        const saved = loadDraft(key);
+        const saved = loadDraft(draftKey(o.draft, repSlug));
         if (saved) {
+          // reopen on the first step with gaps (the SSN and date of birth are never saved), and
+          // keep the later steps reachable
+          const gaps = missingByStep(saved.d);
+          const first = STEPS.findIndex((x) => gaps[x.id].length > 0);
           setD(saved.d);
-          setStep(saved.step);
+          setStep(first >= 0 ? Math.min(first, saved.step) : saved.step);
           setVisited(saved.step);
           return;
         }
@@ -196,7 +209,7 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
     return () => {
       live = false;
     };
-  }, [token, repSlug, key]);
+  }, [token, repSlug]);
 
   const update: Update = (fn) => {
     setD((x) => {
@@ -221,23 +234,31 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
   const repName = rep?.name ?? "your Lamp rep";
   const repFirst = repName.split(" ")[0] ?? repName;
 
+  const lastStep = STEPS.length - 1;
+
   const go = (to: number) => {
+    // leaving the sign step drops the drawings: the pad comes back blank, so must the state
+    if (current.id === "sign" && to !== step) setSig((x) => ({ ...x, image: null, image2: null }));
     setStep(to);
     setVisited((v) => Math.max(v, to));
     setShowMissing(false);
     saveDraft(key, d, to);
-    window.requestAnimationFrame(() =>
-      topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    );
+    window.requestAnimationFrame(() => {
+      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      headingRef.current?.focus({ preventScroll: true });
+    });
   };
 
-  const next = () => {
+  /** Continue, or (after a Review edit) straight back to signing; blocked while gaps remain. */
+  const next = (to = step + 1) => {
     if (byStep[current.id].length) {
       setShowMissing(true);
-      topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.requestAnimationFrame(() =>
+        cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      );
       return;
     }
-    go(step + 1);
+    go(to);
   };
 
   async function submit() {
@@ -249,7 +270,8 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
       return setError(`Type your full name as the owner, ${owner.first} ${owner.last}, to sign.`);
     if (!sig.image) return setError("Draw your signature in the box.");
     const co = d.owners[1];
-    if (sig.second && co) {
+    const second = sig.second && !!co;
+    if (second && co) {
       if (!signatureMatches(sig.typed2, co))
         return setError(`${co.first} types their full name, ${co.first} ${co.last}, to sign.`);
       if (!sig.image2) return setError(`${co.first} draws their signature in the box.`);
@@ -260,8 +282,8 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
       name: sig.typed.trim(),
       at: new Date().toISOString(),
       image: sig.image,
-      name2: sig.second ? sig.typed2.trim() : null,
-      image2: sig.second ? sig.image2 : null,
+      name2: second ? sig.typed2.trim() : null,
+      image2: second ? sig.image2 : null,
       via: "link" as const,
       ip: null,
       agent: navigator.userAgent,
@@ -276,16 +298,6 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
       amount_requested: amount(clean.request.amount),
       repName: rep?.name ?? null,
     };
-    // the signed PDF goes with the application; if building it fails, staff build it later
-    let pdf: string | undefined;
-    try {
-      pdf = b64(
-        await applicationPdfBytes(src, detailsToPdf(clean, signed, rep?.name ?? null)),
-        false,
-      );
-    } catch {
-      pdf = undefined;
-    }
     let res: Response;
     try {
       res = await fetch("/api/application/submit", {
@@ -303,7 +315,6 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
           },
           consent_version: CONSENT_VERSION,
           company_fax: honeypot.current?.value ?? "",
-          pdf,
         }),
       });
     } catch {
@@ -325,22 +336,42 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
     saveClaim(out.claim_token);
     clearDraft(key);
 
+    // The signed PDF, built now with what the database stamped (time and IP), goes with the
+    // file for funders. If building or sending it fails, staff build the same PDF later.
+    const stamped = { ...signed, at: out.signed_at ?? signed.at, ip: out.signer_ip ?? null };
+    const values = detailsToPdf(clean, stamped, rep?.name ?? null);
+    lastSigned.current = { src, values };
+    const upload = async (
+      blob: Blob,
+      name: string,
+      kind: "bank_statement" | "funder_application",
+    ) => {
+      const form = new FormData();
+      form.set("application_id", out.application_id!);
+      form.set("claim_token", out.claim_token!);
+      form.set("kind", kind);
+      form.set("file", blob, name);
+      const up = await fetch("/api/application/upload", { method: "POST", body: form });
+      const j = (await up.json().catch(() => ({}))) as { error?: string };
+      return up.ok ? null : (j.error ?? "Didn't upload");
+    };
+    try {
+      const bytes = await applicationPdfBytes(src, values);
+      await upload(
+        new Blob([bytes as BlobPart], { type: "application/pdf" }),
+        "Signed application.pdf",
+        "funder_application",
+      );
+    } catch {
+      /* staff build it from the saved answers */
+    }
+
     const uploads: Done["uploads"] = [];
     for (const f of files) {
       setUploading(f.name);
-      const form = new FormData();
-      form.set("application_id", out.application_id);
-      form.set("claim_token", out.claim_token);
-      form.set("kind", "bank_statement");
-      form.set("file", f);
       try {
-        const up = await fetch("/api/application/upload", { method: "POST", body: form });
-        const j = (await up.json().catch(() => ({}))) as { error?: string };
-        uploads.push(
-          up.ok
-            ? { name: f.name, ok: true }
-            : { name: f.name, ok: false, error: j.error ?? "Didn't upload" },
-        );
+        const err = await upload(f, f.name, "bank_statement");
+        uploads.push(err ? { name: f.name, ok: false, error: err } : { name: f.name, ok: true });
       } catch {
         uploads.push({ name: f.name, ok: false, error: "Didn't upload" });
       }
@@ -352,9 +383,10 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
       claim_token: out.claim_token,
       rep_name: out.rep_name ?? rep?.name ?? "",
       email: out.email ?? owner.email,
+      signed_at: stamped.at,
+      signer_ip: stamped.ip,
       uploads,
     });
-    lastSigned.current = { src, values: detailsToPdf(clean, signed, rep?.name ?? null) };
     window.scrollTo({ top: 0 });
   }
   return (
@@ -396,12 +428,19 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
               onGo={(i) => i <= visited && go(i)}
             />
 
-            <div className="ll-glass mt-6 rounded-[1.75rem] p-5 ring-1 ring-line sm:p-9">
+            <div
+              ref={cardRef}
+              className="ll-glass mt-6 scroll-mt-24 rounded-[1.75rem] p-5 ring-1 ring-line sm:p-9"
+            >
               <div key={current.id} className="rise">
                 <p className="font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-leaf">
                   Step {step + 1} of {STEPS.length}
                 </p>
-                <h2 className="mt-2 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+                <h2
+                  ref={headingRef}
+                  tabIndex={-1}
+                  className="mt-2 font-display text-2xl font-bold tracking-tight outline-none sm:text-3xl"
+                >
                   {STEP_HEADLINE[current.id]}
                 </h2>
                 {showMissing && byStep[current.id].length > 0 && (
@@ -451,16 +490,27 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
                   >
                     <ArrowLeft className="size-4" /> Back
                   </button>
-                  <button
-                    type="button"
-                    onClick={next}
-                    className="inline-flex items-center justify-center gap-2 rounded-full bg-leaf px-6 py-3.5 font-semibold text-ink transition hover:-translate-y-0.5 hover:brightness-105"
-                  >
-                    {current.id === "statements" && files.length === 0
-                      ? "Skip for now"
-                      : "Continue"}
-                    <ArrowRight className="size-4" />
-                  </button>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {visited === lastStep && step < lastStep - 1 && (
+                      <button
+                        type="button"
+                        onClick={() => next(lastStep)}
+                        className={cn(btnOutline, "px-5 py-3")}
+                      >
+                        Back to signing
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => next()}
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-leaf px-6 py-3.5 font-semibold text-ink transition hover:-translate-y-0.5 hover:brightness-105"
+                    >
+                      {current.id === "statements" && files.length === 0
+                        ? "Skip for now"
+                        : "Continue"}
+                      <ArrowRight className="size-4" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -563,7 +613,14 @@ function Stepper({
   const pctDone = Math.round((step / (STEPS.length - 1)) * 100);
   return (
     <nav aria-label="Application steps" className="mt-10">
-      <div className="h-1.5 overflow-hidden rounded-full bg-line sm:hidden">
+      <div
+        className="h-1.5 overflow-hidden rounded-full bg-line sm:hidden"
+        role="progressbar"
+        aria-valuemin={1}
+        aria-valuemax={STEPS.length}
+        aria-valuenow={step + 1}
+        aria-valuetext={`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]?.title ?? ""}`}
+      >
         <div
           className="h-full rounded-full bg-leaf transition-all duration-500"
           style={{ width: `${Math.max(6, pctDone)}%` }}
@@ -571,7 +628,8 @@ function Stepper({
       </div>
       <ol className="hidden gap-1.5 sm:grid sm:grid-cols-6">
         {STEPS.map((s, i) => {
-          const isDone = i < step || (i <= visited && i !== step && byStep[s.id].length === 0);
+          // a check only for a step that was reached and has nothing missing
+          const isDone = i <= visited && i !== step && byStep[s.id].length === 0;
           const here = i === step;
           return (
             <li key={s.id}>
@@ -624,10 +682,9 @@ function Statements({ files, setFiles }: { files: File[]; setFiles: (f: File[]) 
         setNote(`${f.name} is over 20 MB. Download a smaller copy from your bank's website.`);
         continue;
       }
-      const ok =
-        f.type === "application/pdf" || f.type.startsWith("image/") || /\.pdf$/i.test(f.name);
-      if (!ok) {
-        setNote(`${f.name} isn't a PDF or a photo.`);
+      // the same rule the upload route applies, so nothing is refused after signing
+      if (!UPLOAD_TYPES.includes(uploadType(f))) {
+        setNote(`${f.name} isn't a PDF, JPG, PNG or HEIC photo.`);
         continue;
       }
       if (!next.some((x) => x.name === f.name && x.size === f.size)) next.push(f);
@@ -653,11 +710,11 @@ function Statements({ files, setFiles }: { files: File[]; setFiles: (f: File[]) 
           <Upload className="size-5" />
         </span>
         <span className="font-semibold">Choose statements or drop them here</span>
-        <span className="text-sm text-smoke">PDF or photos, up to 20 MB each</span>
+        <span className="text-sm text-smoke">PDF, JPG, PNG or HEIC, up to 20 MB each</span>
         <input
           type="file"
           multiple
-          accept="application/pdf,image/*"
+          accept="application/pdf,image/jpeg,image/png,image/heic,.pdf,.heic"
           className="sr-only"
           onChange={(e) => {
             add(e.target.files);
@@ -665,7 +722,9 @@ function Statements({ files, setFiles }: { files: File[]; setFiles: (f: File[]) 
           }}
         />
       </label>
-      {note && <p className="mt-3 text-sm text-smoke">{note}</p>}
+      <p className="mt-3 text-sm text-smoke empty:hidden" role="status" aria-live="polite">
+        {note}
+      </p>
       {files.length > 0 && (
         <ul className="mt-5 space-y-2">
           {files.map((f, i) => (
@@ -773,11 +832,14 @@ function Review({
       </p>
       <dl className="mt-5 divide-y divide-line overflow-hidden rounded-2xl bg-white ring-1 ring-line">
         {rows.map((r) => (
-          <div key={r.title} className="flex gap-4 px-5 py-4">
-            <dt className="w-28 shrink-0 text-sm font-semibold">{r.title}</dt>
-            <dd className="min-w-0 flex-1 space-y-0.5 text-sm text-smoke">
+          <div
+            key={r.title}
+            className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 px-5 py-4 sm:flex sm:gap-4"
+          >
+            <dt className="text-sm font-semibold sm:w-28 sm:shrink-0">{r.title}</dt>
+            <dd className="col-span-2 min-w-0 flex-1 space-y-0.5 text-sm text-smoke">
               {r.lines.filter(Boolean).map((l) => (
-                <p key={l} className="truncate">
+                <p key={l} className="break-words">
                   {l}
                 </p>
               ))}
@@ -785,7 +847,8 @@ function Review({
             <button
               type="button"
               onClick={() => onEdit(r.step)}
-              className="self-start text-sm font-semibold text-forest underline-offset-4 hover:underline"
+              aria-label={`Edit ${r.title.toLowerCase()}`}
+              className="col-start-2 row-start-1 self-start text-sm font-semibold text-forest underline-offset-4 hover:underline"
             >
               Edit
             </button>
@@ -848,8 +911,8 @@ function DoneScreen({
             <Mail className="size-6 text-forest" />
             <p className="mt-3 font-semibold">Check your inbox</p>
             <p className="mt-1 text-smoke">
-              We sent a sign-in link to <strong className="text-ink">{email}</strong>. Open it on
-              this device and your application will be in your account.
+              We sent a sign-in link to <strong className="text-ink">{email}</strong>. Open it and
+              your application will be waiting in your account.
             </p>
           </div>
         ) : (

@@ -6,10 +6,13 @@ import { BANKRUPTCY, fmtEin, fmtSsn, maskSsn, missing } from "@/lib/application-
 import { RESTRICTED, revealFullApplication, type FullApplication } from "@/lib/full-application";
 import {
   amount,
+  BORROWERS,
+  CONDITIONS,
   equityOf,
   flags,
   labelOf,
   LIEN_TYPES,
+  LISTED,
   PAYMENT_STATUS,
   pct,
   PROPERTY_TYPES,
@@ -317,6 +320,7 @@ function RealEstateBlock({ r, row }: { r: RealEstate; row: Row }) {
     );
   }
   if (r.owns !== "yes") return null;
+  const want = r.interest === "yes" || r.interest === "maybe";
   return (
     <div className="mt-4 border-t border-line pt-4 text-sm" data-real-estate={r.properties.length}>
       <p className="font-semibold">Real estate</p>
@@ -325,7 +329,10 @@ function RealEstateBlock({ r, row }: { r: RealEstate; row: Row }) {
           "Use the equity",
           r.interest === "maybe" ? "Maybe" : r.interest ? yesNo(r.interest) : "",
         )}
-        {row("How they'd want it", labelOf(STRUCTURES, r.structure))}
+        {/* answers hidden on the page when they said No are not shown (older rows may hold them) */}
+        {want && row("How they'd want it", labelOf(STRUCTURES, r.structure))}
+        {want && row("Funds would go to", labelOf(BORROWERS, r.borrower))}
+        {want && row("What it's for", r.purpose_note.trim())}
         {row(
           "Foreclosure or short sale, 7 years",
           r.foreclosure === "yes"
@@ -374,7 +381,10 @@ function PropertyBlock({ p, n, row }: { p: Property; n: number; row: Row }) {
             .filter(Boolean)
             .join(" · "),
         )}
-        {row("Rent", p.rent && `${money(p.rent)} a month`)}
+        {(p.use === "rental" || p.use === "owner_rental") &&
+          row("Rent", p.rent && `${money(p.rent)} a month`)}
+        {row("Condition", labelOf(CONDITIONS, p.condition))}
+        {row("Listed for sale", labelOf(LISTED, p.listed))}
         {row(
           "Taxes / insurance",
           [
@@ -428,6 +438,8 @@ function PropertyBlock({ p, n, row }: { p: Property; n: number; row: Row }) {
         {row("Total owed", usd0(e.owed))}
         {row("Equity", usd0(e.equity))}
         {row("Owed ÷ value (CLTV)", pct(e.cltv))}
+        {e.owedAtLimits > e.owed && row("Owed, lines at full limit", usd0(e.owedAtLimits))}
+        {e.owedAtLimits > e.owed && row("At full limits ÷ value (HCLTV)", pct(e.hcltv))}
         {row(
           "Room up to",
           e.value

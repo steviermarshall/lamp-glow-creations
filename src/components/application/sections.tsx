@@ -44,6 +44,7 @@ import {
   Group,
   inputCls,
   Money,
+  MonthYear,
   Select,
   Text,
 } from "@/components/application/fields";
@@ -714,9 +715,16 @@ function PropertyCard({
             ]}
           />
         </div>
-        <F label="When you bought it">
-          <Text value={p.purchased} onChange={(v) => set({ purchased: v })} type="month" />
-        </F>
+        <div>
+          <span className="mb-1.5 block text-[0.8rem] font-semibold text-smoke">
+            When you bought it
+          </span>
+          <MonthYear
+            label="When you bought it"
+            value={p.purchased}
+            onChange={(v) => set({ purchased: v })}
+          />
+        </div>
         <F label="What you paid" optional>
           <Money value={p.price} onChange={(v) => set({ price: v })} />
         </F>
@@ -820,9 +828,10 @@ function PropertyCard({
 
       <EquityMeter
         value={e.value}
-        owed={e.owedAtLimits}
-        equity={e.value != null ? e.value - e.owedAtLimits : null}
-        ratio={e.hcltv}
+        owed={e.owed}
+        equity={e.equity}
+        ratio={e.cltv}
+        atLimits={e.owedAtLimits > e.owed ? e.owedAtLimits : null}
       />
     </section>
   );
@@ -920,11 +929,14 @@ function EquityMeter({
   owed,
   equity,
   ratio,
+  atLimits,
 }: {
   value: number | null;
   owed: number;
   equity: number | null;
   ratio: number | null;
+  /** What's owed if every equity line were drawn to its limit, when that's more. */
+  atLimits: number | null;
 }) {
   if (value == null || value <= 0) return null;
   const owedPct = Math.min(100, Math.max(0, (ratio ?? 0) * 100));
@@ -948,6 +960,12 @@ function EquityMeter({
         </span>
         <span>Worth about {usd0(value)}</span>
       </div>
+      {atLimits != null && (
+        <p className="mt-2 text-xs text-smoke">
+          With your equity line fully drawn: {usd0(atLimits)} owed ({pct(atLimits / value)} of
+          value). Funding partners usually count the full line.
+        </p>
+      )}
     </div>
   );
 }

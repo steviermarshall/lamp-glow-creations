@@ -24,7 +24,7 @@ export function SignBlock({
   d: Details;
   s: Signing;
   set: (patch: Partial<Signing>) => void;
-  /** What's still missing; signing is off until it's empty. */
+  /** What's still missing in the application itself. */
   todo: string[];
   error: string;
   busy: boolean;
@@ -38,12 +38,24 @@ export function SignBlock({
     day: "numeric",
     year: "numeric",
   });
-  const ready =
-    todo.length === 0 &&
-    s.agree &&
-    s.typed.trim().length >= 3 &&
-    !!s.image &&
-    (!s.second || (s.typed2.trim().length >= 3 && !!s.image2));
+  // a second signer only counts while there is a second owner to sign for
+  const second = s.second && !!co;
+  // everything left before Sign works, in the order they appear on the page
+  const left = [
+    ...todo,
+    ...(todo.length === 0
+      ? [
+          !s.agree && "tick the box to agree",
+          s.typed.trim().length < 3 && "type your full name",
+          !s.image &&
+            "draw your signature, or sign with your typed name (a short mark doesn't count)",
+          second &&
+            s.typed2.trim().length < 3 &&
+            `${co?.first || "the second owner"} types their name`,
+          second && !s.image2 && `${co?.first || "the second owner"} signs`,
+        ].filter((x): x is string => !!x)
+      : []),
+  ];
 
   return (
     <div className="space-y-6" data-sign>
@@ -96,7 +108,7 @@ export function SignBlock({
           <p className="mt-1 pl-8 text-xs text-smoke">
             Optional. If not, your rep will get their signature separately.
           </p>
-          {s.second && (
+          {second && (
             <div className="mt-4">
               <SignerBlock
                 title={`${co.first || "Second owner"} signs`}
@@ -111,11 +123,16 @@ export function SignBlock({
         </div>
       )}
 
-      {todo.length > 0 && (
-        <p className="rounded-2xl bg-sand p-4 text-sm text-smoke ring-1 ring-line" role="status">
-          Still needed before you can sign: {todo.join(", ")}.
-        </p>
-      )}
+      <p
+        className={cn(
+          "rounded-2xl bg-sand p-4 text-sm text-smoke ring-1 ring-line",
+          left.length === 0 && "sr-only",
+        )}
+        role="status"
+        aria-live="polite"
+      >
+        {left.length ? `Still needed before you can sign: ${left.join(", ")}.` : "Ready to sign."}
+      </p>
       {error && (
         <p className="text-sm font-semibold text-destructive" role="alert">
           {error}
@@ -124,17 +141,18 @@ export function SignBlock({
 
       <button
         type="button"
-        disabled={!ready || busy}
+        disabled={busy}
+        aria-disabled={left.length > 0}
         onClick={onSign}
         className={cn(
-          "inline-flex w-full items-center justify-center gap-2 rounded-full bg-leaf px-6 py-4 text-base font-semibold text-ink shadow-[0_10px_30px_-12px_oklch(0.615_0.117_150/0.9)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:pointer-events-none disabled:opacity-45",
+          "inline-flex w-full items-center justify-center gap-2 rounded-full bg-leaf px-6 py-4 text-base font-semibold text-ink shadow-[0_10px_30px_-12px_oklch(0.615_0.117_150/0.9)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:pointer-events-none disabled:opacity-45 aria-disabled:opacity-60",
         )}
       >
         <PenLine className="size-5" /> {busy ? "Signing…" : cta}
       </button>
       <p className="flex items-center justify-center gap-1.5 text-center text-xs text-smoke">
-        <Lock className="size-3.5" /> Only you and the Lamp team see this. Your SSN is used only to
-        submit your application to funding partners.
+        <Lock className="size-3.5" /> Shared only with Lamp and the funding partners reviewing your
+        application, as the authorization above says.
       </p>
     </div>
   );
@@ -159,11 +177,11 @@ function SignerBlock({
     <div>
       <h3 className="font-display text-lg font-semibold">{title}</h3>
       <div className="mt-3 grid gap-4 sm:grid-cols-[1fr_auto]">
-        <F label="Type your full name">
+        <F label={name ? `Type your full name (${name})` : "Type your full name"}>
           <input
             className={cn(inputCls, "font-semibold")}
             value={typed}
-            placeholder={name || "Your full name"}
+            placeholder="Type your full name"
             autoComplete="name"
             onChange={(e) => setTyped(e.target.value)}
           />
@@ -174,7 +192,11 @@ function SignerBlock({
         </div>
       </div>
       <p className="mb-2 mt-4 text-[0.8rem] font-semibold text-smoke">Draw your signature</p>
-      <SignaturePad label={`Signature for ${name || "the owner"}`} onChange={setImage} />
+      <SignaturePad
+        label={`Signature for ${name || "the owner"}`}
+        typed={typed}
+        onChange={setImage}
+      />
     </div>
   );
 }

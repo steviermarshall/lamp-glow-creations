@@ -212,25 +212,44 @@ const arr = (v: unknown) => (Array.isArray(v) ? (v as unknown[]).map(obj) : []);
 /** A saved real_estate value (possibly partial or from an older version) over empty defaults. */
 export function realEstateFromRow(v: unknown): RealEstate {
   const r = obj(v);
+  // Rebuilt key by key from the empty shapes: a stored value can come from an anonymous
+  // submit, so anything that isn't a string becomes "" and every string is length-capped.
   return {
-    ...emptyRealEstate(),
-    ...(r as Partial<RealEstate>),
+    ...strings(emptyRealEstate(), r, { purpose_note: 300 }),
     properties: arr(r["properties"])
       .slice(0, MAX_PROPERTIES)
       .map((p) => ({
-        ...emptyProperty(),
-        ...(p as Partial<Property>),
+        ...strings(emptyProperty(), p),
         free_clear: p["free_clear"] === true,
         liens: arr(p["liens"])
           .slice(0, MAX_LIENS)
-          .map((l) => ({ ...emptyLien(), ...(l as Partial<Lien>) })),
+          .map((l) => strings(emptyLien(), l)),
       })),
   };
 }
 
+/**
+ * The string fields of `base`, each taken from `raw` when it is a string (capped at 120
+ * characters, or `caps[key]`), else left at the default. Non-string fields keep the default.
+ */
+export function strings<T extends object>(
+  base: T,
+  raw: Record<string, unknown>,
+  caps: Partial<Record<keyof T, number>> = {},
+): T {
+  const out = { ...base } as Record<string, unknown>;
+  for (const [k, d] of Object.entries(base)) {
+    const v = raw[k];
+    if (typeof d === "string" && typeof v === "string") {
+      out[k] = v.slice(0, (caps as Record<string, number>)[k] ?? 120);
+    }
+  }
+  return out as T;
+}
+
 /** "$450,000", "450k", "450000.00" → 450000. Empty or nonsense → null. */
-export function amount(s: string | null | undefined): number | null {
-  if (!s) return null;
+export function amount(s: unknown): number | null {
+  if (typeof s !== "string" || !s) return null;
   const t = s.toLowerCase().replace(/[$,\s]/g, "");
   const m = /^(\d+(?:\.\d+)?)(k|m)?$/.exec(t);
   if (!m) return null;
@@ -290,8 +309,13 @@ export const labelOf = (opts: Opt[], id: string) => opts.find((o) => o.id === id
 export function flags(p: Property): string[] {
   const out: string[] = [];
   const e = equityOf(p);
-  if (e.hcltv != null && e.hcltv >= 0.8) out.push(`owes ${pct(e.hcltv)} of value already`);
-  if (p.state.toUpperCase() === "TX" && p.use === "primary")
+  if (e.hcltv != null && e.hcltv >= 0.8)
+    out.push(
+      e.owedAtLimits > e.owed
+        ? `HCLTV ${pct(e.hcltv)} with equity lines at their full limit`
+        : `owes ${pct(e.hcltv)} of value already`,
+    );
+  if (p.state.toUpperCase() === "TX" && (p.use === "primary" || p.use === "owner_rental"))
     out.push("Texas homestead: only a state home-equity product can use it");
   if (p.title === "business" || p.title === "irrevocable_trust")
     out.push("titled to a business or irrevocable trust: equity share options won't take it");
@@ -338,7 +362,7 @@ export function missingRealEstate(r: RealEstate): string[] {
     if (!p.type) out.push(`what kind of property ${which} is`);
     if (!p.use) out.push(`how you use ${which}`);
     if (!p.title) out.push(`whose name is on ${which}'s title`);
-    if (!/^\d{4}-\d{2}$/.test(p.purchased)) out.push(`when you bought ${which}`);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(p.purchased)) out.push(`when you bought ${which}`);
     if (amount(p.value) == null) out.push(`what ${which} is worth today`);
     if (!p.listed) out.push(`whether ${which} is listed for sale`);
     if (!p.condition) out.push(`${which}'s condition`);
@@ -362,15 +386,24 @@ export function missingRealEstate(r: RealEstate): string[] {
 /** Drop empty balance rows before saving, so a half-added row doesn't count as a lien. */
 export function cleanRealEstate(r: RealEstate): RealEstate {
   if (r.owns !== "yes") return { ...emptyRealEstate(), owns: r.owns };
+  // answers the page hid after a change (interest switched to No, a rental that became the
+  // home, an equity line that became a 2nd) are dropped, so they never reach staff or the PDF
+  const want = r.interest === "yes" || r.interest === "maybe";
   return {
     ...r,
+    structure: want ? r.structure : "",
+    borrower: want ? r.borrower : "",
+    purpose_note: want ? r.purpose_note : "",
+    foreclosure_year: r.foreclosure === "yes" ? r.foreclosure_year : "",
     properties: r.properties.map((p) => ({
       ...p,
+      rent: p.use === "rental" || p.use === "owner_rental" ? p.rent : "",
+      hoa_dues: p.hoa === "yes" ? p.hoa_dues : "",
       liens: p.free_clear
         ? []
-        : p.liens.filter(
-            (l) => l.type && (l.holder.trim() || l.balance.trim() || l.payment.trim()),
-          ),
+        : p.liens
+            .filter((l) => l.type && (l.holder.trim() || l.balance.trim() || l.payment.trim()))
+            .map((l) => ({ ...l, limit: l.type === "heloc" ? l.limit : "" })),
     })),
   };
 }

@@ -6,44 +6,74 @@ import {
   useState,
   type PointerEvent,
 } from "react";
-import { Eraser } from "lucide-react";
+import { Eraser, Type } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
  * Draw-your-signature box: a sheet of paper with a signing line, mouse, pen or finger. The
  * drawing is kept at the canvas's real pixel size (devicePixelRatio aware), and every point is
  * mapped from where the pointer actually is on screen, so ink lands under the finger on a phone
- * too. onChange gets a PNG data URL (dark ink, transparent ground, cropped to the ink with a
- * margin) or null once cleared.
+ * too. One pointer at a time (a palm or second finger is ignored), a first stroke that only goes
+ * up or down is a scroll attempt and is wiped, and anyone who can't draw (keyboard, screen
+ * reader) can sign with their typed name instead. onChange gets a PNG data URL (dark ink,
+ * transparent ground, cropped to the ink with a margin) or null when there's no usable signature.
  */
 
 const INK = "#14231b";
 const EXPORT_MAX_W = 640;
 /** Less ink than this (CSS px of line) is a tap or a dot, not a signature. */
 const MIN_INK = 60;
+/** A signature is wider than this (CSS px); a narrower first stroke was a scroll swipe. */
+const MIN_WIDTH = 40;
+const SCRIPT_FONT =
+  '"Snell Roundhand", "Segoe Script", "Brush Script MT", "Apple Chancery", cursive';
 
 export function SignaturePad({
   onChange,
   label,
+  typed = "",
   className,
 }: {
   onChange: (png: string | null) => void;
   label: string;
+  /** The typed full name, for "Sign with my typed name". */
+  typed?: string;
   className?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawing = useRef(false);
+  const active = useRef<number | null>(null);
   const last = useRef<{ x: number; y: number; t: number } | null>(null);
+  const stroke = useRef({ minX: 0, maxX: 0 });
+  const bounds = useRef({ minX: Infinity, maxX: -Infinity });
   const strokes = useRef(0);
   const ink = useRef(0);
   const [empty, setEmpty] = useState(true);
+  const [fromTyped, setFromTyped] = useState(false);
   // the latest callback, so a parent passing a new function each render doesn't re-fit the canvas
   const changed = useRef(onChange);
   useLayoutEffect(() => {
     changed.current = onChange;
   });
 
-  // Size the bitmap to the box's CSS size times the device ratio; redraw nothing (a resize clears).
+  const wipe = useCallback(() => {
+    const c = canvasRef.current;
+    const ctx = c?.getContext("2d");
+    if (c && ctx) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.restore();
+    }
+    strokes.current = 0;
+    ink.current = 0;
+    bounds.current = { minX: Infinity, maxX: -Infinity };
+    setEmpty(true);
+    setFromTyped(false);
+    changed.current(null);
+  }, []);
+
+  // Size the bitmap to the box's CSS size times the device ratio. A real resize (rotating the
+  // phone) clears the drawing, since the strokes can't be rescaled cleanly.
   const fit = useCallback(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -62,13 +92,8 @@ export function SignaturePad({
       ctx.strokeStyle = INK;
       ctx.fillStyle = INK;
     }
-    if (strokes.current) {
-      strokes.current = 0;
-      ink.current = 0;
-      setEmpty(true);
-      changed.current(null);
-    }
-  }, []);
+    if (strokes.current) wipe();
+  }, [wipe]);
 
   useEffect(() => {
     fit();
@@ -77,17 +102,28 @@ export function SignaturePad({
     return () => ro.disconnect();
   }, [fit]);
 
-  const point = (e: PointerEvent<HTMLCanvasElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top, t: e.timeStamp };
-  };
+  // a freshly mounted pad is blank, so whatever the parent held from an earlier pad is stale
+  useEffect(() => {
+    changed.current(null);
+  }, []);
+
+  const report = () =>
+    changed.current(
+      ink.current >= MIN_INK && bounds.current.maxX - bounds.current.minX >= MIN_WIDTH
+        ? exportInk(canvasRef.current!)
+        : null,
+    );
 
   const down = (e: PointerEvent<HTMLCanvasElement>) => {
+    if (active.current !== null) return;
     e.preventDefault();
+    if (fromTyped) wipe();
+    active.current = e.pointerId;
     e.currentTarget.setPointerCapture(e.pointerId);
-    drawing.current = true;
-    const p = point(e);
+    const r = e.currentTarget.getBoundingClientRect();
+    const p = { x: e.clientX - r.left, y: e.clientY - r.top, t: e.timeStamp };
     last.current = p;
+    stroke.current = { minX: p.x, maxX: p.x };
     const ctx = e.currentTarget.getContext("2d");
     if (ctx) {
       ctx.beginPath();
@@ -97,7 +133,7 @@ export function SignaturePad({
   };
 
   const move = (e: PointerEvent<HTMLCanvasElement>) => {
-    if (!drawing.current || !last.current) return;
+    if (e.pointerId !== active.current || !last.current) return;
     e.preventDefault();
     const ctx = e.currentTarget.getContext("2d");
     if (!ctx) return;
@@ -109,6 +145,8 @@ export function SignaturePad({
       const prev = last.current!;
       const dist = Math.hypot(p.x - prev.x, p.y - prev.y);
       ink.current += dist;
+      stroke.current.minX = Math.min(stroke.current.minX, p.x);
+      stroke.current.maxX = Math.max(stroke.current.maxX, p.x);
       const speed = dist / Math.max(1, p.t - prev.t);
       // a pen-like line: thinner when fast, fuller when slow
       ctx.lineWidth = Math.max(1.4, Math.min(3.2, 3.4 - speed * 1.1));
@@ -124,42 +162,72 @@ export function SignaturePad({
   };
 
   const up = (e: PointerEvent<HTMLCanvasElement>) => {
-    if (!drawing.current) return;
-    drawing.current = false;
+    if (e.pointerId !== active.current) return;
+    active.current = null;
     last.current = null;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
+    // a first stroke that only went up or down was someone trying to scroll the page
+    if (strokes.current === 0 && stroke.current.maxX - stroke.current.minX < 24) {
+      wipe();
+      return;
+    }
     strokes.current += 1;
+    bounds.current.minX = Math.min(bounds.current.minX, stroke.current.minX);
+    bounds.current.maxX = Math.max(bounds.current.maxX, stroke.current.maxX);
     setEmpty(false);
-    changed.current(ink.current >= MIN_INK ? exportInk(e.currentTarget) : null);
+    report();
   };
 
-  const clear = () => {
-    const c = canvasRef.current;
-    const ctx = c?.getContext("2d");
-    if (!c || !ctx) return;
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, c.width, c.height);
-    ctx.restore();
-    strokes.current = 0;
-    ink.current = 0;
-    setEmpty(true);
-    changed.current(null);
-  };
+  /** Write the typed name on the line in a script hand: a signature without drawing. */
+  const signTyped = useCallback(
+    (name: string) => {
+      const c = canvasRef.current;
+      const ctx = c?.getContext("2d");
+      if (!c || !ctx) return;
+      const r = c.getBoundingClientRect();
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.restore();
+      let size = 44;
+      ctx.font = `italic ${size}px ${SCRIPT_FONT}`;
+      const room = r.width - 48;
+      const w = ctx.measureText(name).width;
+      if (w > room) size = Math.max(18, Math.floor((size * room) / w));
+      ctx.font = `italic ${size}px ${SCRIPT_FONT}`;
+      ctx.fillStyle = INK;
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(name, 24, r.height - 52);
+      strokes.current = 1;
+      ink.current = MIN_INK;
+      bounds.current = { minX: 24, maxX: 24 + Math.min(room, ctx.measureText(name).width) };
+      setEmpty(false);
+      setFromTyped(true);
+      report();
+    },
+    // report reads refs only
+    [],
+  );
+
+  // a typed signature follows the typed name; once the name is too short it goes away
+  useEffect(() => {
+    if (!fromTyped) return;
+    if (typed.trim().length >= 3) signTyped(typed.trim());
+    else wipe();
+  }, [typed, fromTyped, signTyped, wipe]);
 
   return (
     <div className={cn("select-none", className)}>
       <div className="relative overflow-hidden rounded-2xl bg-[#fbfaf5] shadow-[inset_0_1px_3px_rgb(0_0_0/0.18)] ring-1 ring-black/10">
         <canvas
           ref={canvasRef}
-          aria-label={label}
+          aria-label={`${label}: ${empty ? "empty. Draw here, or sign with your typed name below" : "signed"}`}
           role="img"
           className="block h-44 w-full cursor-crosshair touch-none sm:h-48"
           onPointerDown={down}
           onPointerMove={move}
           onPointerUp={up}
           onPointerCancel={up}
-          onPointerLeave={(e) => drawing.current && up(e)}
         />
         <div
           aria-hidden="true"
@@ -170,19 +238,30 @@ export function SignaturePad({
         {empty && (
           <p
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-[#14231b]/40"
+            className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 px-4 text-center text-sm text-[#14231b]/40"
           >
             Sign here with your finger or mouse
           </p>
         )}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
-          onClick={clear}
-          disabled={empty}
-          className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#14231b] ring-1 ring-black/10 transition hover:bg-white disabled:opacity-0"
+          onClick={() => signTyped(typed.trim())}
+          disabled={typed.trim().length < 3}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-smoke ring-1 ring-line transition hover:text-ink disabled:opacity-40"
         >
-          <Eraser className="size-3.5" /> Clear
+          <Type className="size-3.5" /> Sign with my typed name instead
         </button>
+        {!empty && (
+          <button
+            type="button"
+            onClick={wipe}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-smoke ring-1 ring-line transition hover:text-ink"
+          >
+            <Eraser className="size-3.5" /> Clear
+          </button>
+        )}
       </div>
     </div>
   );

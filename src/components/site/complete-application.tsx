@@ -46,6 +46,8 @@ type Row = {
   signature_image_2: string | null;
   signed_via: string | null;
   consent_version: string | null;
+  signer_ip: string | null;
+  signer_agent: string | null;
 };
 
 type Signed = {
@@ -56,6 +58,8 @@ type Signed = {
   image2: string | null;
   via: "link" | "account" | null;
   consent: string | null;
+  ip: string | null;
+  agent: string | null;
 };
 
 const unsigned: Signed = {
@@ -66,6 +70,8 @@ const unsigned: Signed = {
   image2: null,
   via: null,
   consent: null,
+  ip: null,
+  agent: null,
 };
 
 export function CompleteApplication({
@@ -94,7 +100,7 @@ export function CompleteApplication({
         sb
           .from("application_details")
           .select(
-            "business,owners,balances,request,real_estate,signed_name,signed_at,signature_image,signed_name_2,signature_image_2,signed_via,consent_version",
+            "business,owners,balances,request,real_estate,signed_name,signed_at,signature_image,signed_name_2,signature_image_2,signed_via,consent_version,signer_ip,signer_agent",
           )
           .eq("application_id", applicationId)
           .maybeSingle(),
@@ -125,6 +131,8 @@ export function CompleteApplication({
           image2: r.signature_image_2,
           via: r.signed_via === "link" || r.signed_via === "account" ? r.signed_via : null,
           consent: r.consent_version,
+          ip: r.signer_ip,
+          agent: r.signer_agent,
         });
       } else {
         setD(
@@ -167,13 +175,15 @@ export function CompleteApplication({
     if (!sb || !d) return;
     setError("");
     const co = d.owners[1];
+    // a second signer only counts while there is a second owner
+    const second = sig.second && !!co;
     if (sign) {
       if (todo.length) return setError("Fill in everything listed above before signing.");
       if (!sig.agree) return setError("Tick the box to agree to the authorization.");
       if (!signatureMatches(sig.typed, owner))
         return setError(`Type your full name as the owner, ${owner.first} ${owner.last}, to sign.`);
       if (!sig.image) return setError("Draw your signature in the box.");
-      if (sig.second && co) {
+      if (second && co) {
         if (!signatureMatches(sig.typed2, co))
           return setError(`${co.first} types their full name, ${co.first} ${co.last}, to sign.`);
         if (!sig.image2) return setError(`${co.first} draws their signature in the box.`);
@@ -191,8 +201,8 @@ export function CompleteApplication({
         ? {
             signed_name: sig.typed.trim(),
             signature_image: sig.image,
-            signed_name_2: sig.second ? sig.typed2.trim() : null,
-            signature_image_2: sig.second ? sig.image2 : null,
+            signed_name_2: second ? sig.typed2.trim() : null,
+            signature_image_2: second ? sig.image2 : null,
             consent_text: CONSENT_TEXT,
             consent_version: CONSENT_VERSION,
             signer_agent: navigator.userAgent.slice(0, 300),
@@ -200,7 +210,7 @@ export function CompleteApplication({
         : {}),
     };
     const cols =
-      "signed_name,signed_at,signature_image,signed_name_2,signature_image_2,signed_via,consent_version";
+      "signed_name,signed_at,signature_image,signed_name_2,signature_image_2,signed_via,consent_version,signer_ip,signer_agent";
     const res = exists
       ? await sb
           .from("application_details")
@@ -229,6 +239,8 @@ export function CompleteApplication({
       | "signature_image_2"
       | "signed_via"
       | "consent_version"
+      | "signer_ip"
+      | "signer_agent"
     >;
     if (r.signed_at) {
       const s: Signed = {
@@ -239,6 +251,8 @@ export function CompleteApplication({
         image2: r.signature_image_2,
         via: r.signed_via === "link" ? "link" : "account",
         consent: r.consent_version,
+        ip: r.signer_ip,
+        agent: r.signer_agent,
       };
       setSigned(s);
       setOpen(false);
@@ -255,10 +269,7 @@ export function CompleteApplication({
     const sb = getSupabase();
     if (!sb) return;
     try {
-      const bytes = await applicationPdfBytes(
-        pdfSource(x),
-        detailsToPdf(x, { ...s, agent: navigator.userAgent }, repName),
-      );
+      const bytes = await applicationPdfBytes(pdfSource(x), detailsToPdf(x, s, repName));
       const path = `${userId}/${Date.now()}-signed-application.pdf`;
       const up = await sb.storage
         .from("documents")
