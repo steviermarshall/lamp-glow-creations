@@ -78,7 +78,7 @@ function Staff() {
 
   if (access.state === "loading") {
     return (
-      <PageShell footer={false} tone="night">
+      <PageShell member footer={false} tone="night">
         <div className="grid place-items-center py-40">
           <Loader2 className="size-6 animate-spin text-smoke" />
         </div>
@@ -88,7 +88,7 @@ function Staff() {
 
   if (access.state !== "staff") {
     return (
-      <PageShell footer={false} tone="night">
+      <PageShell member footer={false} tone="night">
         <div className="mx-auto max-w-xl px-5 py-24 text-center" data-staff-gate={access.state}>
           <h1 className="font-display text-2xl font-bold">Staff only</h1>
           <p className="mt-2 text-smoke">
@@ -105,7 +105,7 @@ function Staff() {
   }
 
   return (
-    <PageShell footer={false} tone="night">
+    <PageShell member footer={false} tone="night">
       <div className="mx-auto max-w-6xl px-5 pb-24 pt-10 sm:px-6 sm:pt-14">
         <p className="text-sm text-smoke">
           {user?.email} · {access.isAdmin ? "Admin" : "Rep"}
