@@ -23,6 +23,7 @@ import {
   STRUCTURES,
   TITLE_HOLDERS,
   VALUE_SOURCES,
+  amount,
   labelOf,
   type Lien,
   type Opt,
@@ -69,7 +70,14 @@ const LATE: Opt[] = [
   { id: "2+", label: "2 or more" },
 ];
 
-type Field<T> = { key: keyof T & string; label: string; opts?: Opt[]; flag?: Change["flag"] };
+type Field<T> = {
+  key: keyof T & string;
+  label: string;
+  opts?: Opt[];
+  flag?: Change["flag"];
+  /** A dollar amount: shown as "$62,000" however it was typed. */
+  usd?: true;
+};
 
 const BUSINESS: Field<Business>[] = [
   { key: "legal_name", label: "Legal business name", flag: "identity" },
@@ -85,12 +93,12 @@ const BUSINESS: Field<Business>[] = [
   { key: "ein", label: "EIN", flag: "identity" },
   { key: "entity_type", label: "Entity type" },
   { key: "industry", label: "Industry" },
-  { key: "monthly_revenue", label: "Monthly revenue" },
-  { key: "card_volume", label: "Monthly card sales" },
+  { key: "monthly_revenue", label: "Monthly revenue", usd: true },
+  { key: "card_volume", label: "Monthly card sales", usd: true },
   { key: "bank", label: "Bank" },
   { key: "deposit_count", label: "Deposits a month" },
   { key: "premises", label: "Premises", opts: PREMISES },
-  { key: "rent", label: "Rent" },
+  { key: "rent", label: "Rent", usd: true },
   { key: "liens", label: "Liens or judgments", opts: YES_NO },
   { key: "bankruptcy", label: "Bankruptcy", opts: BANKRUPTCY },
   { key: "bankruptcy_year", label: "Bankruptcy year" },
@@ -112,9 +120,9 @@ const OWNER: Field<Owner>[] = [
 
 const BALANCE: Field<Balance>[] = [
   { key: "funder", label: "funder" },
-  { key: "original", label: "original amount" },
-  { key: "current", label: "current balance" },
-  { key: "payment", label: "payment" },
+  { key: "original", label: "original amount", usd: true },
+  { key: "current", label: "current balance", usd: true },
+  { key: "payment", label: "payment", usd: true },
   { key: "frequency", label: "how often", opts: FREQUENCY },
   { key: "payoff", label: "payoff" },
 ];
@@ -139,14 +147,14 @@ const PROPERTY: Field<Property>[] = [
   { key: "title", label: "on title", opts: TITLE_HOLDERS },
   { key: "all_sign", label: "everyone on title signs", opts: YES_NO },
   { key: "purchased", label: "bought (month)" },
-  { key: "price", label: "price paid" },
-  { key: "value", label: "worth today" },
+  { key: "price", label: "price paid", usd: true },
+  { key: "value", label: "worth today", usd: true },
   { key: "value_source", label: "value from", opts: VALUE_SOURCES },
-  { key: "rent", label: "rent" },
+  { key: "rent", label: "rent", usd: true },
   { key: "taxes_current", label: "taxes current", opts: YES_NO },
   { key: "insured", label: "insured", opts: YES_NO },
   { key: "hoa", label: "HOA", opts: YES_NO },
-  { key: "hoa_dues", label: "HOA dues" },
+  { key: "hoa_dues", label: "HOA dues", usd: true },
   { key: "listed", label: "listed for sale", opts: LISTED },
   { key: "condition", label: "condition", opts: CONDITIONS },
 ];
@@ -154,18 +162,25 @@ const PROPERTY: Field<Property>[] = [
 const LIEN: Field<Lien>[] = [
   { key: "type", label: "type", opts: LIEN_TYPES },
   { key: "holder", label: "held by" },
-  { key: "balance", label: "balance" },
-  { key: "limit", label: "line limit" },
-  { key: "payment", label: "monthly payment" },
+  { key: "balance", label: "balance", usd: true },
+  { key: "limit", label: "line limit", usd: true },
+  { key: "payment", label: "monthly payment", usd: true },
   { key: "status", label: "payments", opts: PAYMENT_STATUS },
   { key: "late_12m", label: "late payments in 12 months", opts: LATE },
   { key: "payoff", label: "pay off with new funding", opts: YES_NO },
 ];
 
-const show = (v: unknown, opts?: Opt[]): string => {
+/** "62000" or "62k" → "$62,000"; anything that isn't a dollar amount stays as typed. */
+const usd = (s: string): string => {
+  const n = amount(s);
+  return n === null ? s : `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+};
+
+const show = (v: unknown, opts?: Opt[], dollars?: boolean): string => {
   if (typeof v === "boolean") return v ? "Yes" : "No";
   const s = typeof v === "string" ? v.trim() : "";
   if (!s) return "";
+  if (dollars) return usd(s);
   return opts ? labelOf(opts, s) || s : s;
 };
 
@@ -180,8 +195,8 @@ function fields<T extends object>(
   list: Field<T>[],
 ) {
   for (const f of list) {
-    const before = show((a as Record<string, unknown>)[f.key], f.opts);
-    const after = show((b as Record<string, unknown>)[f.key], f.opts);
+    const before = show((a as Record<string, unknown>)[f.key], f.opts, f.usd);
+    const after = show((b as Record<string, unknown>)[f.key], f.opts, f.usd);
     if (before === after) continue;
     out.push({
       path: `${base}.${f.key}`,
@@ -283,8 +298,12 @@ export function diffDetails(
         path: `balances.${at}`,
         section: "funding",
         label: name,
-        before: a ? [x.funder, x.current].filter(Boolean).join(", ") || "listed" : "",
-        after: b ? [x.funder, x.current].filter(Boolean).join(", ") || "added" : "",
+        before: a
+          ? [x.funder, x.current && usd(x.current)].filter(Boolean).join(", ") || "listed"
+          : "",
+        after: b
+          ? [x.funder, x.current && usd(x.current)].filter(Boolean).join(", ") || "added"
+          : "",
         kind: a ? "removed" : "added",
       });
       return;
@@ -304,7 +323,7 @@ export function diffDetails(
     uses: uses(r),
   });
   fields(out, "funding", "request", "", req(before.request), req(after.request), [
-    { key: "amount", label: "Amount requested" },
+    { key: "amount", label: "Amount requested", usd: true },
     { key: "term", label: "Term" },
     { key: "uses", label: "Use of funds" },
   ]);
@@ -360,10 +379,12 @@ export function diffDetails(
           section: "property",
           label: lname,
           before: xa
-            ? [l.holder, l.balance && `balance ${l.balance}`].filter(Boolean).join(", ") || "listed"
+            ? [l.holder, l.balance && `balance ${usd(l.balance)}`].filter(Boolean).join(", ") ||
+              "listed"
             : "",
           after: yb
-            ? [l.holder, l.balance && `balance ${l.balance}`].filter(Boolean).join(", ") || "added"
+            ? [l.holder, l.balance && `balance ${usd(l.balance)}`].filter(Boolean).join(", ") ||
+              "added"
             : "",
           kind: xa ? "removed" : "added",
         });

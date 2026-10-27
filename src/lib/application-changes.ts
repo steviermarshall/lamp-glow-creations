@@ -395,7 +395,7 @@ export function sendHold(v: StaffVersions | null | undefined): string | null {
   if (newest && newest.version > 1) {
     const answered = v.requests.find((r) => r.result_version === newest.version);
     if (answered && !answered.reviewed_at)
-      return "Review what changed in the merchant's update first (Mark reviewed below).";
+      return "Review what changed in the merchant's update first (Mark reviewed, under Changes and versions).";
   }
   return null;
 }
