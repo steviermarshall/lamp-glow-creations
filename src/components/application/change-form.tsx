@@ -215,7 +215,7 @@ export function ChangeForm({
 
   return (
     <div className="space-y-6" data-change-form>
-      <section className="rounded-[1.5rem] bg-sand p-5 ring-1 ring-line sm:p-7" data-asked>
+      <section className="rounded-[1.5rem] bg-white p-5 ring-1 ring-leaf/40 sm:p-7" data-asked>
         <p className="flex items-center gap-2 text-sm font-semibold text-forest">
           <MessageSquareText className="size-4" /> {repFirst ?? "Your Lamp rep"} asked for an update
         </p>
@@ -341,7 +341,7 @@ export function ChangeForm({
         )}
       </section>
 
-      <div className="border-t border-line pt-8">
+      <div className="rounded-[1.5rem] bg-white p-5 ring-1 ring-line sm:p-7">
         {secondSignedBefore && co && (
           <p className="mb-6 rounded-2xl bg-sand p-4 text-sm ring-1 ring-line">
             {co.first || "The second owner"} signed the application last time, so they sign this
