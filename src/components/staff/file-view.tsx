@@ -157,20 +157,22 @@ export function FileView({
     }
     const row = app.data as FileRow;
     setFile(row);
-    // the notes table isn't there until its SQL runs; any other error leaves the notes unsaved
-    // rather than risk writing over notes that couldn't be read
+    // the notes table isn't there until its SQL runs; any other error leaves the box as it was,
+    // read-only, rather than risk writing over notes that couldn't be read
     const where = !nt.error
       ? "table"
       : nt.error.code === "42P01" || nt.error.code === "PGRST205"
         ? "column"
         : null;
-    const saved = where === "table" ? (nt.data?.body ?? "") : (row.staff_notes ?? "");
     setNotesWhere(where);
-    setSavedNotes(saved);
-    // compare with what was loaded before this read: React runs the updater later
-    const before = loadedNotes.current;
-    loadedNotes.current = saved;
-    setNotes((typed) => (typed === before ? saved : typed));
+    if (where) {
+      const saved = where === "table" ? (nt.data?.body ?? "") : (row.staff_notes ?? "");
+      setSavedNotes(saved);
+      // compare with what was loaded before this read: React runs the updater later
+      const before = loadedNotes.current;
+      loadedNotes.current = saved;
+      setNotes((typed) => (typed === before ? saved : typed));
+    }
     setEvents(ev.data as EventRow[]);
     setDocs(dc.data as DocRow[]);
     const actors = [...new Set(ev.data.map((e) => e.actor_user_id).filter(Boolean))] as string[];
@@ -192,6 +194,8 @@ export function FileView({
     setError("");
     setNotes("");
     setNotesSaved(false);
+    setNotesWhere(null);
+    setSavedNotes("");
     loadedNotes.current = "";
     load();
   }, [load]);
@@ -219,9 +223,13 @@ export function FileView({
   /** Saves the box; true once the note is stored. */
   const saveNotes = async () => {
     let saved = false;
+    const sent = notes;
     await run("notes", async () => {
       const r = await writeNotes();
       saved = r.ok;
+      // the reload then shows what was stored, which can differ from what was sent: a save from
+      // a page still on the old column is merged into the moved note, and a clear there is ignored
+      if (r.ok) loadedNotes.current = sent;
       return r;
     });
     return saved;
@@ -495,6 +503,7 @@ export function FileView({
                 aria-label="Staff notes"
                 className="min-h-28 w-full rounded-xl bg-white px-4 py-3 ring-1 ring-line"
                 value={notes}
+                readOnly={!notesWhere}
                 onChange={(e) => {
                   setNotes(e.target.value);
                   setNotesSaved(false);
