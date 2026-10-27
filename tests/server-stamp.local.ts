@@ -429,6 +429,18 @@ if (after) {
     String(saved.data.outcome ?? saved.status),
   );
 
+  const copyForm = upload("signed-application.pdf", "application/pdf", PDF);
+  copyForm.set("kind", "funder_application");
+  copyForm.set("signed_copy", "1");
+  const copy = await site("/api/documents/upload", merchantA, copyForm);
+  record(
+    "server",
+    "merchant's signed copy after signing on the account page",
+    "allowed",
+    copy.data.outcome === "saved",
+    String(copy.data.outcome ?? copy.status),
+  );
+
   const fake = await site(
     "/api/documents/upload",
     merchantA,
