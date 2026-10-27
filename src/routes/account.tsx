@@ -3,7 +3,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Check, FileUp, Loader2, LogOut, Paperclip, Trash2 } from "lucide-react";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth, saveDraftToAccount } from "@/hooks/use-auth";
-import { labelFor, loadDraft, QUESTIONS, type Answers, type Draft } from "@/lib/apply";
+import { clearClaims, loadClaims } from "@/lib/application-links";
+import { clearDraft, labelFor, loadDraft, QUESTIONS, type Answers, type Draft } from "@/lib/apply";
 import {
   checklistFor,
   DOCUMENT_LABELS,
@@ -122,9 +123,18 @@ function Account() {
     if (!sb || !user) return;
     (async () => {
       try {
-        // Only a finished draft becomes an application. A half-answered one (say, from
-        // tapping "Check my options" while signed in) waits in /apply instead.
-        if (isFinished(loadDraft())) await saveDraftToAccount(user.id, user.email);
+        // An application signed from a link (on this device, or for this email) moves into this
+        // account first; the database checks the proof (claim_applications). When one does, it
+        // supersedes any quick /apply answers still saved here, so those aren't filed as a second.
+        const claimed = await sb.rpc("claim_applications", { _tokens: loadClaims() });
+        if (!claimed.error && (claimed.data ?? 0) > 0) {
+          clearClaims();
+          clearDraft();
+        } else if (isFinished(loadDraft())) {
+          // Only a finished draft becomes an application. A half-answered one (say, from
+          // tapping "Check my options" while signed in) waits in /apply instead.
+          await saveDraftToAccount(user.id, user.email);
+        }
         const { data, error: err } = await sb
           .from("applications")
           .select("id,status,answers,first_name,business_name,created_at,updated_at,submitted_at")
@@ -662,14 +672,17 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
         <h2 className="font-display text-lg font-semibold">
           {app.business_name || "Your answers"}
         </h2>
-        <dl className="mt-4 space-y-3 text-sm">
-          {QUESTIONS.map((q) => (
-            <div key={q.key}>
-              <dt className="text-xs text-smoke">{q.title}</dt>
-              <dd className="font-medium">{labelFor(q.key, app.answers[q.key]) ?? "—"}</dd>
-            </div>
-          ))}
-        </dl>
+        {/* a file signed from a link has no quick answers: show only what was answered */}
+        {QUESTIONS.some((q) => labelFor(q.key, app.answers?.[q.key])) && (
+          <dl className="mt-4 space-y-3 text-sm">
+            {QUESTIONS.filter((q) => labelFor(q.key, app.answers?.[q.key])).map((q) => (
+              <div key={q.key}>
+                <dt className="text-xs text-smoke">{q.title}</dt>
+                <dd className="font-medium">{labelFor(q.key, app.answers[q.key])}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
         <p className="mt-6 text-xs leading-relaxed text-smoke">
           Need to change something? Email{" "}
           <a className="underline" href="mailto:hello@getlamp.app">

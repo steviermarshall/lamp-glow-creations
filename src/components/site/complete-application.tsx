@@ -1,43 +1,77 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Check, Lock } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { btnOutline, btnPrimary, card } from "@/components/site/layout";
 import {
+  cleanDetails,
   CONSENT_TEXT,
   CONSENT_VERSION,
-  ENTITY_TYPES,
-  USES,
   detailsToPdf,
-  emptyBalance,
-  emptyOwner,
   fromRow,
   missing,
   prefill,
   signatureMatches,
-  type Balance,
-  type Business,
   type Details,
-  type Owner,
 } from "@/lib/application-details";
 import { applicationPdfBytes, downloadApplicationPdf } from "@/lib/application-pdf";
+import {
+  BusinessSection,
+  FundingSection,
+  OwnersSection,
+  RealEstateSection,
+  type Update,
+} from "@/components/application/sections";
+import { SignBlock } from "@/components/application/sign-block";
+import { emptySigning, type Signing } from "@/components/application/form-kit";
 
 /**
- * The full application on the merchant's account page: business, owners, current advances and
- * the request, saved as a draft as often as they like, then signed once with their typed name.
- * The database stamps the signature time and refuses edits after signing (application_details).
+ * The full application on the merchant's account page: business, owners, real estate, current
+ * advances and the request, saved as a draft as often as they like, then signed once with their
+ * typed name and drawn signature. The database stamps the signature time and refuses edits after
+ * signing (application_details). The same sections as the application link page.
  * Merchant copy: never the word "loan".
  */
-
-const field = "w-full rounded-xl bg-white px-3.5 py-2.5 text-sm ring-1 ring-line focus:ring-ink/40";
 
 type Row = {
   business: unknown;
   owners: unknown;
   balances: unknown;
   request: unknown;
+  real_estate: unknown;
   signed_name: string | null;
   signed_at: string | null;
+  signature_image: string | null;
+  signed_name_2: string | null;
+  signature_image_2: string | null;
+  signed_via: string | null;
+  consent_version: string | null;
+  signer_ip: string | null;
+  signer_agent: string | null;
+};
+
+type Signed = {
+  name: string | null;
+  at: string | null;
+  image: string | null;
+  name2: string | null;
+  image2: string | null;
+  via: "link" | "account" | null;
+  consent: string | null;
+  ip: string | null;
+  agent: string | null;
+};
+
+const unsigned: Signed = {
+  name: null,
+  at: null,
+  image: null,
+  name2: null,
+  image2: null,
+  via: null,
+  consent: null,
+  ip: null,
+  agent: null,
 };
 
 export function CompleteApplication({
@@ -49,16 +83,12 @@ export function CompleteApplication({
 }) {
   const [d, setD] = useState<Details | null>(null);
   const [exists, setExists] = useState(false);
-  const [signed, setSigned] = useState<{ name: string | null; at: string | null }>({
-    name: null,
-    at: null,
-  });
+  const [signed, setSigned] = useState<Signed>(unsigned);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState<"" | "draft" | "sign">("");
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [typed, setTyped] = useState("");
-  const [agree, setAgree] = useState(false);
+  const [sig, setSig] = useState<Signing>(emptySigning);
   const [repName, setRepName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,7 +99,9 @@ export function CompleteApplication({
       const [row, app] = await Promise.all([
         sb
           .from("application_details")
-          .select("business,owners,balances,request,signed_name,signed_at")
+          .select(
+            "business,owners,balances,request,real_estate,signed_name,signed_at,signature_image,signed_name_2,signature_image_2,signed_via,consent_version,signer_ip,signer_agent",
+          )
           .eq("application_id", applicationId)
           .maybeSingle(),
         sb
@@ -91,7 +123,17 @@ export function CompleteApplication({
       if (r) {
         setExists(true);
         setD(fromRow(r));
-        setSigned({ name: r.signed_name, at: r.signed_at });
+        setSigned({
+          name: r.signed_name,
+          at: r.signed_at,
+          image: r.signature_image,
+          name2: r.signed_name_2,
+          image2: r.signature_image_2,
+          via: r.signed_via === "link" || r.signed_via === "account" ? r.signed_via : null,
+          consent: r.consent_version,
+          ip: r.signer_ip,
+          agent: r.signer_agent,
+        });
       } else {
         setD(
           prefill({
@@ -116,50 +158,70 @@ export function CompleteApplication({
   if (!d) return null;
   const todo = missing(d);
   const owner = d.owners[0]!;
+  const update: Update = (fn) => setD((x) => (x ? fn(x) : x));
 
-  const setB = (k: keyof Business, v: string) =>
-    setD({ ...d, business: { ...d.business, [k]: v } });
-  const setO = (i: number, k: keyof Owner, v: string) =>
-    setD({ ...d, owners: d.owners.map((o, j) => (j === i ? { ...o, [k]: v } : o)) });
-  const setBal = (i: number, k: keyof Balance, v: string) =>
-    setD({ ...d, balances: d.balances.map((b, j) => (j === i ? { ...b, [k]: v } : b)) });
+  const pdfSource = (x: Details) => ({
+    answers: null,
+    first_name: x.owners[0]?.first ?? null,
+    business_name: x.business.legal_name,
+    phone: x.business.phone,
+    email: x.business.email,
+    amount_requested: null,
+    repName,
+  });
 
   async function save(sign: boolean) {
     const sb = getSupabase();
     if (!sb || !d) return;
     setError("");
+    const co = d.owners[1];
+    // a second signer only counts while there is a second owner
+    const second = sig.second && !!co;
     if (sign) {
       if (todo.length) return setError("Fill in everything listed above before signing.");
-      if (!agree) return setError("Tick the box to agree to the authorization.");
-      if (!signatureMatches(typed, owner))
+      if (!sig.agree) return setError("Tick the box to agree to the authorization.");
+      if (!signatureMatches(sig.typed, owner))
         return setError(`Type your full name as the owner, ${owner.first} ${owner.last}, to sign.`);
+      if (!sig.image) return setError("Draw your signature in the box.");
+      if (second && co) {
+        if (!signatureMatches(sig.typed2, co))
+          return setError(`${co.first} types their full name, ${co.first} ${co.last}, to sign.`);
+        if (!sig.image2) return setError(`${co.first} draws their signature in the box.`);
+      }
     }
     setSaving(sign ? "sign" : "draft");
+    const clean = cleanDetails(d);
     const payload = {
-      business: d.business,
-      owners: d.owners,
-      balances: d.balances.filter((b) => b.funder.trim() || b.current.trim()),
-      request: d.request,
+      business: clean.business,
+      owners: clean.owners,
+      balances: clean.balances,
+      request: clean.request,
+      real_estate: clean.real_estate,
       ...(sign
         ? {
-            signed_name: typed.trim(),
+            signed_name: sig.typed.trim(),
+            signature_image: sig.image,
+            signed_name_2: second ? sig.typed2.trim() : null,
+            signature_image_2: second ? sig.image2 : null,
             consent_text: CONSENT_TEXT,
             consent_version: CONSENT_VERSION,
             signer_agent: navigator.userAgent.slice(0, 300),
           }
         : {}),
     };
+    const cols =
+      "signed_name,signed_at,signature_image,signed_name_2,signature_image_2,signed_via,consent_version,signer_ip,signer_agent";
     const res = exists
       ? await sb
           .from("application_details")
           .update(payload)
           .eq("application_id", applicationId)
-          .select("signed_name,signed_at")
+          .select(cols)
           .single()
       : await sb
           .from("application_details")
           .insert({ application_id: applicationId, user_id: userId, ...payload })
-          .select("signed_name,signed_at")
+          .select(cols)
           .single();
     setSaving("");
     if (res.error) {
@@ -168,11 +230,33 @@ export function CompleteApplication({
     }
     setExists(true);
     setSavedAt(new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }));
-    const r = res.data as { signed_name: string | null; signed_at: string | null };
+    const r = res.data as Pick<
+      Row,
+      | "signed_name"
+      | "signed_at"
+      | "signature_image"
+      | "signed_name_2"
+      | "signature_image_2"
+      | "signed_via"
+      | "consent_version"
+      | "signer_ip"
+      | "signer_agent"
+    >;
     if (r.signed_at) {
-      setSigned({ name: r.signed_name, at: r.signed_at });
+      const s: Signed = {
+        name: r.signed_name,
+        at: r.signed_at,
+        image: r.signature_image,
+        name2: r.signed_name_2,
+        image2: r.signature_image_2,
+        via: r.signed_via === "link" ? "link" : "account",
+        consent: r.consent_version,
+        ip: r.signer_ip,
+        agent: r.signer_agent,
+      };
+      setSigned(s);
       setOpen(false);
-      if (sign) void storeSignedCopy({ name: r.signed_name, at: r.signed_at });
+      if (sign) void storeSignedCopy(clean, s);
     }
   }
 
@@ -181,22 +265,11 @@ export function CompleteApplication({
    * application" item. Funders get this file when Lamp sends the deal, including automatic
    * sends. Best effort: if it fails, the rep's Send builds the same PDF from the saved answers.
    */
-  async function storeSignedCopy(sig: { name: string | null; at: string | null }) {
+  async function storeSignedCopy(x: Details, s: Signed) {
     const sb = getSupabase();
-    if (!sb || !d) return;
+    if (!sb) return;
     try {
-      const bytes = await applicationPdfBytes(
-        {
-          answers: null,
-          first_name: owner.first,
-          business_name: d.business.legal_name,
-          phone: d.business.phone,
-          email: d.business.email,
-          amount_requested: null,
-          repName,
-        },
-        detailsToPdf(d, sig, repName),
-      );
+      const bytes = await applicationPdfBytes(pdfSource(x), detailsToPdf(x, s, repName));
       const path = `${userId}/${Date.now()}-signed-application.pdf`;
       const up = await sb.storage
         .from("documents")
@@ -223,18 +296,7 @@ export function CompleteApplication({
   async function copy() {
     if (!d) return;
     try {
-      await downloadApplicationPdf(
-        {
-          answers: null,
-          first_name: owner.first,
-          business_name: d.business.legal_name,
-          phone: d.business.phone,
-          email: d.business.email,
-          amount_requested: null,
-          repName,
-        },
-        detailsToPdf(d, signed, repName),
-      );
+      await downloadApplicationPdf(pdfSource(d), detailsToPdf(d, signed, repName));
     } catch {
       setError("Couldn't build your copy. Try again.");
     }
@@ -247,7 +309,8 @@ export function CompleteApplication({
           <Check className="size-5 text-forest" /> Application signed
         </h2>
         <p className="mt-2 text-sm text-smoke">
-          Signed by {signed.name} on{" "}
+          Signed by {signed.name}
+          {signed.name2 ? ` and ${signed.name2}` : ""} on{" "}
           {new Date(signed.at).toLocaleString("en-US", {
             month: "short",
             day: "numeric",
@@ -257,10 +320,21 @@ export function CompleteApplication({
           })}
           . Your rep has it. To change anything now, call or text your rep.
         </p>
+        {signed.image && (
+          <div className="mt-4 inline-block rounded-xl bg-[#fbfaf5] px-4 py-2 ring-1 ring-black/10">
+            <img
+              src={signed.image}
+              alt={`Signature of ${signed.name ?? "the owner"}`}
+              className="h-12 w-auto"
+            />
+          </div>
+        )}
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-        <button type="button" className={cn(btnOutline, "mt-4 px-5 py-2.5")} onClick={copy}>
-          Download my signed application
-        </button>
+        <div>
+          <button type="button" className={cn(btnOutline, "mt-4 px-5 py-2.5")} onClick={copy}>
+            Download my signed application
+          </button>
+        </div>
       </section>
     );
   }
@@ -281,410 +355,11 @@ export function CompleteApplication({
           {exists ? "Continue my application" : "Start my application"}
         </button>
       ) : (
-        <div className="mt-5 space-y-6">
-          <Group title="Your business">
-            <F label="Legal business name">
-              <input
-                className={field}
-                value={d.business.legal_name}
-                onChange={(e) => setB("legal_name", e.target.value)}
-              />
-            </F>
-            <F label="Doing business as (if different)">
-              <input
-                className={field}
-                value={d.business.dba}
-                onChange={(e) => setB("dba", e.target.value)}
-              />
-            </F>
-            <F label="Business address (no PO boxes)" wide>
-              <input
-                className={field}
-                value={d.business.address}
-                onChange={(e) => setB("address", e.target.value)}
-              />
-            </F>
-            <F label="City">
-              <input
-                className={field}
-                value={d.business.city}
-                onChange={(e) => setB("city", e.target.value)}
-              />
-            </F>
-            <div className="grid grid-cols-2 gap-3">
-              <F label="State">
-                <input
-                  className={field}
-                  maxLength={2}
-                  value={d.business.state}
-                  onChange={(e) => setB("state", e.target.value.toUpperCase())}
-                />
-              </F>
-              <F label="ZIP">
-                <input
-                  className={field}
-                  inputMode="numeric"
-                  maxLength={5}
-                  value={d.business.zip}
-                  onChange={(e) => setB("zip", e.target.value)}
-                />
-              </F>
-            </div>
-            <F label="Business phone">
-              <input
-                className={field}
-                type="tel"
-                value={d.business.phone}
-                onChange={(e) => setB("phone", e.target.value)}
-              />
-            </F>
-            <F label="Business email">
-              <input
-                className={field}
-                type="email"
-                value={d.business.email}
-                onChange={(e) => setB("email", e.target.value)}
-              />
-            </F>
-            <F label="Business start date">
-              <input
-                className={field}
-                type="date"
-                value={d.business.start_date}
-                onChange={(e) => setB("start_date", e.target.value)}
-              />
-            </F>
-            <F label="Federal tax ID (EIN)">
-              <input
-                className={field}
-                inputMode="numeric"
-                placeholder="12-3456789"
-                value={d.business.ein}
-                onChange={(e) => setB("ein", e.target.value)}
-              />
-            </F>
-            <F label="Entity type">
-              <select
-                className={field}
-                value={d.business.entity_type}
-                onChange={(e) => setB("entity_type", e.target.value)}
-              >
-                <option value="">Choose one</option>
-                {ENTITY_TYPES.map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
-            </F>
-            <F label="Industry">
-              <input
-                className={field}
-                value={d.business.industry}
-                onChange={(e) => setB("industry", e.target.value)}
-              />
-            </F>
-            <F label="Average monthly revenue ($)">
-              <input
-                className={field}
-                inputMode="decimal"
-                value={d.business.monthly_revenue}
-                onChange={(e) => setB("monthly_revenue", e.target.value)}
-              />
-            </F>
-            <F label="Monthly card sales ($, if any)">
-              <input
-                className={field}
-                inputMode="decimal"
-                value={d.business.card_volume}
-                onChange={(e) => setB("card_volume", e.target.value)}
-              />
-            </F>
-            <F label="Business bank">
-              <input
-                className={field}
-                value={d.business.bank}
-                onChange={(e) => setB("bank", e.target.value)}
-              />
-            </F>
-            <F label="Deposits a month (count)">
-              <input
-                className={field}
-                inputMode="numeric"
-                value={d.business.deposit_count}
-                onChange={(e) => setB("deposit_count", e.target.value)}
-              />
-            </F>
-            <F label="Do you own or rent your location?">
-              <select
-                className={field}
-                value={d.business.premises}
-                onChange={(e) => setB("premises", e.target.value)}
-              >
-                <option value="">Choose one</option>
-                <option value="own">Own</option>
-                <option value="rent">Rent</option>
-              </select>
-            </F>
-            {d.business.premises === "rent" && (
-              <F label="Monthly rent ($)">
-                <input
-                  className={field}
-                  inputMode="decimal"
-                  value={d.business.rent}
-                  onChange={(e) => setB("rent", e.target.value)}
-                />
-              </F>
-            )}
-            <F label="Any liens or judgments?">
-              <select
-                className={field}
-                value={d.business.liens}
-                onChange={(e) => setB("liens", e.target.value)}
-              >
-                <option value="">Choose one</option>
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-            </F>
-          </Group>
-
-          {d.owners.map((o, i) => (
-            <Group key={i} title={i === 0 ? "You (principal owner)" : "Second owner"}>
-              <F label="First name">
-                <input
-                  className={field}
-                  value={o.first}
-                  onChange={(e) => setO(i, "first", e.target.value)}
-                />
-              </F>
-              <F label="Last name">
-                <input
-                  className={field}
-                  value={o.last}
-                  onChange={(e) => setO(i, "last", e.target.value)}
-                />
-              </F>
-              <F label="Title">
-                <input
-                  className={field}
-                  placeholder="Owner, CEO…"
-                  value={o.title}
-                  onChange={(e) => setO(i, "title", e.target.value)}
-                />
-              </F>
-              <F label="Ownership %">
-                <input
-                  className={field}
-                  inputMode="decimal"
-                  value={o.ownership}
-                  onChange={(e) => setO(i, "ownership", e.target.value)}
-                />
-              </F>
-              <F label="Home address" wide>
-                <input
-                  className={field}
-                  value={o.address}
-                  onChange={(e) => setO(i, "address", e.target.value)}
-                />
-              </F>
-              <F label="City">
-                <input
-                  className={field}
-                  value={o.city}
-                  onChange={(e) => setO(i, "city", e.target.value)}
-                />
-              </F>
-              <div className="grid grid-cols-2 gap-3">
-                <F label="State">
-                  <input
-                    className={field}
-                    maxLength={2}
-                    value={o.state}
-                    onChange={(e) => setO(i, "state", e.target.value.toUpperCase())}
-                  />
-                </F>
-                <F label="ZIP">
-                  <input
-                    className={field}
-                    inputMode="numeric"
-                    maxLength={5}
-                    value={o.zip}
-                    onChange={(e) => setO(i, "zip", e.target.value)}
-                  />
-                </F>
-              </div>
-              <F label="Mobile phone">
-                <input
-                  className={field}
-                  type="tel"
-                  value={o.mobile}
-                  onChange={(e) => setO(i, "mobile", e.target.value)}
-                />
-              </F>
-              <F label="Email">
-                <input
-                  className={field}
-                  type="email"
-                  value={o.email}
-                  onChange={(e) => setO(i, "email", e.target.value)}
-                />
-              </F>
-              <F label="Date of birth">
-                <input
-                  className={field}
-                  type="date"
-                  value={o.dob}
-                  onChange={(e) => setO(i, "dob", e.target.value)}
-                />
-              </F>
-              <F label="Social Security number">
-                <input
-                  className={field}
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="123-45-6789"
-                  value={o.ssn}
-                  onChange={(e) => setO(i, "ssn", e.target.value)}
-                />
-              </F>
-              <F label="Credit score (your best guess)">
-                <input
-                  className={field}
-                  inputMode="numeric"
-                  value={o.credit}
-                  onChange={(e) => setO(i, "credit", e.target.value)}
-                />
-              </F>
-              {i === 1 && (
-                <button
-                  type="button"
-                  className="self-end text-sm font-semibold text-smoke underline"
-                  onClick={() => setD({ ...d, owners: d.owners.slice(0, 1) })}
-                >
-                  Remove second owner
-                </button>
-              )}
-            </Group>
-          ))}
-          {d.owners.length < 2 && (
-            <button
-              type="button"
-              className="text-sm font-semibold text-forest underline"
-              onClick={() => setD({ ...d, owners: [...d.owners, emptyOwner()] })}
-            >
-              Add a second owner (anyone with 20% or more)
-            </button>
-          )}
-
-          <Group
-            title="Current advances or balances"
-            hint="Any funding you're paying back now. Leave empty if none."
-          >
-            {d.balances.map((b, i) => (
-              <div
-                key={i}
-                className="grid gap-3 rounded-xl bg-sand p-3 sm:col-span-2 sm:grid-cols-5"
-              >
-                <F label="Funding company">
-                  <input
-                    className={field}
-                    value={b.funder}
-                    onChange={(e) => setBal(i, "funder", e.target.value)}
-                  />
-                </F>
-                <F label="Original amount">
-                  <input
-                    className={field}
-                    value={b.original}
-                    onChange={(e) => setBal(i, "original", e.target.value)}
-                  />
-                </F>
-                <F label="Balance now">
-                  <input
-                    className={field}
-                    value={b.current}
-                    onChange={(e) => setBal(i, "current", e.target.value)}
-                  />
-                </F>
-                <F label="Daily or weekly payment">
-                  <input
-                    className={field}
-                    value={b.payment}
-                    onChange={(e) => setBal(i, "payment", e.target.value)}
-                  />
-                </F>
-                <F label="Expected payoff">
-                  <input
-                    className={field}
-                    value={b.payoff}
-                    onChange={(e) => setBal(i, "payoff", e.target.value)}
-                  />
-                </F>
-              </div>
-            ))}
-            {d.balances.length < 2 && (
-              <button
-                type="button"
-                className="text-left text-sm font-semibold text-forest underline sm:col-span-2"
-                onClick={() => setD({ ...d, balances: [...d.balances, emptyBalance()] })}
-              >
-                Add a current advance
-              </button>
-            )}
-          </Group>
-
-          <Group title="What you're asking for">
-            <F label="Amount requested ($)">
-              <input
-                className={field}
-                inputMode="decimal"
-                value={d.request.amount}
-                onChange={(e) => setD({ ...d, request: { ...d.request, amount: e.target.value } })}
-              />
-            </F>
-            <F label="Preferred term">
-              <select
-                className={field}
-                value={d.request.term}
-                onChange={(e) =>
-                  setD({
-                    ...d,
-                    request: { ...d.request, term: e.target.value as Details["request"]["term"] },
-                  })
-                }
-              >
-                <option value="">No preference</option>
-                <option value="3">3 months</option>
-                <option value="6">6 months</option>
-                <option value="9">9 months</option>
-                <option value="12">12 months or more</option>
-              </select>
-            </F>
-            <fieldset className="sm:col-span-2">
-              <legend className="mb-1 text-xs font-semibold text-smoke">What it's for</legend>
-              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-                {USES.map((u) => (
-                  <label key={u.id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={d.request.uses.includes(u.id)}
-                      onChange={(e) =>
-                        setD({
-                          ...d,
-                          request: {
-                            ...d.request,
-                            uses: e.target.checked
-                              ? [...d.request.uses, u.id]
-                              : d.request.uses.filter((x) => x !== u.id),
-                          },
-                        })
-                      }
-                    />
-                    {u.label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          </Group>
+        <div className="mt-8 space-y-12">
+          <BusinessSection d={d} update={update} />
+          <OwnersSection d={d} update={update} />
+          <RealEstateSection d={d} update={update} />
+          <FundingSection d={d} update={update} />
 
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -698,81 +373,20 @@ export function CompleteApplication({
             {savedAt && <span className="text-sm text-smoke">Saved at {savedAt}</span>}
           </div>
 
-          <div className="rounded-2xl bg-sand p-5" data-sign>
-            <h3 className="font-display text-base font-semibold">Sign</h3>
-            {todo.length > 0 ? (
-              <p className="mt-2 text-sm text-smoke">
-                Still needed before you can sign: {todo.join(", ")}.
-              </p>
-            ) : (
-              <p className="mt-2 text-sm text-smoke">
-                Everything's filled in. Read the authorization, then sign.
-              </p>
-            )}
-            <div className="mt-3 max-h-48 overflow-y-auto rounded-xl bg-white p-4 text-xs leading-relaxed text-smoke ring-1 ring-line">
-              {CONSENT_TEXT}
-            </div>
-            <label className="mt-3 flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={agree}
-                onChange={(e) => setAgree(e.target.checked)}
-              />
-              I have read and agree to the authorization above, and the information in this
-              application is true and complete.
-            </label>
-            <F label="Type your full name to sign">
-              <input
-                className={cn(field, "mt-1 font-semibold")}
-                placeholder={`${owner.first} ${owner.last}`.trim() || "Your full name"}
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-              />
-            </F>
-            {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-            <button
-              type="button"
-              className={cn(btnPrimary, "mt-4 px-5 py-2.5")}
-              disabled={saving !== "" || todo.length > 0}
-              onClick={() => save(true)}
-            >
-              {saving === "sign" ? "Signing…" : "Sign my application"}
-            </button>
-            <p className="mt-3 flex items-center gap-1.5 text-xs text-smoke">
-              <Lock className="size-3.5" /> Only you and the Lamp team can see this. Your SSN is
-              used only to submit your application to funding partners.
-            </p>
+          <div className="border-t border-line pt-8">
+            <SignBlock
+              d={d}
+              s={sig}
+              set={(patch) => setSig((x) => ({ ...x, ...patch }))}
+              todo={todo}
+              error={error}
+              busy={saving === "sign"}
+              onSign={() => void save(true)}
+              cta="Sign my application"
+            />
           </div>
         </div>
       )}
     </section>
-  );
-}
-
-function Group({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
-  return (
-    <fieldset>
-      <legend className="font-display text-base font-semibold">{title}</legend>
-      {hint && <p className="mt-1 text-sm text-smoke">{hint}</p>}
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">{children}</div>
-    </fieldset>
-  );
-}
-
-function F({
-  label,
-  wide = false,
-  children,
-}: {
-  label: string;
-  wide?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <label className={wide ? "block sm:col-span-2" : "block"}>
-      <span className="mb-1 block text-xs font-semibold text-smoke">{label}</span>
-      {children}
-    </label>
   );
 }

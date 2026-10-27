@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { age } from "@/lib/staff";
-import { btnPrimary, card } from "@/components/site/layout";
+import { btnOutline, btnPrimary, card } from "@/components/site/layout";
+import { SendApplications, type SendSeed } from "@/components/staff/send-applications";
+import { MAX_RECIPIENTS } from "@/lib/application-links";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import {
   ENGINE_STATUS_LABEL,
@@ -20,12 +22,14 @@ import {
  * list). The engine runs outside Lamp; an admin picks leads there, downloads them with the rep
  * each one goes to, and uploads the file here. A rep sees and works only their own leads and
  * records what happened on the call; the engine never dials or sends, a person does.
+ * Ticking leads opens Send the application: one personal link each, by email or to copy.
  */
 
 type Row = {
   id: number;
   name: string | null;
   phone: string | null;
+  email: string | null;
   city: string | null;
   state: string | null;
   industry: string | null;
@@ -42,7 +46,7 @@ type Row = {
 };
 
 const COLUMNS =
-  "id,name,phone,city,state,industry,tier,need,reason,signals,status,notes,rep_slug,first_found,pushed_at,worked_at";
+  "id,name,phone,email,city,state,industry,tier,need,reason,signals,status,notes,rep_slug,first_found,pushed_at,worked_at";
 const LIMIT = 300;
 
 export function EngineLeads({
@@ -60,6 +64,9 @@ export function EngineLeads({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState<number | null>(null);
   const [reload, setReload] = useState(0);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  // The send panel, keyed so picking again starts it fresh with the new picks.
+  const [sending, setSending] = useState<{ key: number; seed: SendSeed[] } | null>(null);
 
   useEffect(() => {
     const sb = getSupabase();
@@ -67,6 +74,7 @@ export function EngineLeads({
     let live = true;
     setRows(null);
     setError("");
+    setSelected(new Set());
     (async () => {
       let q = sb.from("engine_leads").select(COLUMNS).not("phone", "is", null).neq("phone", "");
       if (tier) q = q.eq("tier", tier);
@@ -99,6 +107,7 @@ export function EngineLeads({
       setError(`Couldn't save ${row.name ?? "that lead"}: ${err.message}`);
       return;
     }
+    if (next === "do_not_call") pick(row.id, false);
     setRows((rs) =>
       rs
         ? rs.map((r) =>
@@ -134,6 +143,44 @@ export function EngineLeads({
 
   const repName = (slug: string | null) =>
     slug ? (reps.find((r) => r.slug === slug)?.name ?? slug) : null;
+
+  // Do-not-call leads never get a link (the server refuses them too).
+  const canPick = (r: Row) => r.status !== "do_not_call";
+  const pickable = (rows ?? []).filter(canPick);
+  const allPicked = pickable.length > 0 && pickable.every((r) => selected.has(r.id));
+  const somePicked = pickable.some((r) => selected.has(r.id));
+
+  function pick(id: number, on: boolean) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function pickPage(on: boolean) {
+    setSelected((s) => {
+      const next = new Set(s);
+      for (const r of pickable) {
+        if (on) next.add(r.id);
+        else next.delete(r.id);
+      }
+      return next;
+    });
+  }
+
+  function openSend() {
+    const seed = (rows ?? [])
+      .filter((r) => selected.has(r.id) && canPick(r))
+      .map((r) => ({
+        lead_id: r.id,
+        business_name: r.name ?? "",
+        phone: r.phone ?? "",
+        email: r.email ?? "",
+      }));
+    if (seed.length) setSending((s) => ({ key: (s?.key ?? 0) + 1, seed }));
+  }
 
   return (
     <div className="mt-8">
@@ -197,6 +244,19 @@ export function EngineLeads({
 
       {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
+      {sending && (
+        <SendApplications
+          key={sending.key}
+          isAdmin={isAdmin}
+          repSlug={repSlug}
+          reps={reps}
+          seed={sending.seed}
+          onClose={() => setSending(null)}
+          // reload: the server keeps a typed-in email on the lead for next time
+          onSent={() => setReload((n) => n + 1)}
+        />
+      )}
+
       <div className={cn(card, "mt-4 overflow-x-auto")}>
         {rows === null ? (
           <div className="grid place-items-center py-16">
@@ -209,9 +269,22 @@ export function EngineLeads({
               : "No leads assigned to you here yet."}
           </p>
         ) : (
-          <table className="w-full min-w-[900px] text-left text-sm">
+          <table className="w-full min-w-[940px] text-left text-sm">
             <thead className="border-b border-line text-xs uppercase tracking-wide text-smoke">
               <tr>
+                <th className="w-10 py-3 pl-4 pr-0">
+                  <input
+                    type="checkbox"
+                    aria-label="Select every lead on this page"
+                    className="size-4 align-middle"
+                    disabled={pickable.length === 0}
+                    checked={allPicked}
+                    ref={(el) => {
+                      if (el) el.indeterminate = somePicked && !allPicked;
+                    }}
+                    onChange={(e) => pickPage(e.target.checked)}
+                  />
+                </th>
                 <th className="px-4 py-3 font-semibold">Tier</th>
                 <th className="px-4 py-3 font-semibold">Business</th>
                 <th className="px-4 py-3 font-semibold">Phone</th>
@@ -228,8 +301,22 @@ export function EngineLeads({
                 <tr
                   key={r.id}
                   data-engine-lead={r.id}
-                  className="border-b border-line last:border-0 hover:bg-sand"
+                  className={cn(
+                    "border-b border-line last:border-0 hover:bg-sand",
+                    selected.has(r.id) && "bg-sand",
+                  )}
                 >
+                  <td className="w-10 py-3 pl-4 pr-0">
+                    <input
+                      type="checkbox"
+                      className="size-4 align-middle disabled:opacity-40"
+                      aria-label={`Select ${r.name ?? "lead"}`}
+                      title={canPick(r) ? undefined : "Marked do not call"}
+                      disabled={!canPick(r)}
+                      checked={selected.has(r.id)}
+                      onChange={(e) => pick(r.id, e.target.checked)}
+                    />
+                  </td>
                   <td className="px-4 py-3 font-semibold tabular-nums">
                     {r.tier ?? "—"}
                     {r.need != null && <span className="ml-1 text-xs text-smoke">{r.need}</span>}
@@ -248,6 +335,9 @@ export function EngineLeads({
                       </a>
                     ) : (
                       "—"
+                    )}
+                    {r.email && (
+                      <div className="max-w-[12rem] truncate text-xs text-smoke">{r.email}</div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-smoke">
@@ -308,6 +398,39 @@ export function EngineLeads({
           </table>
         )}
       </div>
+
+      {selected.size > 0 && (
+        <div
+          className="sticky bottom-4 z-30 mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-[0_16px_40px_-16px_rgb(0_0_0/0.6)] ring-1 ring-line"
+          data-lead-selection={selected.size}
+        >
+          <p className="text-sm font-semibold">
+            {selected.size} selected
+            {selected.size > MAX_RECIPIENTS && (
+              <span className="ml-2 font-normal text-destructive">
+                At most {MAX_RECIPIENTS} at a time
+              </span>
+            )}
+          </p>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={cn(btnPrimary, "px-4 py-2")}
+              disabled={selected.size > MAX_RECIPIENTS}
+              onClick={openSend}
+            >
+              <Send className="size-4" /> Send application ({selected.size})
+            </button>
+            <button
+              type="button"
+              className={cn(btnOutline, "px-4 py-2")}
+              onClick={() => setSelected(new Set())}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
