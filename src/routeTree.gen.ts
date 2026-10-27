@@ -23,6 +23,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApiApplicationInvitesRouteImport } from './routes/api.application-invites'
 import { Route as ApplicationRepRouteImport } from './routes/application.$rep'
 import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
+import { Route as ApiApplicationNotifyRouteImport } from './routes/api.application.notify'
 import { Route as ApiApplicationOpenRouteImport } from './routes/api.application.open'
 import { Route as ApiApplicationSubmitRouteImport } from './routes/api.application.submit'
 import { Route as ApiApplicationUploadRouteImport } from './routes/api.application.upload'
@@ -100,6 +101,11 @@ const ApplyRepRoute = ApplyRepRouteImport.update({
   path: '/apply/$rep',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiApplicationNotifyRoute = ApiApplicationNotifyRouteImport.update({
+  id: '/api/application/notify',
+  path: '/api/application/notify',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiApplicationOpenRoute = ApiApplicationOpenRouteImport.update({
   id: '/api/application/open',
   path: '/api/application/open',
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/api/application-invites': typeof ApiApplicationInvitesRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
+  '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
@@ -168,6 +175,7 @@ export interface FileRoutesByTo {
   '/api/application-invites': typeof ApiApplicationInvitesRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
+  '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
@@ -191,6 +199,7 @@ export interface FileRoutesById {
   '/api/application-invites': typeof ApiApplicationInvitesRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply_/$rep': typeof ApplyRepRoute
+  '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
@@ -215,6 +224,7 @@ export interface FileRouteTypes {
     | '/api/application-invites'
     | '/application/$rep'
     | '/apply/$rep'
+    | '/api/application/notify'
     | '/api/application/open'
     | '/api/application/submit'
     | '/api/application/upload'
@@ -237,6 +247,7 @@ export interface FileRouteTypes {
     | '/api/application-invites'
     | '/application/$rep'
     | '/apply/$rep'
+    | '/api/application/notify'
     | '/api/application/open'
     | '/api/application/submit'
     | '/api/application/upload'
@@ -259,6 +270,7 @@ export interface FileRouteTypes {
     | '/api/application-invites'
     | '/application/$rep'
     | '/apply_/$rep'
+    | '/api/application/notify'
     | '/api/application/open'
     | '/api/application/submit'
     | '/api/application/upload'
@@ -282,6 +294,7 @@ export interface RootRouteChildren {
   ApiApplicationInvitesRoute: typeof ApiApplicationInvitesRoute
   ApplicationRepRoute: typeof ApplicationRepRoute
   ApplyRepRoute: typeof ApplyRepRoute
+  ApiApplicationNotifyRoute: typeof ApiApplicationNotifyRoute
   ApiApplicationOpenRoute: typeof ApiApplicationOpenRoute
   ApiApplicationSubmitRoute: typeof ApiApplicationSubmitRoute
   ApiApplicationUploadRoute: typeof ApiApplicationUploadRoute
@@ -390,6 +403,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApplyRepRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/application/notify': {
+      id: '/api/application/notify'
+      path: '/api/application/notify'
+      fullPath: '/api/application/notify'
+      preLoaderRoute: typeof ApiApplicationNotifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/application/open': {
       id: '/api/application/open'
       path: '/api/application/open'
@@ -450,6 +470,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiApplicationInvitesRoute: ApiApplicationInvitesRoute,
   ApplicationRepRoute: ApplicationRepRoute,
   ApplyRepRoute: ApplyRepRoute,
+  ApiApplicationNotifyRoute: ApiApplicationNotifyRoute,
   ApiApplicationOpenRoute: ApiApplicationOpenRoute,
   ApiApplicationSubmitRoute: ApiApplicationSubmitRoute,
   ApiApplicationUploadRoute: ApiApplicationUploadRoute,

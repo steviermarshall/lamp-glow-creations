@@ -182,28 +182,6 @@ export function inviteSms(firstName: string, repName: string, url: string): stri
   return `${hi}it's ${repName} at Lamp. Here's your application. It takes about 10 minutes and you sign right on the page: ${url}`;
 }
 
-/** The ping the rep gets when a merchant signs. */
-export function signedEmail(opts: {
-  repName: string;
-  signer: string;
-  businessName: string;
-  fileUrl: string;
-  realEstate: boolean;
-}): { subject: string; text: string } {
-  const biz = opts.businessName.trim() || "A merchant";
-  const subject = `Signed: ${biz} just signed the Lamp application`;
-  const text = [
-    `${opts.repName.split(" ")[0] || "Hi"},`,
-    "",
-    `${opts.signer} signed the full application for ${biz}${opts.realEstate ? " (owns real estate)" : ""}.`,
-    "",
-    `Open the file: ${opts.fileUrl}`,
-    "",
-    "Lamp",
-  ].join("\r\n");
-  return { subject, text };
-}
-
 /** A multipart/alternative message (text and HTML) with an optional Reply-To. */
 export function buildAltMime(opts: {
   from: string;

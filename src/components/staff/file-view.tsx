@@ -4,7 +4,7 @@ import { ArrowLeft, Check, ExternalLink, Loader2, Paperclip, X } from "lucide-re
 import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { labelFor, QUESTIONS, type Answers } from "@/lib/apply";
-import { downloadApplicationPdf } from "@/lib/application-pdf";
+import { downloadApplicationPdf, type PdfPages } from "@/lib/application-pdf";
 import { detailsToPdf } from "@/lib/application-details";
 import { FileApplication } from "@/components/staff/file-application";
 import { RESTRICTED, revealFullApplication, useFullApplication } from "@/lib/full-application";
@@ -254,6 +254,51 @@ export function FileView({
     slug ? (reps.find((r) => r.slug === slug)?.name ?? slug) : "Unassigned";
   const mine = !!repSlug && file.rep_slug === repSlug;
 
+  // The lender copy is page 1, flat; the signing record adds the schedule and how it was signed.
+  async function downloadPdf(pages: PdfPages) {
+    if (!file) return;
+    setBusy(pages === "all" ? "record" : "pdf");
+    setError("");
+    try {
+      // The PDF carries full SSNs, so the database logs it like Show SSN. Staff who can't
+      // see the full application get the quick answers only.
+      const pdfFull =
+        full && full !== RESTRICTED ? await revealFullApplication(fileId, "application_pdf") : null;
+      // the drawn signatures and how it was signed go on the PDF too
+      const signature = pdfFull && {
+        name: pdfFull.signedName,
+        at: pdfFull.signedAt,
+        image: pdfFull.signatureImage,
+        name2: pdfFull.signedName2,
+        image2: pdfFull.signatureImage2,
+        via: pdfFull.signedVia,
+        ip: pdfFull.signerIp,
+        agent: pdfFull.signerAgent,
+        consent: pdfFull.consentVersion,
+      };
+      await downloadApplicationPdf(
+        {
+          answers: file.answers,
+          first_name: file.first_name,
+          business_name: file.business_name,
+          phone: file.phone,
+          email: file.email,
+          amount_requested: file.amount_requested,
+          repName: file.rep_slug ? repName(file.rep_slug) : null,
+        },
+        pdfFull && signature
+          ? detailsToPdf(pdfFull.details, signature, file.rep_slug ? repName(file.rep_slug) : null)
+          : undefined,
+        pages,
+        pages === "all" ? " (signing record)" : "",
+      );
+    } catch {
+      setError("Couldn't build the application PDF. Try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="mt-6">
       <Link
@@ -271,63 +316,31 @@ export function FileView({
             {file.business_name || "Unnamed business"}
           </h2>
         </div>
-        <button
-          type="button"
-          className={cn(btnOutline, "px-4 py-2.5")}
-          disabled={busy === "pdf"}
-          onClick={async () => {
-            setBusy("pdf");
-            setError("");
-            try {
-              // The PDF carries full SSNs, so the database logs it like Show SSN. Staff who can't
-              // see the full application get the quick answers only.
-              const pdfFull =
-                full && full !== RESTRICTED
-                  ? await revealFullApplication(fileId, "application_pdf")
-                  : null;
-              // the drawn signatures and how it was signed go on the PDF too
-              const signature = pdfFull && {
-                name: pdfFull.signedName,
-                at: pdfFull.signedAt,
-                image: pdfFull.signatureImage,
-                name2: pdfFull.signedName2,
-                image2: pdfFull.signatureImage2,
-                via: pdfFull.signedVia,
-                ip: pdfFull.signerIp,
-                agent: pdfFull.signerAgent,
-                consent: pdfFull.consentVersion,
-              };
-              await downloadApplicationPdf(
-                {
-                  answers: file.answers,
-                  first_name: file.first_name,
-                  business_name: file.business_name,
-                  phone: file.phone,
-                  email: file.email,
-                  amount_requested: file.amount_requested,
-                  repName: file.rep_slug ? repName(file.rep_slug) : null,
-                },
-                pdfFull && signature
-                  ? detailsToPdf(
-                      pdfFull.details,
-                      signature,
-                      file.rep_slug ? repName(file.rep_slug) : null,
-                    )
-                  : undefined,
-              );
-            } catch {
-              setError("Couldn't build the application PDF. Try again.");
-            } finally {
-              setBusy(null);
-            }
-          }}
-        >
-          {busy === "pdf"
-            ? "Building PDF…"
-            : full && full !== RESTRICTED && full.signedAt
-              ? "Signed application PDF"
-              : "Application PDF"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={cn(btnOutline, "px-4 py-2.5")}
+            disabled={busy === "pdf"}
+            onClick={() => void downloadPdf("lender")}
+          >
+            {busy === "pdf"
+              ? "Building PDF…"
+              : full && full !== RESTRICTED && full.signedAt
+                ? "Signed application PDF"
+                : "Application PDF"}
+          </button>
+          {full && full !== RESTRICTED && full.signedAt && (
+            <button
+              type="button"
+              className={cn(btnOutline, "px-4 py-2.5")}
+              disabled={busy === "record"}
+              onClick={() => void downloadPdf("all")}
+              title="Every page: the application, the real estate schedule and how it was signed"
+            >
+              {busy === "record" ? "Building PDF…" : "Signing record"}
+            </button>
+          )}
+        </div>
       </div>
 
       {file.user_id === null && (

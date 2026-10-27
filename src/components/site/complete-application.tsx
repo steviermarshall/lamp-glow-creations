@@ -269,7 +269,7 @@ export function CompleteApplication({
     const sb = getSupabase();
     if (!sb) return;
     try {
-      const bytes = await applicationPdfBytes(pdfSource(x), detailsToPdf(x, s, repName));
+      const bytes = await applicationPdfBytes(pdfSource(x), detailsToPdf(x, s, repName), "lender");
       const path = `${userId}/${Date.now()}-signed-application.pdf`;
       const up = await sb.storage
         .from("documents")
@@ -288,6 +288,17 @@ export function CompleteApplication({
         mime_type: "application/pdf",
       });
       if (idx.error) await sb.storage.from("documents").remove([path]);
+      // the rep (and Asad and Stevie) get the signed copy and any statements by email
+      const session = (await sb.auth.getSession()).data.session;
+      if (session)
+        await fetch("/api/application/notify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ application_id: applicationId }),
+        });
     } catch {
       /* the staff Send builds it from the saved answers instead */
     }

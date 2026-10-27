@@ -14,6 +14,12 @@ export const SITE = {
   areaServed: ["New Jersey", "New York City"],
 } as const;
 
+/** Copied on the email every signed application sends to its rep: Asad and Stevie. */
+export const NEW_APPLICATION_COPY: readonly string[] = [
+  "partners@getlamp.app",
+  "marshall@getlamp.app",
+];
+
 export const telHref = (phone: string) => `tel:+1${phone.replace(/\D/g, "").slice(-10)}`;
 
 // ---------- Sign-in ----------
