@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
+import { markStaffBrowser } from "@/lib/track";
 import { useAuth } from "@/hooks/use-auth";
 import { seo } from "@/lib/site";
 import { isStage, useStaffAccess, type Stage } from "@/lib/staff";
@@ -62,6 +63,10 @@ function Staff() {
   const [reps, setReps] = useState<{ slug: string; name: string }[]>([]);
 
   const isStaff = access.state === "staff";
+  useEffect(() => {
+    // staff browsing the site shouldn't count as visitors
+    if (isStaff) markStaffBrowser();
+  }, [isStaff]);
   useEffect(() => {
     const sb = getSupabase();
     if (!sb || !isStaff) return;

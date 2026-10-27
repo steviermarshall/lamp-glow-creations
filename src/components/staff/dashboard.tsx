@@ -6,6 +6,17 @@ import { cn } from "@/lib/utils";
 import { card } from "@/components/site/layout";
 import { STAGE_LABEL, type Stage } from "@/lib/staff";
 import { usd } from "@/lib/money";
+import { QUESTIONS } from "@/lib/apply";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  ACTIVITY_LABEL,
+  buildActivity,
+  buildWebsite,
+  placeText,
+  type ActivityAction,
+  type ActivityRow,
+  type SiteEventRow,
+} from "@/lib/tracking";
 import {
   buildDashboard,
   delta,
@@ -42,7 +53,7 @@ async function readAll<T>(
 const n = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
 const nOrNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
-async function load(isAdmin: boolean): Promise<{ data: DashboardData; failed: string[] }> {
+async function load(isAdmin: boolean): Promise<Loaded> {
   const sb = getSupabase();
   if (!sb) throw new Error("Sign-in isn't available yet.");
   const failed: string[] = [];
@@ -247,8 +258,46 @@ async function load(isAdmin: boolean): Promise<{ data: DashboardData; failed: st
     })),
     funders: got("funders", funders).map((r) => ({ id: String(r["id"]), name: String(r["name"]) })),
   };
-  return { data, failed };
+  let site: SiteEventRow[] = [];
+  let activity: ActivityRow[] = [];
+  if (isAdmin) {
+    // tables newer than the generated types, read untyped
+    const db = sb as unknown as SupabaseClient;
+    const since = new Date(Date.now() - 400 * 86_400_000).toISOString();
+    const [s, a] = await Promise.all([
+      readAll<SiteEventRow>((x, y) =>
+        db
+          .from("site_events")
+          .select(
+            "id,occurred_at,visitor,kind,path,step,question,referrer_host,utm_source,device,country,region,city",
+          )
+          .gte("occurred_at", since)
+          .order("id")
+          .range(x, y),
+      ),
+      readAll<ActivityRow>((x, y) =>
+        db
+          .from("activity_log")
+          .select(
+            "id,occurred_at,user_id,email,action,application_id,detail,ip,country,region,city,device,browser",
+          )
+          .gte("occurred_at", since)
+          .order("id")
+          .range(x, y),
+      ),
+    ]);
+    site = got("site visits", s);
+    activity = got("activity log", a);
+  }
+  return { data, failed, site, activity };
 }
+
+type Loaded = {
+  data: DashboardData;
+  failed: string[];
+  site: SiteEventRow[];
+  activity: ActivityRow[];
+};
 
 /**
  * The Dashboard tab: Lamp's numbers from the database, for the period picked at the top. Admins
@@ -256,7 +305,7 @@ async function load(isAdmin: boolean): Promise<{ data: DashboardData; failed: st
  */
 export function Dashboard({ isAdmin, repSlug }: { isAdmin: boolean; repSlug: string | null }) {
   const [periodKey, setPeriodKey] = useState<PeriodKey>("month");
-  const [raw, setRaw] = useState<{ data: DashboardData; failed: string[] } | null>(null);
+  const [raw, setRaw] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
@@ -287,6 +336,14 @@ export function Dashboard({ isAdmin, repSlug }: { isAdmin: boolean; repSlug: str
   const d = useMemo(
     () => (raw ? buildDashboard(raw.data, period, { repSlug: scope }) : null),
     [raw, period, scope],
+  );
+  const web = useMemo(
+    () => (raw && isAdmin ? buildWebsite(raw.site, period) : null),
+    [raw, period, isAdmin],
+  );
+  const act = useMemo(
+    () => (raw && isAdmin ? buildActivity(raw.activity, period) : null),
+    [raw, period, isAdmin],
   );
   const repName = useMemo(
     () => new Map((raw?.data.reps ?? []).map((r) => [r.slug, r.name])),
@@ -674,19 +731,206 @@ export function Dashboard({ isAdmin, repSlug }: { isAdmin: boolean; repSlug: str
                         : "None failed."
                     }
                   />
-                  <div className={cn(card, "p-5 text-sm text-smoke")}>
-                    <p className="font-semibold text-ink">Coming in part 2</p>
-                    <p className="mt-1">
-                      Site visits and where they come from, /apply drop-off by question, a sign-in
-                      log with city and device, and every staff action.
-                    </p>
+                </div>
+              </div>
+            </Section>
+          )}
+
+          {/* ---------------- website (admins) ---------------- */}
+          {isAdmin && web && (
+            <Section
+              title="Website"
+              note="Lamp's own count: staff browsers and bots left out. In this period."
+            >
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <DeltaTile label="Page views" c={web.views} vs={vs} />
+                <DeltaTile label="Visitors" c={web.visitors} vs={vs} />
+                <Tile label="Started /apply" value={String(web.apply[0]?.visitors ?? 0)} />
+                <Tile
+                  label="Saw their options"
+                  value={String(web.apply.find((s) => s.question === "result")?.visitors ?? 0)}
+                />
+              </div>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <div className={cn(card, "overflow-x-auto")}>
+                  <Table
+                    head={["Where visitors came from", "Visitors"]}
+                    numeric
+                    rows={
+                      web.sources.length
+                        ? web.sources.map((s) => [s.key, s.count])
+                        : [["No visits yet", ""]]
+                    }
+                  />
+                </div>
+                <div className={cn(card, "overflow-x-auto")}>
+                  <Table
+                    head={["Page", "Views"]}
+                    numeric
+                    rows={
+                      web.pages.length
+                        ? web.pages.map((s) => [s.key, s.count])
+                        : [["No visits yet", ""]]
+                    }
+                  />
+                </div>
+              </div>
+              {web.visitors.now > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2 text-sm">
+                  {web.devices.map((s) => (
+                    <span key={s.key} className="rounded-full px-3 py-1 ring-1 ring-line">
+                      {s.key.charAt(0).toUpperCase() + s.key.slice(1)}{" "}
+                      <span className="font-semibold tabular-nums">
+                        {Math.round((s.count / web.visitors.now) * 100)}%
+                      </span>
+                    </span>
+                  ))}
+                  {web.places.map((s) => (
+                    <span key={s.key} className="rounded-full px-3 py-1 ring-1 ring-line">
+                      {s.key} <span className="font-semibold tabular-nums">{s.count}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {web.apply.length > 0 && (
+                <div className={cn(card, "mt-3 p-5")}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-smoke">
+                    /apply: how many visitors reached each question
+                  </p>
+                  <div className="mt-3">
+                    <Funnel
+                      steps={web.apply.map((s) => ({
+                        key: String(s.step),
+                        label: questionLabel(s.question),
+                        count: s.visitors,
+                      }))}
+                    />
                   </div>
+                </div>
+              )}
+            </Section>
+          )}
+
+          {/* ---------------- sign-ins and activity (admins) ---------------- */}
+          {isAdmin && act && (
+            <Section
+              title="Sign-ins and activity"
+              note={
+                act.flagged
+                  ? `${act.flagged} sign-in${act.flagged === 1 ? "" : "s"} from a new place or browser in this period.`
+                  : "In this period."
+              }
+            >
+              <div className={cn(card, "overflow-x-auto")}>
+                <p className="px-5 pt-4 text-xs font-semibold uppercase tracking-[0.12em] text-smoke">
+                  Who signed in, from where
+                </p>
+                {act.signIns.length === 0 ? (
+                  <p className="px-5 pb-5 pt-2 text-sm text-smoke">No sign-ins in this period.</p>
+                ) : (
+                  <Table
+                    head={["When", "Who", "Where", "Device", "IP", ""]}
+                    rows={act.signIns.map((s) => [
+                      when(s.occurred_at),
+                      s.email ?? "unknown",
+                      placeText(s),
+                      s.browser ?? s.device ?? "",
+                      s.ip ?? "",
+                      s.newPlace || s.newBrowser ? (
+                        <span key="n" className="font-semibold text-forest">
+                          {s.newPlace ? "New place" : "New browser"}
+                        </span>
+                      ) : (
+                        ""
+                      ),
+                    ])}
+                  />
+                )}
+              </div>
+              <div className="mt-3 grid gap-3">
+                <div className={cn(card, "overflow-x-auto")}>
+                  <Table
+                    head={["Person", "Sign-ins", "Files opened", "Stage changes", "PDFs", "Sends"]}
+                    numeric
+                    rows={
+                      act.byPerson.length
+                        ? act.byPerson.map((p) => [
+                            p.email,
+                            p.counts["sign_in"] ?? 0,
+                            p.counts["open_file"] ?? 0,
+                            p.counts["change_stage"] ?? 0,
+                            p.counts["download_pdf"] ?? 0,
+                            (p.counts["send_to_funders"] ?? 0) +
+                              (p.counts["send_application"] ?? 0),
+                          ])
+                        : [["Nobody yet", "", "", "", "", ""]]
+                    }
+                  />
+                </div>
+                <div className={cn(card, "overflow-x-auto")}>
+                  <p className="px-5 pt-4 text-xs font-semibold uppercase tracking-[0.12em] text-smoke">
+                    Latest staff actions
+                  </p>
+                  {act.recent.length === 0 ? (
+                    <p className="px-5 pb-5 pt-2 text-sm text-smoke">
+                      No staff actions in this period.
+                    </p>
+                  ) : (
+                    <Table
+                      head={["When", "Who", "What", "File"]}
+                      rows={act.recent.map((r) => [
+                        when(r.occurred_at),
+                        r.email ?? "unknown",
+                        `${ACTIVITY_LABEL[r.action as ActivityAction] ?? r.action}${r.detail ? ` (${r.detail})` : ""}`,
+                        r.application_id ? (
+                          <Link
+                            key="f"
+                            to="/staff"
+                            search={{ file: r.application_id }}
+                            className="underline-offset-4 hover:underline"
+                          >
+                            Open
+                          </Link>
+                        ) : (
+                          "—"
+                        ),
+                      ])}
+                    />
+                  )}
                 </div>
               </div>
             </Section>
           )}
         </>
       )}
+    </div>
+  );
+}
+
+const when = (iso: string) =>
+  new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+/** The /apply question's own wording, or a plain name for the last two steps. */
+function questionLabel(key: string) {
+  if (key === "contact") return "Contact details";
+  if (key === "result") return "Saw their options";
+  const q = QUESTIONS.find((x) => x.key === key);
+  return q ? q.title : key;
+}
+
+function DeltaTile({ label, c, vs }: { label: string; c: Cmp; vs: string | null }) {
+  return (
+    <div className={cn(card, "p-4")}>
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-smoke">{label}</p>
+      <p className="mt-1.5 font-display text-2xl font-bold tabular-nums">
+        {c.now.toLocaleString("en-US")}
+      </p>
+      <Delta c={c} vs={vs} />
     </div>
   );
 }

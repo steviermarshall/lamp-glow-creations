@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -14,6 +15,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 
 import { SITE } from "../lib/site";
 import { THEME_SCRIPT } from "../lib/theme";
+import { track } from "../lib/track";
 
 const SITE_URL = SITE.url;
 
@@ -166,11 +168,21 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** A page view for Lamp's own visit counts, on every route change (staff pages excluded). */
+function PageViews() {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => {
+    if (!path.startsWith("/staff")) track("page_view");
+  }, [path]);
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
+      <PageViews />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
     </QueryClientProvider>

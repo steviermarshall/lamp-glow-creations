@@ -19,6 +19,7 @@ import { useAuth, recordLead, saveDraftToAccount } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { btnOutline, btnPrimary, card, PageShell } from "@/components/site/layout";
 import { GoogleButton, sendMagicLink, signInWithGoogle } from "@/components/site/auth";
+import { track } from "@/lib/track";
 
 const CONTACT_STEP = QUESTIONS.length;
 const RESULT_STEP = QUESTIONS.length + 1;
@@ -61,6 +62,11 @@ export function ApplyFlow({ search, rep }: { search: Record<string, unknown>; re
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
+    // how far visitors get, question by question, for the dashboard's /apply drop-off
+    const question =
+      QUESTIONS[step]?.key ??
+      (step === CONTACT_STEP ? "contact" : step === RESULT_STEP ? "result" : "");
+    track("apply_step", { step, question });
   }, [step]);
 
   const choose = (key: keyof Answers, value: string) => {

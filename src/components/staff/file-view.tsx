@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Check, ExternalLink, Loader2, Paperclip, X } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/track";
 import { cn } from "@/lib/utils";
 import { labelFor, QUESTIONS, type Answers } from "@/lib/apply";
 import { downloadApplicationPdf, type PdfPages } from "@/lib/application-pdf";
@@ -157,6 +158,10 @@ export function FileView({
     load();
   }, [load]);
 
+  useEffect(() => {
+    void logActivity("open_file", { applicationId: fileId });
+  }, [fileId]);
+
   /** Runs one write; an update the rules refuse comes back with no rows, not an error. */
   const run = async (key: string, write: () => Promise<{ ok: boolean }>) => {
     if (busy) return;
@@ -185,7 +190,10 @@ export function FileView({
         .update(patch)
         .eq("id", fileId)
         .select("id");
-      return { ok: !err && data.length === 1 };
+      const ok = !err && data.length === 1;
+      if (ok && patch.status)
+        void logActivity("change_stage", { applicationId: fileId, detail: patch.status });
+      return { ok };
     });
 
   const review = (doc: DocRow, status: "accepted" | "rejected") =>
@@ -257,6 +265,10 @@ export function FileView({
   // The lender copy is page 1, flat; the signing record adds the schedule and how it was signed.
   async function downloadPdf(pages: PdfPages) {
     if (!file) return;
+    void logActivity("download_pdf", {
+      applicationId: fileId,
+      detail: pages === "all" ? "signing record" : "application",
+    });
     setBusy(pages === "all" ? "record" : "pdf");
     setError("");
     try {

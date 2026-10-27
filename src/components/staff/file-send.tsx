@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Send } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/track";
 import { cn } from "@/lib/utils";
 import { stamp } from "@/lib/staff";
 import { btnPrimary, card } from "@/components/site/layout";
@@ -186,6 +187,11 @@ export function FileSend({
       const data = (await res.json().catch(() => ({}))) as { results?: Result[]; error?: string };
       if (!res.ok) throw new Error(data.error || `The sending service answered ${res.status}.`);
       setResults(data.results ?? []);
+      if (!dryRun)
+        void logActivity("send_to_funders", {
+          applicationId: fileId,
+          detail: `${(data.results ?? []).filter((r) => r.status === "sent").length} sent`,
+        });
       if (!dryRun) {
         await load();
         onSent();
