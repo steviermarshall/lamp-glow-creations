@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Menu, X } from "lucide-react";
+import { Menu, Moon, Sun, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { currentTheme, setTheme, type Theme } from "@/lib/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { SITE, telHref } from "@/lib/site";
 import { LampField } from "@/components/site/lamp-field";
@@ -111,6 +112,7 @@ export function SiteHeader({
         )}
 
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Link
             to={user ? "/account" : "/login"}
             className="hidden rounded-full px-4 py-2.5 text-[0.95rem] font-semibold text-mist transition hover:text-paper sm:inline-flex"
@@ -174,6 +176,28 @@ export function SiteHeader({
         </nav>
       )}
     </header>
+  );
+}
+
+/** Sun in dark mode, moon in light mode. Both icons render on the server; CSS shows the right one. */
+function ThemeToggle() {
+  const [theme, setThemeState] = useState<Theme | null>(null);
+  useEffect(() => setThemeState(currentTheme()), []);
+  const next: Theme = theme === "light" ? "dark" : "light";
+  return (
+    <button
+      type="button"
+      className="grid size-11 place-items-center rounded-full text-mist ring-1 ring-white/20 transition hover:text-paper"
+      aria-label={theme ? `Switch to ${next} mode` : "Switch light or dark mode"}
+      title={theme ? `Switch to ${next} mode` : undefined}
+      onClick={() => {
+        setTheme(next);
+        setThemeState(next);
+      }}
+    >
+      <Sun className="ll-when-dark size-[1.15rem]" aria-hidden="true" />
+      <Moon className="ll-when-light size-[1.15rem]" aria-hidden="true" />
+    </button>
   );
 }
 
