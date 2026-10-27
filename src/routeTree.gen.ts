@@ -20,7 +20,9 @@ import { Route as OfferCheckRouteImport } from './routes/offer-check'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as ApiActivityRouteImport } from './routes/api.activity'
 import { Route as ApiApplicationInvitesRouteImport } from './routes/api.application-invites'
+import { Route as ApiTrackRouteImport } from './routes/api.track'
 import { Route as ApplicationRepRouteImport } from './routes/application.$rep'
 import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
 import { Route as ApiApplicationNotifyRouteImport } from './routes/api.application.notify'
@@ -86,9 +88,19 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiActivityRoute = ApiActivityRouteImport.update({
+  id: '/api/activity',
+  path: '/api/activity',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiApplicationInvitesRoute = ApiApplicationInvitesRouteImport.update({
   id: '/api/application-invites',
   path: '/api/application-invites',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTrackRoute = ApiTrackRouteImport.update({
+  id: '/api/track',
+  path: '/api/track',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApplicationRepRoute = ApplicationRepRouteImport.update({
@@ -149,7 +161,9 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
+  '/api/activity': typeof ApiActivityRoute
   '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
@@ -172,7 +186,9 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
+  '/api/activity': typeof ApiActivityRoute
   '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
@@ -196,7 +212,9 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
+  '/api/activity': typeof ApiActivityRoute
   '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply_/$rep': typeof ApplyRepRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
@@ -221,7 +239,9 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/staff'
     | '/terms'
+    | '/api/activity'
     | '/api/application-invites'
+    | '/api/track'
     | '/application/$rep'
     | '/apply/$rep'
     | '/api/application/notify'
@@ -244,7 +264,9 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/staff'
     | '/terms'
+    | '/api/activity'
     | '/api/application-invites'
+    | '/api/track'
     | '/application/$rep'
     | '/apply/$rep'
     | '/api/application/notify'
@@ -267,7 +289,9 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/staff'
     | '/terms'
+    | '/api/activity'
     | '/api/application-invites'
+    | '/api/track'
     | '/application/$rep'
     | '/apply_/$rep'
     | '/api/application/notify'
@@ -291,7 +315,9 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   StaffRoute: typeof StaffRoute
   TermsRoute: typeof TermsRoute
+  ApiActivityRoute: typeof ApiActivityRoute
   ApiApplicationInvitesRoute: typeof ApiApplicationInvitesRoute
+  ApiTrackRoute: typeof ApiTrackRoute
   ApplicationRepRoute: typeof ApplicationRepRoute
   ApplyRepRoute: typeof ApplyRepRoute
   ApiApplicationNotifyRoute: typeof ApiApplicationNotifyRoute
@@ -382,11 +408,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/activity': {
+      id: '/api/activity'
+      path: '/api/activity'
+      fullPath: '/api/activity'
+      preLoaderRoute: typeof ApiActivityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/application-invites': {
       id: '/api/application-invites'
       path: '/api/application-invites'
       fullPath: '/api/application-invites'
       preLoaderRoute: typeof ApiApplicationInvitesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/track': {
+      id: '/api/track'
+      path: '/api/track'
+      fullPath: '/api/track'
+      preLoaderRoute: typeof ApiTrackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/application/$rep': {
@@ -467,7 +507,9 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   StaffRoute: StaffRoute,
   TermsRoute: TermsRoute,
+  ApiActivityRoute: ApiActivityRoute,
   ApiApplicationInvitesRoute: ApiApplicationInvitesRoute,
+  ApiTrackRoute: ApiTrackRoute,
   ApplicationRepRoute: ApplicationRepRoute,
   ApplyRepRoute: ApplyRepRoute,
   ApiApplicationNotifyRoute: ApiApplicationNotifyRoute,

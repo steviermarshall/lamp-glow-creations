@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { clearDraft, loadDraft, type Draft } from "@/lib/apply";
+import { logActivity } from "@/lib/track";
 
 /** Current Supabase session. `loading` is true until the first check finishes. */
 export function useAuth() {
@@ -18,9 +19,10 @@ export function useAuth() {
       setSession(data.session);
       setLoading(false);
     });
-    const { data } = sb.auth.onAuthStateChange((_event, s) => {
+    const { data } = sb.auth.onAuthStateChange((event, s) => {
       setSession(s);
       setLoading(false);
+      if (event === "SIGNED_IN") void logActivity("sign_in");
     });
     return () => data.subscription.unsubscribe();
   }, []);
