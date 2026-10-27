@@ -6,8 +6,12 @@ export type Theme = "dark" | "light";
 
 const KEY = "lamp.theme";
 
-/** Runs in <head> before the first paint, so a light-mode visitor never sees a dark flash. */
-export const THEME_SCRIPT = `try{if(localStorage.getItem("${KEY}")==="light")document.documentElement.dataset["theme"]="light"}catch(e){}`;
+/**
+ * Runs in <head> before the first paint, so a light-mode visitor never sees a dark flash. The
+ * application link starts light (long forms read better and feel more like paperwork there); a
+ * member's own pick, either way, always wins.
+ */
+export const THEME_SCRIPT = `try{var t=localStorage.getItem("${KEY}");if(t==="light"||(t===null&&location.pathname.indexOf("/application/")===0))document.documentElement.dataset["theme"]="light"}catch(e){}`;
 
 export function currentTheme(): Theme {
   return document.documentElement.dataset["theme"] === "light" ? "light" : "dark";
