@@ -573,9 +573,14 @@ export function FileView({
           </section>
 
           <section className={cn(card, "p-6")}>
-            <h3 className="font-display text-lg font-semibold">Answers</h3>
+            <h3 className="font-display text-lg font-semibold">
+              {QUESTIONS.some((q) => labelFor(q.key, file.answers?.[q.key]))
+                ? "Answers"
+                : "Request"}
+            </h3>
             <dl className="mt-4 space-y-3 text-sm">
-              {QUESTIONS.map((q) => (
+              {/* a file signed from a link has no quick answers; its full application is above */}
+              {QUESTIONS.filter((q) => labelFor(q.key, file.answers?.[q.key])).map((q) => (
                 <Item key={q.key} label={q.title}>
                   {labelFor(q.key, file.answers?.[q.key])}
                 </Item>

@@ -191,16 +191,17 @@ export function SignaturePad({
       ctx.restore();
       let size = 44;
       ctx.font = `italic ${size}px ${SCRIPT_FONT}`;
-      const room = r.width - 48;
+      const room = r.width - 72;
       const w = ctx.measureText(name).width;
       if (w > room) size = Math.max(18, Math.floor((size * room) / w));
       ctx.font = `italic ${size}px ${SCRIPT_FONT}`;
       ctx.fillStyle = INK;
       ctx.textBaseline = "alphabetic";
-      ctx.fillText(name, 24, r.height - 52);
+      // starts after the "×" on the signing line
+      ctx.fillText(name, 48, r.height - 52);
       strokes.current = 1;
       ink.current = MIN_INK;
-      bounds.current = { minX: 24, maxX: 24 + Math.min(room, ctx.measureText(name).width) };
+      bounds.current = { minX: 48, maxX: 48 + Math.min(room, ctx.measureText(name).width) };
       setEmpty(false);
       setFromTyped(true);
       report();

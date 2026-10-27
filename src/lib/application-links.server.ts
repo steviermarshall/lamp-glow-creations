@@ -748,7 +748,7 @@ const ERR: Record<string, [number, string]> = {
   unknown_rep: [404, "We couldn't find that rep's page."],
   too_many: [
     429,
-    "Too many applications from this network. Try again in an hour or call your rep.",
+    "We're getting a lot of applications from here right now. Try again in an hour or call your rep.",
   ],
 };
 
