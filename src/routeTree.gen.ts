@@ -21,7 +21,11 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApiActivityRouteImport } from './routes/api.activity'
+import { Route as ApiApplicationDetailsRouteImport } from './routes/api.application-details'
 import { Route as ApiApplicationInvitesRouteImport } from './routes/api.application-invites'
+import { Route as ApiDocumentsRouteImport } from './routes/api.documents'
+import { Route as ApiLeadsRouteImport } from './routes/api.leads'
+import { Route as ApiServerCheckRouteImport } from './routes/api.server-check'
 import { Route as ApiTrackRouteImport } from './routes/api.track'
 import { Route as ApplicationRepRouteImport } from './routes/application.$rep'
 import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
@@ -29,6 +33,7 @@ import { Route as ApiApplicationNotifyRouteImport } from './routes/api.applicati
 import { Route as ApiApplicationOpenRouteImport } from './routes/api.application.open'
 import { Route as ApiApplicationSubmitRouteImport } from './routes/api.application.submit'
 import { Route as ApiApplicationUploadRouteImport } from './routes/api.application.upload'
+import { Route as ApiDocumentsUploadRouteImport } from './routes/api.documents.upload'
 import { Route as ApiFundersSendRouteImport } from './routes/api.funders.send'
 import { Route as ApiGmailCallbackRouteImport } from './routes/api.gmail.callback'
 import { Route as ApiGmailConnectRouteImport } from './routes/api.gmail.connect'
@@ -93,9 +98,29 @@ const ApiActivityRoute = ApiActivityRouteImport.update({
   path: '/api/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiApplicationDetailsRoute = ApiApplicationDetailsRouteImport.update({
+  id: '/api/application-details',
+  path: '/api/application-details',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiApplicationInvitesRoute = ApiApplicationInvitesRouteImport.update({
   id: '/api/application-invites',
   path: '/api/application-invites',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDocumentsRoute = ApiDocumentsRouteImport.update({
+  id: '/api/documents',
+  path: '/api/documents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLeadsRoute = ApiLeadsRouteImport.update({
+  id: '/api/leads',
+  path: '/api/leads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiServerCheckRoute = ApiServerCheckRouteImport.update({
+  id: '/api/server-check',
+  path: '/api/server-check',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiTrackRoute = ApiTrackRouteImport.update({
@@ -133,6 +158,11 @@ const ApiApplicationUploadRoute = ApiApplicationUploadRouteImport.update({
   path: '/api/application/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDocumentsUploadRoute = ApiDocumentsUploadRouteImport.update({
+  id: '/upload',
+  path: '/upload',
+  getParentRoute: () => ApiDocumentsRoute,
+} as any)
 const ApiFundersSendRoute = ApiFundersSendRouteImport.update({
   id: '/api/funders/send',
   path: '/api/funders/send',
@@ -162,7 +192,11 @@ export interface FileRoutesByFullPath {
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/api/activity': typeof ApiActivityRoute
+  '/api/application-details': typeof ApiApplicationDetailsRoute
   '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/api/documents': typeof ApiDocumentsRouteWithChildren
+  '/api/leads': typeof ApiLeadsRoute
+  '/api/server-check': typeof ApiServerCheckRoute
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
@@ -170,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
+  '/api/documents/upload': typeof ApiDocumentsUploadRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
@@ -187,7 +222,11 @@ export interface FileRoutesByTo {
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/api/activity': typeof ApiActivityRoute
+  '/api/application-details': typeof ApiApplicationDetailsRoute
   '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/api/documents': typeof ApiDocumentsRouteWithChildren
+  '/api/leads': typeof ApiLeadsRoute
+  '/api/server-check': typeof ApiServerCheckRoute
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
@@ -195,6 +234,7 @@ export interface FileRoutesByTo {
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
+  '/api/documents/upload': typeof ApiDocumentsUploadRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
@@ -213,7 +253,11 @@ export interface FileRoutesById {
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/api/activity': typeof ApiActivityRoute
+  '/api/application-details': typeof ApiApplicationDetailsRoute
   '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/api/documents': typeof ApiDocumentsRouteWithChildren
+  '/api/leads': typeof ApiLeadsRoute
+  '/api/server-check': typeof ApiServerCheckRoute
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply_/$rep': typeof ApplyRepRoute
@@ -221,6 +265,7 @@ export interface FileRoutesById {
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
+  '/api/documents/upload': typeof ApiDocumentsUploadRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
@@ -240,7 +285,11 @@ export interface FileRouteTypes {
     | '/staff'
     | '/terms'
     | '/api/activity'
+    | '/api/application-details'
     | '/api/application-invites'
+    | '/api/documents'
+    | '/api/leads'
+    | '/api/server-check'
     | '/api/track'
     | '/application/$rep'
     | '/apply/$rep'
@@ -248,6 +297,7 @@ export interface FileRouteTypes {
     | '/api/application/open'
     | '/api/application/submit'
     | '/api/application/upload'
+    | '/api/documents/upload'
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
@@ -265,7 +315,11 @@ export interface FileRouteTypes {
     | '/staff'
     | '/terms'
     | '/api/activity'
+    | '/api/application-details'
     | '/api/application-invites'
+    | '/api/documents'
+    | '/api/leads'
+    | '/api/server-check'
     | '/api/track'
     | '/application/$rep'
     | '/apply/$rep'
@@ -273,6 +327,7 @@ export interface FileRouteTypes {
     | '/api/application/open'
     | '/api/application/submit'
     | '/api/application/upload'
+    | '/api/documents/upload'
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
@@ -290,7 +345,11 @@ export interface FileRouteTypes {
     | '/staff'
     | '/terms'
     | '/api/activity'
+    | '/api/application-details'
     | '/api/application-invites'
+    | '/api/documents'
+    | '/api/leads'
+    | '/api/server-check'
     | '/api/track'
     | '/application/$rep'
     | '/apply_/$rep'
@@ -298,6 +357,7 @@ export interface FileRouteTypes {
     | '/api/application/open'
     | '/api/application/submit'
     | '/api/application/upload'
+    | '/api/documents/upload'
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
@@ -316,7 +376,11 @@ export interface RootRouteChildren {
   StaffRoute: typeof StaffRoute
   TermsRoute: typeof TermsRoute
   ApiActivityRoute: typeof ApiActivityRoute
+  ApiApplicationDetailsRoute: typeof ApiApplicationDetailsRoute
   ApiApplicationInvitesRoute: typeof ApiApplicationInvitesRoute
+  ApiDocumentsRoute: typeof ApiDocumentsRouteWithChildren
+  ApiLeadsRoute: typeof ApiLeadsRoute
+  ApiServerCheckRoute: typeof ApiServerCheckRoute
   ApiTrackRoute: typeof ApiTrackRoute
   ApplicationRepRoute: typeof ApplicationRepRoute
   ApplyRepRoute: typeof ApplyRepRoute
@@ -415,11 +479,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/application-details': {
+      id: '/api/application-details'
+      path: '/api/application-details'
+      fullPath: '/api/application-details'
+      preLoaderRoute: typeof ApiApplicationDetailsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/application-invites': {
       id: '/api/application-invites'
       path: '/api/application-invites'
       fullPath: '/api/application-invites'
       preLoaderRoute: typeof ApiApplicationInvitesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents': {
+      id: '/api/documents'
+      path: '/api/documents'
+      fullPath: '/api/documents'
+      preLoaderRoute: typeof ApiDocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/leads': {
+      id: '/api/leads'
+      path: '/api/leads'
+      fullPath: '/api/leads'
+      preLoaderRoute: typeof ApiLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/server-check': {
+      id: '/api/server-check'
+      path: '/api/server-check'
+      fullPath: '/api/server-check'
+      preLoaderRoute: typeof ApiServerCheckRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/track': {
@@ -471,6 +563,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiApplicationUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/documents/upload': {
+      id: '/api/documents/upload'
+      path: '/upload'
+      fullPath: '/api/documents/upload'
+      preLoaderRoute: typeof ApiDocumentsUploadRouteImport
+      parentRoute: typeof ApiDocumentsRoute
+    }
     '/api/funders/send': {
       id: '/api/funders/send'
       path: '/api/funders/send'
@@ -495,6 +594,18 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface ApiDocumentsRouteChildren {
+  ApiDocumentsUploadRoute: typeof ApiDocumentsUploadRoute
+}
+
+const ApiDocumentsRouteChildren: ApiDocumentsRouteChildren = {
+  ApiDocumentsUploadRoute: ApiDocumentsUploadRoute,
+}
+
+const ApiDocumentsRouteWithChildren = ApiDocumentsRoute._addFileChildren(
+  ApiDocumentsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
@@ -508,7 +619,11 @@ const rootRouteChildren: RootRouteChildren = {
   StaffRoute: StaffRoute,
   TermsRoute: TermsRoute,
   ApiActivityRoute: ApiActivityRoute,
+  ApiApplicationDetailsRoute: ApiApplicationDetailsRoute,
   ApiApplicationInvitesRoute: ApiApplicationInvitesRoute,
+  ApiDocumentsRoute: ApiDocumentsRouteWithChildren,
+  ApiLeadsRoute: ApiLeadsRoute,
+  ApiServerCheckRoute: ApiServerCheckRoute,
   ApiTrackRoute: ApiTrackRoute,
   ApplicationRepRoute: ApplicationRepRoute,
   ApplyRepRoute: ApplyRepRoute,
