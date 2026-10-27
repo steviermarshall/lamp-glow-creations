@@ -156,6 +156,12 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
   } | null>(null);
   const key = draftKey(open && open !== "error" ? open.draft : null, repSlug);
 
+  // the application is always the light look (the head script does it on a fresh load; this
+  // covers arriving here from another page of the site)
+  useEffect(() => {
+    document.documentElement.dataset["theme"] = "light";
+  }, []);
+
   useEffect(() => {
     let live = true;
     (async () => {
@@ -409,7 +415,7 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
     window.scrollTo({ top: 0 });
   }
   return (
-    <PageShell member minimalHeader footer={false} tone="night">
+    <PageShell member themeToggle={false} minimalHeader footer={false} tone="night">
       <div ref={topRef} className="mx-auto max-w-3xl scroll-mt-24 px-4 pb-20 pt-6 sm:px-6 sm:pt-12">
         {open === null ? (
           <div className="grid place-items-center py-40">

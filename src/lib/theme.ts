@@ -8,10 +8,10 @@ const KEY = "lamp.theme";
 
 /**
  * Runs in <head> before the first paint, so a light-mode visitor never sees a dark flash. The
- * application link starts light (long forms read better and feel more like paperwork there); a
- * member's own pick, either way, always wins.
+ * application link is always light, with no switch (Stevie, 10-27: long forms read better and
+ * feel like paperwork there); elsewhere a member's own pick wins.
  */
-export const THEME_SCRIPT = `try{var t=localStorage.getItem("${KEY}");if(t==="light"||(t===null&&location.pathname.indexOf("/application/")===0))document.documentElement.dataset["theme"]="light"}catch(e){}`;
+export const THEME_SCRIPT = `try{if(location.pathname.indexOf("/application/")===0||localStorage.getItem("${KEY}")==="light")document.documentElement.dataset["theme"]="light"}catch(e){}`;
 
 export function currentTheme(): Theme {
   return document.documentElement.dataset["theme"] === "light" ? "light" : "dark";

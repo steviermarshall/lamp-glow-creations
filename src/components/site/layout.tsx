@@ -302,6 +302,7 @@ export function PageShell({
   footer = true,
   tone = "paper",
   member = false,
+  themeToggle,
 }: {
   children: ReactNode;
   minimalHeader?: boolean;
@@ -318,6 +319,8 @@ export function PageShell({
    * light/dark switch and follow it. The public site always stays in the green night look.
    */
   member?: boolean;
+  /** Show the light/dark switch. Defaults to member; the application link turns it off. */
+  themeToggle?: boolean;
 }) {
   const live = tone === "night";
   const night = live || tone === "night-calm";
@@ -347,7 +350,7 @@ export function PageShell({
       >
         Skip to content
       </a>
-      <SiteHeader minimal={minimalHeader} floating={night} themeToggle={member} />
+      <SiteHeader minimal={minimalHeader} floating={night} themeToggle={themeToggle ?? member} />
       <main id="main" className="flex-1">
         {children}
       </main>
