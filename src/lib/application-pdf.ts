@@ -11,10 +11,26 @@
 // carry SSN or date of birth. Nothing here uploads or sends: the PDF is built in the browser.
 import {
   BlendMode,
+  PDFArray,
+  PDFDict,
   PDFDocument,
+  PDFHexString,
+  PDFName,
+  PDFNumber,
+  PDFRawStream,
+  PDFStream,
   StandardFonts,
+  beginText,
+  decodePDFRawStream,
+  endText,
+  popGraphicsState,
+  pushGraphicsState,
   rgb,
   setCharacterSpacing,
+  setFillingColor,
+  setFontAndSize,
+  setTextMatrix,
+  showText,
   type Color,
   type PDFFont,
   type PDFForm,
@@ -293,10 +309,11 @@ function winAnsi(font: PDFFont): (s: string) => string {
 
 /**
  * How far a drawn signature may rise above its box, and dip below its line, like ink on paper.
- * The print-name line is only 7pt above the signature box, so a taller rise (24pt was tried)
- * writes the signature over the printed name.
+ * The print-name rule's lower edge is only 5.4pt above the signature box, so the rise stops just
+ * under it: a taller one (11pt, 24pt were tried) writes the signature over the printed name, and
+ * clipping at the rule cuts off its loops. A 3:1 signature prints 17pt tall at most.
  */
-const SIGNATURE_RISE = 11;
+const SIGNATURE_RISE = 5;
 const SIGNATURE_DROP = 3;
 /** Signatures print in a dark pen color whatever the pad drew with (the site is dark green). */
 const PEN = [22, 34, 64] as const;
@@ -849,11 +866,19 @@ const monthYear = (v: string) => {
   return m ? `${m[2]}/${m[1]}` : v;
 };
 
+// The page asks only for what applies (a line's limit, a rental's rent, the structure when they'd
+// use the equity), but a saved row can still hold an answer it hid after a change, so the
+// schedule prints each one only where it applies.
 const LIEN_COLUMNS: Column<Lien>[] = [
   { label: "Type", width: 80, value: (l) => labelOf(LIEN_TYPES, l.type) || l.type },
   { label: "Held by", width: 94, value: (l) => l.holder },
   { label: "Balance", width: 60, value: (l) => money(l.balance), right: true },
-  { label: "Line limit", width: 56, value: (l) => money(l.limit), right: true },
+  {
+    label: "Line limit",
+    width: 56,
+    value: (l) => (l.type === "heloc" ? money(l.limit) : ""),
+    right: true,
+  },
   { label: "Monthly pmt", width: 58, value: (l) => money(l.payment), right: true },
   { label: "Status", width: 74, value: (l) => labelOf(PAYMENT_STATUS, l.status) },
   { label: "Late 12 mo", width: 48, value: (l) => l.late_12m },
@@ -861,6 +886,7 @@ const LIEN_COLUMNS: Column<Lien>[] = [
 ];
 
 function propertyGrid(p: Property): Cell[][] {
+  const rented = p.use === "rental" || p.use === "owner_rental";
   const rows: Cell[][] = [
     [
       { label: "Property type", value: labelOf(PROPERTY_TYPES, p.type) },
@@ -883,8 +909,9 @@ function propertyGrid(p: Property): Cell[][] {
           p.hoa === "yes" && p.hoa_dues.trim()
             ? `Yes, ${money(p.hoa_dues)} a month`
             : answer(p.hoa),
+        span: rented ? 1 : 2,
       },
-      { label: "Monthly rent", value: money(p.rent) },
+      ...(rented ? [{ label: "Monthly rent", value: money(p.rent) }] : []),
     ],
   ];
   if (p.listed || p.condition) {
@@ -958,28 +985,31 @@ function propertyBlock(s: Sheet, p: Property, i: number) {
 
 function realEstatePart(s: Sheet, r: RealEstate) {
   const n = r.properties.length;
-  const summary: Cell[][] = [
-    [
-      {
-        label: "Owns real estate",
-        value: n ? `Yes, ${n} ${n === 1 ? "property" : "properties"}` : "Yes",
-      },
-      { label: "Would use its equity", value: answer(r.interest) },
-      { label: "Preferred structure", value: labelOf(STRUCTURES, r.structure) },
-      { label: "Funds would go to", value: labelOf(BORROWERS, r.borrower) },
-    ],
-    [
-      {
-        label: "Foreclosure, deed-in-lieu or short sale, 7 years",
-        value:
-          r.foreclosure === "yes" && r.foreclosure_year.trim()
-            ? `Yes, ${r.foreclosure_year.trim()}`
-            : answer(r.foreclosure),
-        span: 2,
-      },
-      { label: "What the funds are for", value: r.purpose_note, span: 2 },
-    ],
-  ];
+  const owns: Cell = {
+    label: "Owns real estate",
+    value: n ? `Yes, ${n} ${n === 1 ? "property" : "properties"}` : "Yes",
+  };
+  const interest: Cell = { label: "Would use its equity", value: answer(r.interest) };
+  const foreclosure: Cell = {
+    label: "Foreclosure, deed-in-lieu or short sale, 7 years",
+    value:
+      r.foreclosure === "yes" && r.foreclosure_year.trim()
+        ? `Yes, ${r.foreclosure_year.trim()}`
+        : answer(r.foreclosure),
+    span: 2,
+  };
+  const summary: Cell[][] =
+    r.interest === "yes" || r.interest === "maybe"
+      ? [
+          [
+            owns,
+            interest,
+            { label: "Preferred structure", value: labelOf(STRUCTURES, r.structure) },
+            { label: "Funds would go to", value: labelOf(BORROWERS, r.borrower) },
+          ],
+          [foreclosure, { label: "What the funds are for", value: r.purpose_note, span: 2 }],
+        ]
+      : [[owns, interest, foreclosure]];
   section(s, "Real estate schedule", gridHeight(s, summary));
   grid(s, summary);
   s.y += 12;
@@ -1211,6 +1241,127 @@ function addSchedulePages(
   });
 }
 
+// ---------- Page 1's balances tab ----------
+
+/**
+ * The template's balances tab reads "CURRENT LOAN / CASH ADVANCE BALANCES", and merchants get
+ * this PDF, so the tab is drawn again over it, wider, with the new label. The label is set in
+ * the template's own Inter Bold (its glyphs are on the page as Type3 fonts) at the other tabs'
+ * size, tracking and kerning, so it reads as printed; Helvetica Bold stands in if those glyphs
+ * are missing. Measured from the template (8px of its padding is 4.811pt); drop this once the
+ * template itself is re-exported with the new label.
+ */
+const BALANCES_TAB = {
+  label: "CURRENT FUNDING / CASH ADVANCE BALANCES",
+  left: 39.75,
+  top: 397.297,
+  height: 12.028,
+  radius: 1.8,
+  pad: 4.811,
+  baseline: 405.12,
+  size: 6.411,
+  /** In em, after every letter. */
+  tracking: 0.14,
+};
+/** Inter Bold's kerning for the label's pairs, in 1/2048 em, as the template sets them. */
+const TAB_KERN: Record<string, number> = { CA: -56, AS: -31, DV: -82, VA: -162 };
+/** The template's own tab fill: FOREST as it writes it, which some viewers round one shade off. */
+const TAB_FILL = rgb(0.0549, 0.2314, 0.1725);
+
+type Glyph = { font: PDFName; code: number; advance: number };
+
+/** The template's Inter Bold glyphs by character, from its Type3 fonts (one per glyph range). */
+function interBoldGlyphs(page: PDFPage): Map<string, Glyph> {
+  const glyphs = new Map<string, Glyph>();
+  const fonts = page.node.Resources()?.lookupMaybe(PDFName.of("Font"), PDFDict);
+  for (const [name] of fonts?.entries() ?? []) {
+    try {
+      const font = fonts?.lookupMaybe(name, PDFDict);
+      if (!font || font.get(PDFName.of("Subtype")) !== PDFName.of("Type3")) continue;
+      const desc = font.lookupMaybe(PDFName.of("FontDescriptor"), PDFDict);
+      const fontName = desc?.lookupMaybe(PDFName.of("FontName"), PDFName)?.decodeText() ?? "";
+      if (!fontName.endsWith("Inter-Bold")) continue;
+      const first = font.lookupMaybe(PDFName.of("FirstChar"), PDFNumber)?.asNumber() ?? 0;
+      const widths = font.lookupMaybe(PDFName.of("Widths"), PDFArray);
+      const matrix = font.lookupMaybe(PDFName.of("FontMatrix"), PDFArray);
+      const scale = matrix?.lookupMaybe(0, PDFNumber)?.asNumber();
+      const toUnicode = font.lookupMaybe(PDFName.of("ToUnicode"), PDFStream);
+      if (!widths || !scale || !(toUnicode instanceof PDFRawStream)) continue;
+      const add = (code: number, unicode: number) => {
+        const width = widths.lookupMaybe(code - first, PDFNumber)?.asNumber();
+        const ch = String.fromCodePoint(unicode);
+        if (width && !glyphs.has(ch)) glyphs.set(ch, { font: name, code, advance: width * scale });
+      };
+      const cmap = new TextDecoder().decode(decodePDFRawStream(toUnicode).decode());
+      for (const [, body = ""] of cmap.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) {
+        for (const [, code = "", to = ""] of body.matchAll(/<(\w+)>\s*<(\w{4})>/g)) {
+          add(parseInt(code, 16), parseInt(to, 16));
+        }
+      }
+      for (const [, body = ""] of cmap.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
+        for (const [, lo = "", hi = "", to = ""] of body.matchAll(
+          /<(\w+)>\s*<(\w+)>\s*<(\w{4})>/g,
+        )) {
+          for (let c = parseInt(lo, 16); c <= parseInt(hi, 16); c++) {
+            add(c, parseInt(to, 16) + c - parseInt(lo, 16));
+          }
+        }
+      }
+    } catch {
+      // a font we can't read is one we don't use
+    }
+  }
+  return glyphs;
+}
+
+async function relabelBalancesTab(doc: PDFDocument, page: PDFPage) {
+  const t = BALANCES_TAB;
+  const chars = [...t.label];
+  const glyphs = interBoldGlyphs(page);
+  const helvetica = chars.every((c) => glyphs.has(c))
+    ? null
+    : await doc.embedFont(StandardFonts.HelveticaBold);
+  // each letter's pen position from the label's start
+  const at: number[] = [];
+  let x = 0;
+  chars.forEach((c, i) => {
+    at.push(x);
+    const advance = helvetica ? helvetica.widthOfTextAtSize(c, 1) : glyphs.get(c)!.advance;
+    const kern = helvetica ? 0 : (TAB_KERN[c + (chars[i + 1] ?? "")] ?? 0) / 2048;
+    x += (advance + t.tracking + kern) * t.size;
+  });
+  const w = x + 2 * t.pad;
+  const { radius: r, height: h } = t;
+  page.drawSvgPath(`M0 ${h} L0 ${r} Q0 0 ${r} 0 L${w - r} 0 Q${w} 0 ${w} ${r} L${w} ${h} Z`, {
+    x: t.left,
+    y: PAGE_HEIGHT - t.top,
+    color: TAB_FILL,
+  });
+  const left = t.left + t.pad;
+  const y = PAGE_HEIGHT - t.baseline;
+  if (helvetica) {
+    page.pushOperators(setCharacterSpacing(t.tracking * t.size));
+    page.drawText(t.label, { x: left, y, size: t.size, font: helvetica, color: WHITE });
+    page.pushOperators(setCharacterSpacing(0));
+    return;
+  }
+  page.pushOperators(
+    pushGraphicsState(),
+    setFillingColor(WHITE),
+    beginText(),
+    ...chars.flatMap((c, i) => {
+      const g = glyphs.get(c)!;
+      return [
+        setFontAndSize(g.font, t.size),
+        setTextMatrix(1, 0, 0, 1, left + at[i]!, y),
+        showText(PDFHexString.of(g.code.toString(16).padStart(2, "0"))),
+      ];
+    }),
+    endText(),
+    popGraphicsState(),
+  );
+}
+
 /** Builds the fillable, prefilled application from the template's bytes. */
 export async function buildApplicationPdf(
   template: ArrayBuffer | Uint8Array,
@@ -1218,6 +1369,7 @@ export async function buildApplicationPdf(
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.load(template);
   const page = doc.getPage(0);
+  await relabelBalancesTab(doc, page);
   const form = doc.getForm();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const clean = winAnsi(font);

@@ -20,10 +20,14 @@
 --     the file, the signed application and the timeline. The application_details guard lets a
 --     row with no account be signed only while that function is running.
 --   * claim_applications() moves those files into the merchant's account once they sign in with
---     a confirmed email. Two things can prove the file is theirs:
---       - the claim token their browser kept when they submitted, or
---       - Lamp's server emailed the link to exactly that address (staff never see that token).
---     Staff accounts never take merchant files.
+--     a confirmed email. Three things can prove the file is theirs:
+--       - the claim token their browser kept when they submitted,
+--       - Lamp's server emailed the link to exactly that address and the file was signed through
+--         that link (staff never see that token), or
+--       - it is the email address typed on the signed application.
+--     Staff accounts never take merchant files, and nobody signed in, admins included, can write
+--     the columns a claim reads (invite_id, claim_token_hash, claim_email).
+--   * Automatic funder sends wait until a merchant account owns the file.
 --   * application_details gains:
 --       - the real estate schedule,
 --       - the drawn signatures (owner and second owner),
@@ -45,6 +49,10 @@ alter table public.applications
 
 create index if not exists applications_unclaimed_idx
   on public.applications (claim_email) where user_id is null;
+-- the per-rep cap on public links in submit_link_application reads this
+create index if not exists applications_public_link_idx
+  on public.applications (source_rep_slug, created_at)
+  where invite_id is null and utm ->> 'source' = 'application_link';
 
 -- ---------- 2. Real estate, drawn signatures, how it was signed ----------
 alter table public.application_details
@@ -55,9 +63,11 @@ alter table public.application_details
   add column if not exists signer_ip text,
   add column if not exists signed_via text;
 
--- the per-network limit in submit_link_application reads this
-create index if not exists application_details_link_ip_idx
-  on public.application_details (signer_ip, signed_at) where signed_via = 'link';
+-- the per-network limit in submit_link_application reads the last hour of link signings (it
+-- compares networks, not exact addresses, so an index on signer_ip can't serve it)
+drop index if exists public.application_details_link_ip_idx;
+create index if not exists application_details_link_signed_idx
+  on public.application_details (signed_at) where signed_via = 'link';
 
 do $$
 begin
@@ -209,6 +219,10 @@ begin
     new.signed_at := now();
     new.signed_name := trim(new.signed_name);
     new.signed_name_2 := nullif(trim(coalesce(new.signed_name_2, '')), '');
+    -- a second signer only while the application has a second owner
+    if jsonb_array_length(new.owners) < 2 then
+      new.signed_name_2 := null;
+    end if;
     if new.signed_name_2 is null then
       new.signature_image_2 := null;
     end if;
@@ -247,6 +261,33 @@ create trigger application_details_guard
   for each row execute function public.application_details_guard();
 
 -- ---------- 5. Submitting from a link (the server's service role only) ----------
+-- The network a link signing came from, for the per-network limit: an IPv4 address as it is, an
+-- IPv6 address by its /64, which one subscriber can rotate through freely. An IPv4 address
+-- written as IPv6 (::ffff:a.b.c.d) stays whole, and anything that doesn't parse counts as itself.
+create or replace function public._ip_key(_ip text)
+returns text
+language plpgsql immutable
+set search_path = public
+as $$
+declare
+  a inet;
+begin
+  if position(':' in _ip) = 0 then
+    return _ip;
+  end if;
+  begin
+    a := _ip::inet;
+    if a << '::ffff:0.0.0.0/96'::inet then
+      return host(a);
+    end if;
+    return host(network(set_masklen(a, 64)));
+  exception when others then
+    return _ip;
+  end;
+end;
+$$;
+revoke all on function public._ip_key(text) from public, anon, authenticated;
+
 create or replace function public.submit_link_application(
   _token_hash text,
   _rep_slug text,
@@ -275,6 +316,9 @@ declare
   biz jsonb := coalesce(_details -> 'business', '{}'::jsonb);
   recent int;
   amt numeric;
+  ip_key text;
+  s_at timestamptz;
+  s_ip text;
 begin
   if _claim_token_hash is null or _claim_token_hash !~ '^[0-9a-f]{64}$' then
     raise exception 'bad_request: claim token' using errcode = 'invalid_parameter_value';
@@ -292,10 +336,14 @@ begin
     raise exception 'bad_request: signature' using errcode = 'invalid_parameter_value';
   end if;
 
-  -- the same network can't sign more than a handful of applications an hour
+  -- the same network can't sign more than a handful of applications an hour; the lock makes
+  -- parallel requests from one network take turns, so each one counts the rows before it
   if _signer_ip is not null then
+    ip_key := public._ip_key(left(_signer_ip, 64));
+    perform pg_advisory_xact_lock(hashtext('link_ip:' || ip_key));
     select count(*) into recent from public.application_details
-    where signer_ip = _signer_ip and signed_via = 'link' and signed_at > now() - interval '1 hour';
+    where signed_via = 'link' and signed_at > now() - interval '1 hour'
+      and public._ip_key(signer_ip) = ip_key;
     if recent >= 6 then
       raise exception 'too_many' using errcode = 'P0001';
     end if;
@@ -320,6 +368,15 @@ begin
     select slug into rep from public.reps where slug = lower(trim(coalesce(_rep_slug, ''))) and active;
     if rep is null then
       raise exception 'unknown_rep' using errcode = 'P0001';
+    end if;
+    -- a rep's public link takes at most 20 applications an hour, however many networks they
+    -- come from, so a flood can't bury the rep's board or use up the mailbox that tells them
+    perform pg_advisory_xact_lock(hashtext('link_rep:' || rep));
+    select count(*) into recent from public.applications
+    where source_rep_slug = rep and invite_id is null and utm ->> 'source' = 'application_link'
+      and created_at > now() - interval '1 hour';
+    if recent >= 20 then
+      raise exception 'too_many' using errcode = 'P0001';
     end if;
   end if;
   select name into rep_name from public.reps where slug = rep;
@@ -371,7 +428,9 @@ begin
     coalesce(_details -> 'real_estate', '{}'::jsonb),
     _signed_name, _signature_image, _signed_name_2, _signature_image_2,
     _consent_text, _consent_version, left(_signer_agent, 300), left(_signer_ip, 64)
-  );
+  )
+  -- what the guard stamped, for the signature record on the signed PDF
+  returning signed_at, signer_ip into s_at, s_ip;
   perform set_config('lamp.link_signing', 'off', true);
 
   insert into public.events (application_id, kind, body, payload)
@@ -398,7 +457,7 @@ begin
   end if;
 
   return jsonb_build_object('application_id', app_id, 'rep_slug', rep, 'rep_name', rep_name,
-                            'invite_id', inv.id);
+                            'invite_id', inv.id, 'signed_at', s_at, 'signer_ip', s_ip);
 end;
 $$;
 revoke all on function public.submit_link_application(text, text, jsonb, text, text, text, text, text, text, text, text, text, text)
@@ -440,15 +499,30 @@ begin
         from unnest(coalesce(_tokens, '{}')) as t
         where length(t) between 20 and 128
       )
-      or (i.channel = 'email' and i.email = em)
+      -- Lamp emailed the link to this address, and this file was signed through that link
+      or (i.channel = 'email' and i.email = em and i.application_id = a.id
+          and i.submitted_at is not null)
+      -- the address typed on the signed application, now confirmed by this sign-in (accepted
+      -- trade-off: an address mistyped as someone else's real one hands that person the file)
+      or a.claim_email = em
     );
   if cardinality(ids) = 0 then
     return 0;
   end if;
 
+  -- from here on, only the files this call actually moved: a sign-in running at the same moment
+  -- may have taken one of them first
   perform set_config('lamp.claiming', 'on', true);
-  update public.applications set user_id = uid, claim_token_hash = null
-   where id = any (ids) and user_id is null;
+  with moved as (
+    update public.applications set user_id = uid, claim_token_hash = null
+     where id = any (ids) and user_id is null
+    returning id
+  )
+  select coalesce(array_agg(moved.id), '{}') into ids from moved;
+  if cardinality(ids) = 0 then
+    perform set_config('lamp.claiming', 'off', true);
+    return 0;
+  end if;
   update public.application_details set user_id = uid
    where application_id = any (ids) and user_id is null;
   update public.documents set user_id = uid
@@ -571,3 +645,98 @@ drop policy if exists "Users read own indexed files" on storage.objects;
 create policy "Users read own indexed files" on storage.objects
   for select to authenticated
   using (bucket_id = 'documents' and public.storage_object_is_mine(name));
+
+-- ---------- 9. The claim columns are the server's ----------
+-- claim_applications decides who owns a file from invite_id, claim_token_hash and claim_email, so
+-- nobody signed in may write them, admins included; no screen does. current_user, not the role
+-- setting, as in applications_before_update: claim_applications runs as its owner and the
+-- server's service role is not 'authenticated', so both pass.
+create or replace function public.applications_claim_fields_guard()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if current_user = 'authenticated'
+     and (new.invite_id is distinct from old.invite_id
+          or new.claim_token_hash is distinct from old.claim_token_hash
+          or new.claim_email is distinct from old.claim_email) then
+    raise exception 'claim fields are set by the server only'
+      using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.applications_claim_fields_guard() from public, anon, authenticated;
+
+drop trigger if exists applications_claim_fields_guard on public.applications;
+create trigger applications_claim_fields_guard
+  before update on public.applications
+  for each row execute function public.applications_claim_fields_guard();
+
+-- ---------- 10. Automatic funder sends wait for a merchant account ----------
+-- As in 20261024120000_funder_send.sql, plus one rule: a file signed from a link, which anyone
+-- can submit with no account, sends nothing on its own until claim_applications has moved it
+-- into a merchant's account. Files filed from an account already needed a verified email.
+create or replace function public.queue_auto_send()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_url text;
+  v_secret text;
+  v_app public.applications;
+begin
+  if new.kind not in ('funder_application', 'bank_statement') or new.status = 'rejected' then
+    return new;
+  end if;
+  select * into v_app from public.applications where id = new.application_id;
+  if v_app.id is null or v_app.status in ('declined', 'withdrawn', 'closed', 'funded') then
+    return new;
+  end if;
+  if v_app.user_id is null then
+    return new;
+  end if;
+  if not public.funder_package_ready(new.application_id) then
+    return new;
+  end if;
+  if not exists (
+    select 1 from public._funder_matches(new.application_id) m
+    where m.auto_send and m.eligible and not m.already_sent
+  ) then
+    return new;
+  end if;
+
+  begin
+    execute $q$select decrypted_secret from vault.decrypted_secrets where name = 'funder_send_url'$q$ into v_url;
+    execute $q$select decrypted_secret from vault.decrypted_secrets where name = 'funder_send_secret'$q$ into v_secret;
+  exception when others then
+    v_url := null;
+  end;
+  if v_url is null or v_secret is null then
+    return new;
+  end if;
+
+  begin
+    execute 'select net.http_post(url := $1, headers := $2, body := $3)'
+      using v_url,
+            jsonb_build_object('Content-Type', 'application/json', 'x-funder-send-secret', v_secret),
+            jsonb_build_object('application_id', new.application_id, 'mode', 'auto');
+  exception when others then
+    insert into public.events (application_id, kind, body, payload)
+    values (new.application_id, 'system', 'Automatic send to funders could not be queued.',
+            jsonb_build_object('error', sqlerrm));
+  end;
+  return new;
+exception when others then
+  return new;
+end;
+$$;
+revoke all on function public.queue_auto_send() from public, anon, authenticated;
+
+drop trigger if exists documents_queue_auto_send on public.documents;
+create trigger documents_queue_auto_send
+  after insert or update of status on public.documents
+  for each row execute function public.queue_auto_send();

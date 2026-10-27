@@ -15,7 +15,7 @@ import {
   SITE_URL,
   SUPABASE_URL,
 } from "@/lib/funder-send.server";
-import { b64url, safeFilename, sameSecret } from "@/lib/funder-send";
+import { b64url, sameSecret } from "@/lib/funder-send";
 import {
   CONSENT_TEXT,
   CONSENT_VERSION,
@@ -46,13 +46,17 @@ import {
   type Recipient,
   type SendRequest,
   type SendResult,
+  type SubmitResponse,
 } from "@/lib/application-links";
 import { SITE } from "@/lib/site";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SLUG = /^[a-z0-9][a-z0-9-]{1,31}$/;
 const PNG = /^data:image\/png;base64,[A-Za-z0-9+/]+=*$/;
-const MAX_SUBMIT_BYTES = 12 * 1024 * 1024;
+const MAX_OPEN_BYTES = 16 * 1024;
+/** Two drawn signatures (400 KB each at most) and the answers; the signed PDF comes by upload. */
+const MAX_SUBMIT_BYTES = 2 * 1024 * 1024;
+const SIGNED = "That application is already signed; open the file instead.";
 
 type Svc = ReturnType<typeof service>;
 
@@ -60,6 +64,97 @@ const notReady = () =>
   !SUPABASE_URL() || !SERVICE_KEY()
     ? json(500, { error: "The server is missing its database settings." })
     : null;
+
+/** A lookup failed (not "there's none"): the caller can try again. */
+const tryAgain = () => json(503, { error: "Try again in a moment." });
+
+/**
+ * The request body, read up to max bytes; null when it's larger. Content-Length is only a hint (a
+ * chunked or HTTP/2 request can leave it out), so the stream itself is counted.
+ */
+export async function readCapped(
+  request: Request,
+  max: number,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  const len = request.headers.get("content-length");
+  if (len !== null && Number(len) > max) return null;
+  const reader = request.body?.getReader();
+  if (!reader) return new Uint8Array();
+  const parts: Uint8Array[] = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.byteLength;
+    if (n > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    parts.push(value);
+  }
+  const out = new Uint8Array(n);
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.byteLength;
+  }
+  return out;
+}
+
+/** A JSON object body of at most max bytes, or the 413/400 response to send back. */
+async function readJson<T extends object>(request: Request, max: number): Promise<T | Response> {
+  let buf: Uint8Array | null;
+  try {
+    buf = await readCapped(request, max);
+  } catch {
+    return json(400, { error: "Send JSON." });
+  }
+  if (!buf) return json(413, { error: "That's too large to send." });
+  try {
+    const v: unknown = JSON.parse(new TextDecoder().decode(buf));
+    if (v && typeof v === "object" && !Array.isArray(v)) return v as T;
+  } catch {
+    /* not JSON */
+  }
+  return json(400, { error: "Send JSON." });
+}
+
+/**
+ * Storage key for a file added from the link. Only letters, digits, "_", "." and "-" survive: '#'
+ * or '?' would cut the key short in Storage's URL, and '%', '[', ']' or '~' fail its key check.
+ * The documents row keeps the real name for display.
+ */
+export const linkUploadPath = (appId: string, name: string, now = Date.now()) =>
+  `link/${appId}/${now}-${name.replace(/[^\w.-]+/g, "_").slice(-80) || "file"}`;
+
+/**
+ * An upload's type: what the browser said, or by the name when it said nothing useful (a File
+ * with no type arrives in a form as application/octet-stream).
+ */
+export function uploadType(file: { type: string; name: string }): string {
+  const said = file.type === "application/octet-stream" ? "" : file.type.toLowerCase();
+  if (said) return said;
+  if (/\.pdf$/i.test(file.name)) return "application/pdf";
+  if (/\.heic$/i.test(file.name)) return "image/heic";
+  return "";
+}
+
+const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46, 0x2d]; // "%PDF-"
+
+/** A PDF's header, which readers accept anywhere in the first 1 KB. */
+export function looksLikePdf(bytes: Uint8Array): boolean {
+  const last = Math.min(bytes.length, 1024) - PDF_MAGIC.length;
+  for (let i = 0; i <= last; i++) {
+    if (PDF_MAGIC.every((b, j) => bytes[i + j] === b)) return true;
+  }
+  return false;
+}
+
+/** Storage's "that key already exists" (older servers send it as statusCode "409" in a 400). */
+const isDuplicate = (e: unknown) => {
+  const x = e as { status?: number; statusCode?: string } | null;
+  return x?.status === 409 || x?.statusCode === "409";
+};
 
 /** The visitor's address as the edge saw it. */
 function clientIp(request: Request): string | null {
@@ -72,6 +167,7 @@ function clientIp(request: Request): string | null {
   return ip.trim().slice(0, 64) || null;
 }
 
+/** Never throws: a failure comes back as { error } for the caller to record, and a batch goes on. */
 async function gmailSend(
   access: string,
   msg: {
@@ -96,13 +192,18 @@ async function gmailSend(
   } catch {
     return { error: "bad address" };
   }
-  const res = await fetch(GMAIL_SEND_URL(), {
-    method: "POST",
-    headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ raw: b64url(raw) }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(GMAIL_SEND_URL(), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ raw: b64url(raw) }),
+    });
+  } catch {
+    return { error: "Couldn't reach Gmail" };
+  }
   if (!res.ok) return { error: `Gmail ${res.status}` };
-  const out = (await res.json()) as { id?: string };
+  const out = (await res.json().catch(() => ({}))) as { id?: string };
   return { id: out.id ?? "" };
 }
 
@@ -114,12 +215,14 @@ type Rep = {
   active: boolean;
 };
 
+/** The rep, or null when there's none. Throws when the lookup itself failed. */
 async function repBySlug(svc: Svc, slug: string): Promise<Rep | null> {
   const r = await svc
     .from("reps")
     .select("slug,name,title,user_id,active")
     .eq("slug", slug)
     .maybeSingle();
+  if (r.error) throw r.error;
   return (r.data as Rep | null) ?? null;
 }
 
@@ -144,6 +247,38 @@ async function staffEmails(svc: Svc): Promise<Set<string>> {
 
 const isLampAddress = (email: string, staff: Set<string>) =>
   staff.has(email) || email.endsWith("@getlamp.app");
+
+/**
+ * Whether a lead with this email or phone is marked do not contact, on any rep's list. Null when
+ * the list couldn't be read: callers refuse rather than guess.
+ */
+async function doNotContact(svc: Svc, email: string, phone: string): Promise<boolean | null> {
+  const digits = phone.replace(/\D/g, "").slice(-10);
+  const [byEmail, byPhone] = await Promise.all([
+    email
+      ? svc
+          .from("engine_leads")
+          .select("id")
+          .eq("status", "do_not_call")
+          .ilike("email", email.replace(/[\\%_]/g, "\\$&"))
+          .limit(1)
+      : null,
+    // stored phones come in any format: narrow by the last four digits, then compare ten
+    digits.length >= 10
+      ? svc
+          .from("engine_leads")
+          .select("phone")
+          .eq("status", "do_not_call")
+          .like("phone", `%${digits.slice(-4)}`)
+          .limit(500)
+      : null,
+  ]);
+  if (byEmail?.error || byPhone?.error) return null;
+  if ((byEmail?.data ?? []).length) return true;
+  return ((byPhone?.data ?? []) as { phone: string | null }[]).some(
+    (l) => (l.phone ?? "").replace(/\D/g, "").slice(-10) === digits,
+  );
+}
 
 // ---------- POST /api/application-invites (staff) ----------
 
@@ -180,27 +315,34 @@ export async function applicationInvites(request: Request): Promise<Response> {
     // the caller's own client: a rep only finds links sent for them
     const found = await who.client
       .from("application_invites" as never)
-      .select("id,rep_slug,email,first_name,business_name,submitted_at,note")
+      .select("id,rep_slug,email,phone,first_name,business_name,submitted_at,note,engine_lead_id")
       .eq("id", body.invite_id)
       .maybeSingle();
     const inv = found.data as {
       id: string;
       rep_slug: string;
       email: string | null;
+      phone: string | null;
       first_name: string | null;
       business_name: string | null;
       submitted_at: string | null;
       note: string | null;
+      engine_lead_id: number | null;
     } | null;
     if (!inv) return json(404, { error: "That link isn't one of yours." });
-    if (inv.submitted_at)
-      return json(409, { error: "That application is already signed; open the file instead." });
+    if (inv.submitted_at) return json(409, { error: SIGNED });
 
+    // both writes skip a link signed since the read above (Postgres re-checks the condition
+    // after waiting on submit's row lock), so a signed invite never changes channel or address
     if (body.action === "cancel") {
-      await svc
+      const stop = await svc
         .from("application_invites")
         .update({ cancelled_at: new Date().toISOString() })
-        .eq("id", inv.id);
+        .eq("id", inv.id)
+        .is("submitted_at", null)
+        .select("id");
+      if (stop.error) return json(500, { error: "Couldn't stop the link." });
+      if (!stop.data?.length) return json(409, { error: SIGNED });
       const out: SendResult = { index: 0, status: "cancelled", detail: "Link stopped." };
       return json(200, { results: [out] });
     }
@@ -208,7 +350,19 @@ export async function applicationInvites(request: Request): Promise<Response> {
     const channel: Channel = body.channel === "email" ? "email" : "link";
     if (channel === "email" && !inv.email)
       return json(400, { error: "That link has no email address; copy it instead." });
-    const rep = await repBySlug(svc, inv.rep_slug);
+    // do not contact: the lead this went to, or anyone on a lead list with the same email or phone
+    const [lead, dnc] = await Promise.all([
+      inv.engine_lead_id
+        ? svc.from("engine_leads").select("status").eq("id", inv.engine_lead_id).maybeSingle()
+        : null,
+      doNotContact(svc, inv.email ?? "", inv.phone ?? ""),
+    ]);
+    if (lead?.error || dnc === null)
+      return json(503, { error: "Couldn't check the do-not-contact list. Try again." });
+    if (dnc || (lead?.data as { status: string } | null)?.status === "do_not_call")
+      return json(409, { error: "Marked do not contact." });
+    const rep = await repBySlug(svc, inv.rep_slug).catch(() => undefined);
+    if (rep === undefined) return tryAgain();
     if (!rep) return json(409, { error: "That rep is gone." });
     const token = newToken();
     const note = typeof body.note === "string" ? body.note.slice(0, MAX_NOTE) : (inv.note ?? "");
@@ -224,8 +378,11 @@ export async function applicationInvites(request: Request): Promise<Response> {
         last_error: null,
         sent_by: who.userId,
       })
-      .eq("id", inv.id);
+      .eq("id", inv.id)
+      .is("submitted_at", null)
+      .select("id");
     if (upd.error) return json(500, { error: "Couldn't make a new link." });
+    if (!upd.data?.length) return json(409, { error: SIGNED });
     const url = applicationUrl(SITE_URL(), rep.slug, token);
     if (channel === "link") {
       return json(200, {
@@ -240,7 +397,7 @@ export async function applicationInvites(request: Request): Promise<Response> {
         ],
       });
     }
-    const access = await gmailAccessToken(svc);
+    const access = await gmailAccessToken(svc).catch(() => ({ error: "Couldn't reach Google." }));
     if ("error" in access) {
       await svc
         .from("application_invites")
@@ -295,7 +452,8 @@ export async function applicationInvites(request: Request): Promise<Response> {
   }
   if (!repSlug)
     return json(400, { error: "Your account has no rep link yet. Ask an admin to link one." });
-  const rep = await repBySlug(svc, repSlug);
+  const rep = await repBySlug(svc, repSlug).catch(() => undefined);
+  if (rep === undefined) return tryAgain();
   if (!rep || !rep.active) return json(400, { error: "That rep isn't active." });
 
   // the caller's own client, so a rep only reaches leads assigned to them
@@ -365,6 +523,15 @@ export async function applicationInvites(request: Request): Promise<Response> {
       results.push({ index, status: "skipped", detail: "That's a Lamp team address." });
       continue;
     }
+    const dnc = await doNotContact(svc, email, phone);
+    if (dnc !== false) {
+      results.push({
+        index,
+        status: "skipped",
+        detail: dnc ? "Marked do not contact." : "Couldn't check the do-not-contact list.",
+      });
+      continue;
+    }
     if (channel === "email") {
       const dup = await svc
         .from("application_invites")
@@ -422,7 +589,7 @@ export async function applicationInvites(request: Request): Promise<Response> {
       continue;
     }
 
-    access ??= await gmailAccessToken(svc);
+    access ??= await gmailAccessToken(svc).catch(() => ({ error: "Couldn't reach Google." }));
     if ("error" in access) {
       await svc
         .from("application_invites")
@@ -482,6 +649,7 @@ type InviteRow = {
   expires_at: string;
 };
 
+/** The invite, or null when the token matches none. Throws when the lookup itself failed. */
 async function inviteByToken(svc: Svc, token: string): Promise<InviteRow | null> {
   const r = await svc
     .from("application_invites")
@@ -490,33 +658,37 @@ async function inviteByToken(svc: Svc, token: string): Promise<InviteRow | null>
     )
     .eq("token_hash", await hashToken(token))
     .maybeSingle();
+  if (r.error) throw r.error;
   return (r.data as InviteRow | null) ?? null;
 }
 
 /**
  * What the application page needs before the merchant starts: who sent it and what they already
- * know. A personal link also records that it was opened (and, with event "start", started).
+ * know. A personal link also records that it was opened (and, with event "start", started). A
+ * lookup that fails is a 503, so the page offers a retry instead of calling a good link dead.
  */
 export async function openApplication(request: Request): Promise<Response> {
   const nr = notReady();
   if (nr) return nr;
-  let body: { token?: unknown; rep?: unknown; event?: unknown };
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return json(400, { error: "Send JSON." });
-  }
+  const body = await readJson<{ token?: unknown; rep?: unknown; event?: unknown }>(
+    request,
+    MAX_OPEN_BYTES,
+  );
+  if (body instanceof Response) return body;
   const svc = service();
   const none = (state: OpenResponse["state"]): Response =>
-    json(200, { state, rep: null, prefill: null } satisfies OpenResponse);
+    json(200, { state, draft: null, rep: null, prefill: null } satisfies OpenResponse);
   const repOut = (r: Rep) => ({ slug: r.slug, name: r.name, title: r.title });
 
   if (body.token != null) {
     if (!isToken(body.token)) return none("not_found");
-    const inv = await inviteByToken(svc, body.token);
+    const inv = await inviteByToken(svc, body.token).catch(() => undefined);
+    if (inv === undefined) return tryAgain();
     if (!inv) return none("not_found");
-    const rep = await repBySlug(svc, inv.rep_slug);
-    const base = { rep: rep ? repOut(rep) : null };
+    const rep = await repBySlug(svc, inv.rep_slug).catch(() => undefined);
+    if (rep === undefined) return tryAgain();
+    // the invite id, not the token, keys the page's saved draft: a resent link keeps progress
+    const base = { draft: inv.id, rep: rep ? repOut(rep) : null };
     if (inv.submitted_at) return json(200, { ...base, state: "signed", prefill: null });
     if (inv.cancelled_at) return json(200, { ...base, state: "cancelled", prefill: null });
     if (Date.parse(inv.expires_at) < Date.now())
@@ -545,9 +717,15 @@ export async function openApplication(request: Request): Promise<Response> {
 
   const slug = typeof body.rep === "string" ? body.rep.toLowerCase() : "";
   if (!SLUG.test(slug)) return none("unknown_rep");
-  const rep = await repBySlug(svc, slug);
+  const rep = await repBySlug(svc, slug).catch(() => undefined);
+  if (rep === undefined) return tryAgain();
   if (!rep || !rep.active) return none("unknown_rep");
-  return json(200, { state: "open", rep: repOut(rep), prefill: null } satisfies OpenResponse);
+  return json(200, {
+    state: "open",
+    draft: null,
+    rep: repOut(rep),
+    prefill: null,
+  } satisfies OpenResponse);
 }
 
 // ---------- POST /api/application/submit (anyone with the link) ----------
@@ -560,7 +738,6 @@ type SubmitBody = {
   consent_version?: unknown;
   /** honeypot: a field people never see */
   company_fax?: unknown;
-  pdf?: unknown;
 };
 
 const ERR: Record<string, [number, string]> = {
@@ -578,20 +755,15 @@ const ERR: Record<string, [number, string]> = {
 /**
  * The merchant signs and submits. Everything is checked again here (the page's checks are for
  * the merchant's convenience), the file is created in one transaction by
- * submit_link_application, the signed PDF the page built is stored with the file, and the rep
- * gets an email. The response carries the claim token the browser keeps for the account step.
+ * submit_link_application, and the rep gets an email. The response carries the claim token the
+ * browser keeps for the account step, and the time and address the database recorded: the page
+ * builds the signed PDF from those and uploads it (kind funder_application).
  */
 export async function submitApplication(request: Request): Promise<Response> {
   const nr = notReady();
   if (nr) return nr;
-  const size = Number(request.headers.get("content-length") ?? "0");
-  if (size > MAX_SUBMIT_BYTES) return json(413, { error: "That's too large to send." });
-  let body: SubmitBody;
-  try {
-    body = (await request.json()) as SubmitBody;
-  } catch {
-    return json(400, { error: "Send JSON." });
-  }
+  const body = await readJson<SubmitBody>(request, MAX_SUBMIT_BYTES);
+  if (body instanceof Response) return body;
   if (body.company_fax) return json(400, { error: "Couldn't submit." });
   if (body.consent_version !== CONSENT_VERSION)
     return json(409, { error: "The application was updated. Refresh the page and sign again." });
@@ -648,34 +820,26 @@ export async function submitApplication(request: Request): Promise<Response> {
     if (known) return json(known[0], { error: known[1], code: res.error.message });
     return json(500, { error: "Couldn't submit. Try again, or call your rep." });
   }
-  const out = res.data as { application_id: string; rep_slug: string; rep_name: string | null };
+  const out = res.data as {
+    application_id: string;
+    rep_slug: string;
+    rep_name: string | null;
+    signed_at?: string | null;
+    signer_ip?: string | null;
+  };
 
-  // the signed PDF the page built, kept with the file for funders (best effort: staff can build it)
-  if (typeof body.pdf === "string" && body.pdf.length < (MAX_SIGNED_PDF_BYTES * 4) / 3 + 16) {
-    try {
-      const bytes = Uint8Array.from(atob(body.pdf), (c) => c.charCodeAt(0));
-      if (bytes.length > 500 && new TextDecoder().decode(bytes.subarray(0, 5)) === "%PDF-") {
-        const path = `link/${out.application_id}/signed-application.pdf`;
-        const up = await svc.storage
-          .from("documents")
-          .upload(path, bytes, { contentType: "application/pdf", upsert: false });
-        if (!up.error) {
-          const idx = await svc.from("documents").insert({
-            application_id: out.application_id,
-            user_id: null,
-            bucket: "documents",
-            storage_path: path,
-            kind: "funder_application",
-            original_name: "Signed application.pdf",
-            size_bytes: bytes.length,
-            mime_type: "application/pdf",
-          });
-          if (idx.error) await svc.storage.from("documents").remove([path]);
-        }
-      }
-    } catch {
-      /* staff build the same PDF from the saved answers */
-    }
+  // what the database stamped, for the signed PDF's signature record (read back if not returned)
+  let signedAt = out.signed_at ?? null;
+  let signerIp = out.signer_ip ?? null;
+  if (!signedAt) {
+    const row = await svc
+      .from("application_details")
+      .select("signed_at,signer_ip")
+      .eq("application_id", out.application_id)
+      .maybeSingle();
+    const r = row.data as { signed_at: string | null; signer_ip: string | null } | null;
+    signedAt = r?.signed_at ?? null;
+    signerIp = r?.signer_ip ?? signerIp;
   }
 
   // tell the rep (best effort)
@@ -710,37 +874,58 @@ export async function submitApplication(request: Request): Promise<Response> {
     claim_token: claimToken,
     rep_name: out.rep_name ?? "",
     email: claimEmail,
-  });
+    signed_at: signedAt ?? new Date().toISOString(),
+    signer_ip: signerIp,
+  } satisfies SubmitResponse);
 }
 
 // ---------- POST /api/application/upload (the browser that submitted) ----------
 
 /**
- * Bank statements and other files added on the page right after signing, before the merchant has
- * an account. Proven by the claim token that browser got back from submit; only while the file
- * has no account yet (afterwards they upload from their account page) and for two days.
+ * Files added on the page right after signing, before the merchant has an account: bank
+ * statements (kind bank_statement, several), and the signed application PDF the page builds from
+ * what submit returned (kind funder_application, one per file). Proven by the claim token that
+ * browser got back from submit; only while the file has no account yet (afterwards they upload
+ * from their account page) and for two days.
  */
 export async function uploadToApplication(request: Request): Promise<Response> {
   const nr = notReady();
   if (nr) return nr;
-  const size = Number(request.headers.get("content-length") ?? "0");
-  if (size > MAX_UPLOAD_BYTES + 64 * 1024) return json(413, { error: "That file is over 20 MB." });
+  let buf: Uint8Array<ArrayBuffer> | null;
+  try {
+    buf = await readCapped(request, MAX_UPLOAD_BYTES + 64 * 1024);
+  } catch {
+    return json(400, { error: "Send the file as a form." });
+  }
+  if (!buf) return json(413, { error: "That file is over 20 MB." });
   let form: FormData;
   try {
-    form = await request.formData();
+    form = await new Response(buf, {
+      headers: { "Content-Type": request.headers.get("content-type") ?? "" },
+    }).formData();
   } catch {
     return json(400, { error: "Send the file as a form." });
   }
   const appId = String(form.get("application_id") ?? "");
   const claim = String(form.get("claim_token") ?? "");
-  const kind = form.get("kind") === "bank_statement" ? "bank_statement" : "other";
+  const kind = form.get("kind");
   const file = form.get("file");
-  if (!UUID.test(appId) || !isToken(claim) || !(file instanceof File))
+  if (
+    !UUID.test(appId) ||
+    !isToken(claim) ||
+    !(file instanceof File) ||
+    (kind !== "bank_statement" && kind !== "funder_application")
+  )
     return json(400, { error: "Missing the file or the application." });
-  if (file.size > MAX_UPLOAD_BYTES) return json(413, { error: "That file is over 20 MB." });
-  const type = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "");
-  if (!UPLOAD_TYPES.includes(type))
+  const signedPdf = kind === "funder_application";
+  if (file.size > (signedPdf ? MAX_SIGNED_PDF_BYTES : MAX_UPLOAD_BYTES))
+    return json(413, { error: signedPdf ? "That PDF is too large." : "That file is over 20 MB." });
+  const type = uploadType(file);
+  if (signedPdf ? type !== "application/pdf" : !UPLOAD_TYPES.includes(type))
     return json(415, { error: "Send a PDF or a photo (JPG, PNG or HEIC)." });
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (type === "application/pdf" && !looksLikePdf(bytes))
+    return json(415, { error: "That file isn't a PDF we can open. Send a PDF or a photo." });
 
   const svc = service();
   const app = await svc
@@ -759,29 +944,45 @@ export async function uploadToApplication(request: Request): Promise<Response> {
   if (a.user_id) return json(409, { error: "Sign in to your account to add more documents." });
   if (Date.now() - Date.parse(a.created_at) > 48 * 3_600_000)
     return json(410, { error: "Sign in to your account to add documents." });
-  const count = await svc
-    .from("documents")
-    .select("id", { count: "exact", head: true })
-    .eq("application_id", appId)
-    .like("storage_path", "link/%");
-  if ((count.count ?? 0) >= MAX_LINK_UPLOADS + 1)
+  const already = "The signed application is already saved.";
+  // the signed copy: one per file, however it got there; statements: up to MAX_LINK_UPLOADS
+  const count = signedPdf
+    ? await svc
+        .from("documents")
+        .select("id", { count: "exact", head: true })
+        .eq("application_id", appId)
+        .eq("kind", "funder_application")
+    : await svc
+        .from("documents")
+        .select("id", { count: "exact", head: true })
+        .eq("application_id", appId)
+        .like("storage_path", "link/%")
+        .neq("kind", "funder_application");
+  if (count.error) return json(500, { error: "Couldn't store the file. Try again." });
+  if (signedPdf && (count.count ?? 0) > 0) return json(409, { error: already });
+  if (!signedPdf && (count.count ?? 0) >= MAX_LINK_UPLOADS)
     return json(429, {
       error: "That's the most files we take here. Add the rest from your account.",
     });
 
-  const path = `link/${appId}/${Date.now()}-${safeFilename(file.name).replace(/\s+/g, "-").slice(-80)}`;
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  // the signed copy's fixed key also stops two copies sent at once (upsert is off)
+  const path = signedPdf
+    ? `link/${appId}/signed-application.pdf`
+    : linkUploadPath(appId, file.name);
   const up = await svc.storage
     .from("documents")
     .upload(path, bytes, { contentType: type, upsert: false });
-  if (up.error) return json(500, { error: "Couldn't store the file. Try again." });
+  if (up.error)
+    return signedPdf && isDuplicate(up.error)
+      ? json(409, { error: already })
+      : json(500, { error: "Couldn't store the file. Try again." });
   const idx = await svc.from("documents").insert({
     application_id: appId,
     user_id: null,
     bucket: "documents",
     storage_path: path,
     kind,
-    original_name: file.name.slice(0, 200),
+    original_name: signedPdf ? "Signed application.pdf" : file.name.slice(0, 200),
     size_bytes: bytes.length,
     mime_type: type,
   });
@@ -789,11 +990,12 @@ export async function uploadToApplication(request: Request): Promise<Response> {
     await svc.storage.from("documents").remove([path]);
     return json(500, { error: "Couldn't store the file. Try again." });
   }
-  await svc.from("events").insert({
-    application_id: appId,
-    kind: "document_uploaded",
-    body: `${kind === "bank_statement" ? "Bank statement" : "File"} added from the application link: ${file.name.slice(0, 120)}`,
-    visible_to_merchant: true,
-  });
+  if (!signedPdf)
+    await svc.from("events").insert({
+      application_id: appId,
+      kind: "document_uploaded",
+      body: `Bank statement added from the application link: ${file.name.slice(0, 120)}`,
+      visible_to_merchant: true,
+    });
   return json(200, { ok: true });
 }

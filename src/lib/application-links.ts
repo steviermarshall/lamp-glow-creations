@@ -247,8 +247,17 @@ export function buildAltMime(opts: {
   return `${head.join("\r\n")}\r\nContent-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n${part("text/plain", opts.text)}\r\n${part("text/html", opts.html)}\r\n--${boundary}--\r\n`;
 }
 
-/** Display name for a From header: letters, digits, spaces and a few marks, quoted. */
-export const fromName = (s: string) => `"${s.replace(/[^\w .'&-]/g, "").trim() || "Lamp"}"`;
+/**
+ * Display name for a From header. Drops only what could break the header (quotes, backslashes,
+ * control characters, CR/LF among them); plain ASCII is quoted, anything else (José, O’Neil) is
+ * RFC 2047 encoded, like the Subject.
+ */
+export const fromName = (s: string) => {
+  const n = s.replace(/["\\\p{Cc}]/gu, "").trim() || "Lamp";
+  return /^[\x20-\x7e]*$/.test(n)
+    ? `"${n}"`
+    : `=?UTF-8?B?${b64(new TextEncoder().encode(n), false)}?=`;
+};
 
 // ---------- Browser: claim tokens kept after submitting ----------
 
