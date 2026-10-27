@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { clearDraft, loadDraft, type Draft } from "@/lib/apply";
+import { logActivity } from "@/lib/track";
 
 /** Current Supabase session. `loading` is true until the first check finishes. */
 export function useAuth() {
@@ -18,9 +19,10 @@ export function useAuth() {
       setSession(data.session);
       setLoading(false);
     });
-    const { data } = sb.auth.onAuthStateChange((_event, s) => {
+    const { data } = sb.auth.onAuthStateChange((event, s) => {
       setSession(s);
       setLoading(false);
+      if (event === "SIGNED_IN") void logActivity("sign_in");
     });
     return () => data.subscription.unsubscribe();
   }, []);
@@ -64,12 +66,16 @@ async function insertDraft(userId: string, email: string | undefined) {
 
 /** Records the lead as soon as we have an email, so unfinished sign-ups aren't lost. */
 export async function recordLead(draft: Omit<Draft, "savedAt">) {
-  const sb = getSupabase();
-  if (!sb || !draft.answers.email) return;
-  await sb.from("leads").insert({
-    email: draft.answers.email,
-    first_name: draft.answers.firstName ?? null,
-    answers: draft.answers,
-    utm: draft.utm,
+  if (!getSupabase() || !draft.answers.email) return;
+  // through the site's server, which takes only these fields and limits each network
+  await fetch("/api/leads", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: draft.answers.email,
+      first_name: draft.answers.firstName ?? null,
+      answers: draft.answers,
+      utm: draft.utm,
+    }),
   });
 }

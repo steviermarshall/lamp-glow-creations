@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, BadgeCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { seo } from "@/lib/site";
+import { GOOGLE_SIGN_IN, seo } from "@/lib/site";
 import { btnPrimary, card, Eyebrow, PageShell } from "@/components/site/layout";
 
 export const Route = createFileRoute("/how-it-works")({
@@ -25,7 +25,7 @@ const STEPS = [
   {
     title: "Create your account and upload",
     time: "About ten minutes",
-    body: "Sign in with Google or an emailed link, no password. Then upload your last three months of business bank statements and a photo of your driver's license.",
+    body: `Sign in with ${GOOGLE_SIGN_IN ? "Google or an emailed link" : "an emailed link"}, no password. Then upload your last three months of business bank statements and a photo of your driver's license.`,
     detail: "Your files are private to you and the Lamp team.",
   },
   {

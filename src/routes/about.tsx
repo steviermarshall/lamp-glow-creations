@@ -8,7 +8,7 @@ export const Route = createFileRoute("/about")({
       path: "/about",
       title: "About — Lamp",
       description:
-        "Lamp is a working capital brokerage for owner-operators in New Jersey and New York City. We shop your file and show you the offers in plain English.",
+        "Lamp is a working capital brokerage for owner-operators across the U.S. We shop your file and show you the offers in plain English.",
     }),
   component: About,
 });
@@ -39,9 +39,9 @@ function About() {
       </ul>
       <h2>Who we work with</h2>
       <p>
-        Owner-operators across New Jersey and New York City — restaurants, trucking companies,
-        contractors, retail shops, salons, auto shops, and medical offices. If you run the place
-        yourself, we built this for you.
+        Owner-operators across the country — restaurants, trucking companies, contractors, retail
+        shops, salons, auto shops, and medical offices. If you run the place yourself, we built this
+        for you.
       </p>
       <h2>Get in touch</h2>
       <p>

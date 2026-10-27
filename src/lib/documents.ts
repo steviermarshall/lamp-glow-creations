@@ -51,6 +51,22 @@ export const REQUIRED_DOCUMENTS: readonly DocumentRequirement[] = [
   },
 ];
 
+/**
+ * What the browser asks of /api/documents (documents.server.ts). The browser never touches the
+ * documents bucket itself: files are uploaded through /api/documents/upload, and listed, opened
+ * (logged) and removed here.
+ */
+export type DocumentsRequest =
+  | { action: "folder" }
+  | { action: "remove"; path: string }
+  | { action: "open"; document_id: string }
+  | { action: "review"; document_id: string; status: "accepted" | "rejected" };
+
+export type FolderFile = { name: string; created_at: string | null };
+
+/** "kept": the row is with the team now, so the file stays. "unknown": the reply was lost. */
+export type DocumentOutcome = "saved" | "removed" | "kept" | "failed" | "unknown";
+
 export const DOCUMENT_LABELS: Record<DocumentKind, string> = {
   bank_statement: "Business bank statement",
   voided_check: "Voided business check or bank letter",

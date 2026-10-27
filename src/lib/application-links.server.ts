@@ -15,7 +15,13 @@ import {
   SITE_URL,
   SUPABASE_URL,
 } from "@/lib/funder-send.server";
-import { b64url, sameSecret } from "@/lib/funder-send";
+import {
+  b64url,
+  buildMime,
+  MAX_ATTACHMENT_BYTES,
+  sameSecret,
+  type Attachment,
+} from "@/lib/funder-send";
 import {
   CONSENT_TEXT,
   CONSENT_VERSION,
@@ -41,7 +47,6 @@ import {
   MAX_SIGNED_PDF_BYTES,
   MAX_UPLOAD_BYTES,
   newToken,
-  signedEmail,
   UPLOAD_TYPES,
   type Channel,
   type OpenResponse,
@@ -51,7 +56,13 @@ import {
   type SubmitResponse,
 } from "@/lib/application-links";
 import type { SendBackRequest } from "@/lib/application-changes";
-import { SITE } from "@/lib/site";
+import { NEW_APPLICATION_COPY, SITE } from "@/lib/site";
+import {
+  einVariants,
+  newApplicationEmail,
+  recipients,
+  type Duplicate,
+} from "@/lib/new-application-email";
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SLUG = /^[a-z0-9][a-z0-9-]{1,31}$/;
@@ -875,32 +886,7 @@ export async function submitApplication(request: Request): Promise<Response> {
     signerIp = r?.signer_ip ?? signerIp;
   }
 
-  // tell the rep (best effort)
-  try {
-    const repRow = await repBySlug(svc, out.rep_slug);
-    const to = await emailOf(svc, repRow?.user_id ?? null);
-    if (to && repRow) {
-      const access = await gmailAccessToken(svc);
-      if (!("error" in access)) {
-        const m = signedEmail({
-          repName: repRow.name,
-          signer: name,
-          businessName: d.business.legal_name,
-          fileUrl: `${SITE_URL()}/staff?file=${out.application_id}`,
-          realEstate: d.real_estate.owns === "yes",
-        });
-        await gmailSend(access.access, {
-          to,
-          fromName: "Lamp",
-          replyTo: null,
-          subject: m.subject,
-          text: m.text,
-        });
-      }
-    }
-  } catch {
-    /* the file is on their board either way */
-  }
+  // the rep's email waits for the signed PDF and the statements: see notifyNewApplication
 
   return json(200, {
     application_id: out.application_id,
@@ -1031,4 +1017,236 @@ export async function uploadToApplication(request: Request): Promise<Response> {
       visible_to_merchant: true,
     });
   return json(200, { ok: true });
+}
+
+// ---------- POST /api/application/notify (once the signed copy and statements are in) ----------
+
+const NOTICE = "new_application";
+/** "docs_needed" reads "Docs needed". */
+const stageText = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, " ");
+
+/**
+ * The email every signed application sends, Tip Top style: to the rep whose link it came in on,
+ * with NEW_APPLICATION_COPY (Asad and Stevie) copied, the details on top, a warning when the tax
+ * ID is already in Lamp, and the signed application and bank statements attached. Asked for by
+ * the browser that signed (claim token) or the signed-in merchant who owns the file, within two
+ * days of signing, and sent once per file.
+ */
+export async function notifyNewApplication(request: Request): Promise<Response> {
+  const nr = notReady();
+  if (nr) return nr;
+  let body: { application_id?: unknown; claim_token?: unknown };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return json(400, { error: "Missing the application." });
+  }
+  const appId = String(body.application_id ?? "");
+  const claim = typeof body.claim_token === "string" ? body.claim_token : "";
+  if (!UUID.test(appId)) return json(400, { error: "Missing the application." });
+
+  const svc = service();
+  const app = await svc
+    .from("applications")
+    .select("id,user_id,claim_token_hash,rep_slug,business_name")
+    .eq("id", appId)
+    .maybeSingle();
+  const a = app.data as {
+    user_id: string | null;
+    claim_token_hash: string | null;
+    rep_slug: string | null;
+    business_name: string | null;
+  } | null;
+  if (!a) return json(404, { error: "We couldn't find that application." });
+  let allowed =
+    isToken(claim) &&
+    !!a.claim_token_hash &&
+    sameSecret(await hashToken(claim), a.claim_token_hash);
+  if (!allowed && a.user_id) allowed = (await caller(request))?.userId === a.user_id;
+  if (!allowed) return json(404, { error: "We couldn't find that application." });
+
+  const det = await svc
+    .from("application_details")
+    .select("business,owners,request,balances,real_estate,signed_name,signed_at")
+    .eq("application_id", appId)
+    .maybeSingle();
+  const d = det.data as {
+    business: Record<string, string> | null;
+    owners: Record<string, string>[] | null;
+    request: { amount?: string } | null;
+    balances: { current?: string; payment?: string }[] | null;
+    real_estate: { owns?: string } | null;
+    signed_name: string | null;
+    signed_at: string | null;
+  } | null;
+  if (!d?.signed_at) return json(409, { error: "Not signed yet." });
+  if (Date.now() - Date.parse(d.signed_at) > 48 * 3_600_000)
+    return json(410, { error: "Too late." });
+
+  const already = await svc
+    .from("events")
+    .select("id", { count: "exact", head: true })
+    .eq("application_id", appId)
+    .contains("payload", { notice: NOTICE });
+  if ((already.count ?? 0) > 0) return json(200, { ok: true, already: true });
+
+  const business = d.business ?? {};
+  const owner = d.owners?.[0] ?? {};
+
+  // the same tax ID on another file
+  const duplicates: Duplicate[] = [];
+  const variants = einVariants(business["ein"]);
+  if (variants.length) {
+    const others = await svc
+      .from("application_details")
+      .select("application_id,signed_at")
+      .in("business->>ein", variants)
+      .neq("application_id", appId)
+      .limit(10);
+    const rows = (others.data ?? []) as { application_id: string; signed_at: string | null }[];
+    if (rows.length) {
+      const files = await svc
+        .from("applications")
+        .select("id,status,rep_slug,business_name")
+        .in(
+          "id",
+          rows.map((r) => r.application_id),
+        );
+      const reps = await svc.from("reps").select("slug,name");
+      const repName = new Map(
+        ((reps.data ?? []) as { slug: string; name: string }[]).map((r) => [r.slug, r.name]),
+      );
+      for (const f of (files.data ?? []) as {
+        id: string;
+        status: string;
+        rep_slug: string | null;
+        business_name: string | null;
+      }[]) {
+        duplicates.push({
+          business: f.business_name ?? "",
+          stage: stageText(f.status),
+          rep: f.rep_slug ? (repName.get(f.rep_slug) ?? f.rep_slug) : null,
+          signedAt: rows.find((r) => r.application_id === f.id)?.signed_at ?? null,
+        });
+      }
+    }
+  }
+
+  // the signed copy first, then every statement while they fit in one email
+  const docs = await svc
+    .from("documents")
+    .select("bucket,storage_path,kind,original_name,mime_type,created_at")
+    .eq("application_id", appId)
+    .in("kind", ["funder_application", "bank_statement"])
+    .in("status", ["received", "accepted"])
+    .order("created_at", { ascending: true });
+  type Doc = {
+    bucket: string;
+    storage_path: string;
+    kind: string;
+    original_name: string | null;
+    mime_type: string | null;
+  };
+  const all = (docs.data ?? []) as Doc[];
+  const label = (business["legal_name"] || a.business_name || "merchant")
+    .replace(/[^\w .&-]+/g, "")
+    .trim();
+  const attachments: Attachment[] = [];
+  let size = 0;
+  let statements = 0;
+  let leftOff = 0;
+  const read = async (x: Doc): Promise<Uint8Array | null> => {
+    const r = await svc.storage.from(x.bucket || "documents").download(x.storage_path);
+    return r.error || !r.data ? null : new Uint8Array(await r.data.arrayBuffer());
+  };
+  const signedCopy = [...all].reverse().find((x) => x.kind === "funder_application");
+  const pdf = signedCopy ? await read(signedCopy) : null;
+  if (pdf) {
+    attachments.push({
+      name: `Lamp application - ${label || "merchant"}.pdf`,
+      mime: "application/pdf",
+      bytes: pdf,
+    });
+    size += pdf.length;
+  }
+  for (const x of all.filter((y) => y.kind === "bank_statement")) {
+    const bytes = await read(x);
+    if (!bytes) {
+      leftOff++;
+      continue;
+    }
+    if (size + bytes.length > MAX_ATTACHMENT_BYTES) {
+      leftOff++;
+      continue;
+    }
+    statements++;
+    size += bytes.length;
+    attachments.push({
+      name: `Bank statement ${statements} - ${x.original_name || "statement"}`,
+      mime: x.mime_type || "application/octet-stream",
+      bytes,
+    });
+  }
+
+  const rep = a.rep_slug ? await repBySlug(svc, a.rep_slug).catch(() => null) : null;
+  const to = recipients(await emailOf(svc, rep?.user_id ?? null), NEW_APPLICATION_COPY);
+  if (!to) return json(200, { ok: true, sent: false });
+  const balances = d.balances ?? [];
+  const m = newApplicationEmail({
+    repName: rep?.name ?? null,
+    via: a.user_id && !claim ? "their Lamp account" : "an application link",
+    signer: d.signed_name ?? "",
+    business,
+    owner,
+    amount: d.request?.amount ?? null,
+    openPositions: balances.filter((x) => x.current?.trim() || x.payment?.trim()).length,
+    ownsRealEstate: d.real_estate?.owns === "yes",
+    fileUrl: `${SITE_URL()}/staff?file=${appId}`,
+    duplicates,
+    attached: { application: !!pdf, statements, leftOff },
+  });
+
+  const access = await gmailAccessToken(svc);
+  let sentOk = false;
+  let why = "";
+  if ("error" in access) why = access.error;
+  else {
+    try {
+      const raw = buildMime({
+        from: `${fromName("Lamp")} <${MAILBOX()}>`,
+        to: to.to,
+        cc: to.cc,
+        subject: m.subject,
+        body: m.text,
+        attachments,
+      });
+      const res = await fetch(GMAIL_SEND_URL(), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${access.access}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ raw: b64url(raw) }),
+      });
+      sentOk = res.ok;
+      if (!res.ok) why = `Gmail ${res.status}`;
+    } catch {
+      why = "couldn't reach Gmail";
+    }
+  }
+  await svc.from("events").insert({
+    application_id: appId,
+    kind: "system",
+    body: sentOk
+      ? `Emailed the signed application to ${[to.to, ...to.cc].join(", ")}${duplicates.length ? " (tax ID already in Lamp)" : ""}.`
+      : `Couldn't email the signed application (${why}).`,
+    payload: sentOk
+      ? {
+          notice: NOTICE,
+          to: to.to,
+          cc: to.cc,
+          attachments: attachments.length,
+          duplicates: duplicates.length,
+        }
+      : { notice_failed: NOTICE, error: why },
+    visible_to_merchant: false,
+  });
+  return json(200, { ok: true, sent: sentOk });
 }

@@ -30,7 +30,7 @@ answer never depends on what the caller can read.
 
 | Role | Reads | Writes |
 |---|---|---|
-| anonymous | active reps | leads (insert only) |
+| anonymous | active reps | leads (insert only, through the site's server) |
 | merchant | own profile, businesses, applications, documents in own folder, visible events, presented offers (`my_offers`) | own profile and businesses; own application answers and contact fields; own documents until reviewed; `accept_offer()` |
 | rep | own files plus the unassigned pool (`pipeline_board`), and only on those files: events, documents, stored files, submissions, offers, and the owner's profile and businesses; own profile; own and untagged leads (and their events); funders; own deals and ledger entries | on own or unassigned files only: stage and staff notes, take an unassigned file for themselves (never assign, hand over or release, never change `source_rep_slug`); events as themselves; submissions; offers; document review; own and untagged leads. No business edits, no `accept_offer()` |
 | admin | everything | everything, plus reps, roles, funders, deals, the ledger |
@@ -48,6 +48,35 @@ Guardrails the database enforces whatever the app sends:
 - a merchant can add a document only as `received`, only for a file that exists under `<own user id>/`, and only with a `kind` from the list below; a merchant cannot change a row afterwards (to relabel a file they remove it and upload it again);
 - a merchant can remove a `received` or `rejected` document only while its application has never been submitted, and can remove a file from storage only when no document row points at it (`storage_object_is_indexed()`), so documents sent to funders stay with the deal;
 - `engine_leads` is written only by the engine (service role, upsert by `(source, source_key)`); staff read every row and may change only `status`, `notes` and `rep_slug` (`engine_leads_before_update` resets everything else, stamps `worked_at` and fills `rep_slug` with the caller's slug on a status change). Anonymous has no access.
+
+## Through the site's server
+
+The browser signs in with Supabase Auth (email link, Google through Lovable's broker), so it
+always holds a key the database accepts. Since `20261027190000_server_stamp.sql` the database
+also refuses that key, on its own, for the sensitive parts, which go through the site's server
+routes instead (`src/routes/api.*.ts`, code in `src/lib/*.server.ts`):
+
+| Part | Browser straight to the database | Through the site's server |
+|---|---|---|
+| files in the `documents` bucket (statements, IDs, signed copies) | refused: no upload, list, link or remove | `/api/documents/upload`, `/api/documents` (folder, remove, open) |
+| `documents` rows | reading the list still works (the board counts them); add, review, remove refused | `/api/documents` (review), upload, remove |
+| `staff_application_details()`, `reveal_application_details()` | refused | `/api/application-details` |
+| `leads` (the public form) | refused; only email, first name, phone, answers and utm may be set at all | `/api/leads`, at most 10 an hour from one network |
+
+The server proves a request came through it with the `x-lamp-server` header (its secret is
+`LAMP_SERVER_STAMP` in Lovable Cloud's secrets). The database keeps only the secret's SHA-256 in
+`lamp_private.server_stamp`, and `via_lamp_server()` checks it in one restrictive rule per table,
+on top of the per-person rules above, which still decide who sees what for the server's
+requests too. Opening a document writes an `open_document` row to `sensitive_access_log`, like
+Show SSN. Nothing is refused while `lamp_private.server_stamp.enforce` is false; switch it with
+`update lamp_private.server_stamp set enforce = true` (or `false` to go back at once), after
+`/api/server-check` shows `"received": true`.
+
+New code that reads or writes those parts must call the server routes, not the Supabase
+client; anything else gets nothing back once the switch is on. The merchant's own
+`application_details` (the account page's application) and every other table still go straight
+from the browser, under the rules above. `tests/server-stamp.local.ts` checks both sides
+against a local Supabase stack.
 
 ## Tables
 

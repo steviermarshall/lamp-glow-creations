@@ -11,10 +11,21 @@ export const SITE = {
   phone: "",
   /** Mailing address for the footer, e.g. "123 Main St, Roselle, NJ 07203". Empty = hidden. */
   address: "",
-  areaServed: ["New Jersey", "New York City"],
+  areaServed: ["United States"],
 } as const;
 
+/** Copied on the email every signed application sends to its rep: Asad and Stevie. */
+export const NEW_APPLICATION_COPY: readonly string[] = [
+  "partners@getlamp.app",
+  "marshall@getlamp.app",
+];
+
 export const telHref = (phone: string) => `tel:+1${phone.replace(/\D/g, "").slice(-10)}`;
+
+// ---------- Sign-in ----------
+// On: "Continue with Google" shows next to the emailed link and goes through Lovable Cloud's
+// sign-in broker (signInWithGoogle in components/site/auth.tsx). Off: emailed sign-in links only.
+export const GOOGLE_SIGN_IN = true;
 
 // ---------- Rep links: /apply/<slug> ----------
 // Anything that comes in through a rep's link is tagged with ref=<slug> on the application.

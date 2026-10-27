@@ -14,11 +14,12 @@ import {
   type Answers,
 } from "@/lib/apply";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { SITE, type Rep } from "@/lib/site";
+import { GOOGLE_SIGN_IN, SITE, type Rep } from "@/lib/site";
 import { useAuth, recordLead, saveDraftToAccount } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { btnOutline, btnPrimary, card, PageShell } from "@/components/site/layout";
 import { GoogleButton, sendMagicLink, signInWithGoogle } from "@/components/site/auth";
+import { track } from "@/lib/track";
 
 const CONTACT_STEP = QUESTIONS.length;
 const RESULT_STEP = QUESTIONS.length + 1;
@@ -61,6 +62,11 @@ export function ApplyFlow({ search, rep }: { search: Record<string, unknown>; re
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
+    // how far visitors get, question by question, for the dashboard's /apply drop-off
+    const question =
+      QUESTIONS[step]?.key ??
+      (step === CONTACT_STEP ? "contact" : step === RESULT_STEP ? "result" : "");
+    track("apply_step", { step, question });
   }, [step]);
 
   const choose = (key: keyof Answers, value: string) => {
@@ -460,10 +466,15 @@ function ResultStep({
           </div>
         ) : (
           <div className="mt-6 space-y-4">
-            <GoogleButton onClick={() => signInWithGoogle()} />
-            <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-smoke">
-              <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
-            </div>
+            {GOOGLE_SIGN_IN && (
+              <>
+                <GoogleButton onClick={() => signInWithGoogle()} />
+                <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-smoke">
+                  <span className="h-px flex-1 bg-line" /> or{" "}
+                  <span className="h-px flex-1 bg-line" />
+                </div>
+              </>
+            )}
             <form onSubmit={onEmail} className="space-y-3">
               <label htmlFor="apply-email" className="sr-only">
                 Email address

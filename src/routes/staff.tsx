@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
+import { markStaffBrowser } from "@/lib/track";
 import { useAuth } from "@/hooks/use-auth";
 import { seo } from "@/lib/site";
 import { isStage, useStaffAccess, type Stage } from "@/lib/staff";
@@ -12,6 +13,7 @@ import { EngineLeads } from "@/components/staff/engine-leads";
 import { SentApplications } from "@/components/staff/sent-applications";
 import { Funders } from "@/components/staff/funders";
 import { Money } from "@/components/staff/money";
+import { Dashboard } from "@/components/staff/dashboard";
 
 type StaffSearch = {
   view?: View | undefined;
@@ -20,9 +22,10 @@ type StaffSearch = {
   file?: string | undefined;
 };
 
-type View = "engine" | "sent" | "funders" | "money";
-const VIEWS: readonly View[] = ["engine", "sent", "funders", "money"];
+type View = "dashboard" | "engine" | "sent" | "funders" | "money";
+const VIEWS: readonly View[] = ["dashboard", "engine", "sent", "funders", "money"];
 const VIEW_TITLE: Record<View, string> = {
+  dashboard: "Dashboard",
   engine: "Engine leads",
   sent: "Applications",
   funders: "Funders",
@@ -61,6 +64,10 @@ function Staff() {
 
   const isStaff = access.state === "staff";
   useEffect(() => {
+    // staff browsing the site shouldn't count as visitors
+    if (isStaff) markStaffBrowser();
+  }, [isStaff]);
+  useEffect(() => {
     const sb = getSupabase();
     if (!sb || !isStaff) return;
     sb.from("reps")
@@ -71,7 +78,7 @@ function Staff() {
 
   if (access.state === "loading") {
     return (
-      <PageShell footer={false} tone="night-calm">
+      <PageShell member footer={false} tone="night">
         <div className="grid place-items-center py-40">
           <Loader2 className="size-6 animate-spin text-smoke" />
         </div>
@@ -81,7 +88,7 @@ function Staff() {
 
   if (access.state !== "staff") {
     return (
-      <PageShell footer={false} tone="night-calm">
+      <PageShell member footer={false} tone="night">
         <div className="mx-auto max-w-xl px-5 py-24 text-center" data-staff-gate={access.state}>
           <h1 className="font-display text-2xl font-bold">Staff only</h1>
           <p className="mt-2 text-smoke">
@@ -98,7 +105,7 @@ function Staff() {
   }
 
   return (
-    <PageShell footer={false} tone="night-calm">
+    <PageShell member footer={false} tone="night">
       <div className="mx-auto max-w-6xl px-5 pb-24 pt-10 sm:px-6 sm:pt-14">
         <p className="text-sm text-smoke">
           {user?.email} · {access.isAdmin ? "Admin" : "Rep"}
@@ -133,6 +140,8 @@ function Staff() {
             repSlug={access.repSlug}
             reps={reps}
           />
+        ) : search.view === "dashboard" ? (
+          <Dashboard isAdmin={access.isAdmin} repSlug={access.repSlug} />
         ) : search.view === "engine" ? (
           <EngineLeads isAdmin={access.isAdmin} repSlug={access.repSlug} reps={reps} />
         ) : search.view === "sent" ? (

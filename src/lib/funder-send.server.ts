@@ -5,6 +5,8 @@
 //   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET                              (Google OAuth web client)
 //   FUNDER_SEND_SECRET                                                  (automatic sends only)
 //   FUNDER_MAILBOX (default partners@getlamp.app), SITE_URL (default https://getlamp.app)
+//   LAMP_SERVER_STAMP   (the secret the database checks for "came through Lamp's server";
+//                        see 20261027190000_server_stamp.sql)
 //
 // Never import this file from browser code: the route files load it inside their handlers.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -50,12 +52,40 @@ export const json = (status: number, body: unknown) =>
 export const service = () =>
   createClient(SUPABASE_URL(), SERVICE_KEY(), { auth: { persistSession: false } });
 
+/**
+ * The header that tells the database a request came through this server. Documents, stored files,
+ * staff reads of the full application and the lead form refuse requests without it once the
+ * switch is on; the per-person rules still apply on top.
+ */
+const stamp = (): Record<string, string> =>
+  env("LAMP_SERVER_STAMP") ? { "x-lamp-server": env("LAMP_SERVER_STAMP") } : {};
+
+/** A visitor with no account (the lead form): the database's anonymous rules, stamped. */
+export const visitor = () =>
+  createClient(SUPABASE_URL(), ANON_KEY(), {
+    global: { headers: stamp() },
+    auth: { persistSession: false },
+  });
+
+/** For /api/server-check: the switch, whether a hash is set, and whether this server's stamp matches. */
+export async function stampStatus() {
+  const configured = !!env("LAMP_SERVER_STAMP");
+  if (!SUPABASE_URL() || !ANON_KEY()) return { configured, database: "not reachable" };
+  const r = await visitor().rpc("server_stamp_status" as never);
+  if (r.error)
+    return { configured, database: r.error.code === "PGRST202" ? "not set up" : "error" };
+  return {
+    configured,
+    ...(r.data as { enforcing: boolean; hash_set: boolean; received: boolean }),
+  };
+}
+
 /** The signed-in caller's own client, so the database's rules apply to what they ask. */
 export async function caller(request: Request) {
   const auth = request.headers.get("Authorization") ?? "";
   if (!auth.startsWith("Bearer ") || !ANON_KEY()) return null;
   const client = createClient(SUPABASE_URL(), ANON_KEY(), {
-    global: { headers: { Authorization: auth } },
+    global: { headers: { Authorization: auth, ...stamp() } },
     auth: { persistSession: false },
   });
   const who = await client.auth.getUser(auth.slice(7));

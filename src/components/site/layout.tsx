@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Menu, X } from "lucide-react";
+import { Menu, Moon, Sun, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { currentTheme, setTheme, type Theme } from "@/lib/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { SITE, telHref } from "@/lib/site";
 import { LampField } from "@/components/site/lamp-field";
@@ -60,8 +61,11 @@ const NAV = [
 export function SiteHeader({
   minimal = false,
   floating = false,
+  themeToggle = false,
 }: {
   minimal?: boolean;
+  /** The light/dark switch: member pages only (staff portal, account, application links). */
+  themeToggle?: boolean;
   /** Lamplight pages: a glass bar floating over the dot field instead of a full-width band. */
   floating?: boolean;
 }) {
@@ -111,6 +115,7 @@ export function SiteHeader({
         )}
 
         <div className="flex items-center gap-2">
+          {themeToggle && <ThemeToggle />}
           <Link
             to={user ? "/account" : "/login"}
             className="hidden rounded-full px-4 py-2.5 text-[0.95rem] font-semibold text-mist transition hover:text-paper sm:inline-flex"
@@ -177,6 +182,28 @@ export function SiteHeader({
   );
 }
 
+/** Sun in dark mode, moon in light mode. Both icons render on the server; CSS shows the right one. */
+function ThemeToggle() {
+  const [theme, setThemeState] = useState<Theme | null>(null);
+  useEffect(() => setThemeState(currentTheme()), []);
+  const next: Theme = theme === "light" ? "dark" : "light";
+  return (
+    <button
+      type="button"
+      className="grid size-11 place-items-center rounded-full text-mist ring-1 ring-white/20 transition hover:text-paper"
+      aria-label={theme ? `Switch to ${next} mode` : "Switch light or dark mode"}
+      title={theme ? `Switch to ${next} mode` : undefined}
+      onClick={() => {
+        setTheme(next);
+        setThemeState(next);
+      }}
+    >
+      <Sun className="ll-when-dark size-[1.15rem]" aria-hidden="true" />
+      <Moon className="ll-when-light size-[1.15rem]" aria-hidden="true" />
+    </button>
+  );
+}
+
 export function SiteFooter() {
   return (
     <footer className="border-t border-white/10 bg-ink text-mist">
@@ -184,8 +211,7 @@ export function SiteFooter() {
         <div>
           <Wordmark size="sm" />
           <p className="mt-4 max-w-xs text-[0.95rem] leading-relaxed">
-            Working capital for owner-operators in New Jersey and New York City, explained in plain
-            English.
+            Working capital for owner-operators across the U.S., explained in plain English.
           </p>
           <ul className="mt-5 space-y-1.5 text-[0.95rem]">
             <li>
@@ -274,6 +300,8 @@ export function PageShell({
   minimalHeader = false,
   footer = true,
   tone = "paper",
+  member = false,
+  themeToggle,
 }: {
   children: ReactNode;
   minimalHeader?: boolean;
@@ -285,6 +313,13 @@ export function PageShell({
    * Both re-map the app's light classes (white cards, ink text, hairlines) in styles.css.
    */
   tone?: "paper" | "night" | "night-calm";
+  /**
+   * Pages for members (staff portal, a merchant's account, the application link): they get the
+   * light/dark switch and follow it. The public site always stays in the green night look.
+   */
+  member?: boolean;
+  /** Show the light/dark switch. Defaults to member; the application link turns it off. */
+  themeToggle?: boolean;
 }) {
   const live = tone === "night";
   const night = live || tone === "night-calm";
@@ -294,7 +329,11 @@ export function PageShell({
       className={cn(
         "font-body relative flex min-h-screen flex-col overflow-x-clip antialiased",
         night
-          ? cn("ll-night isolate bg-night text-paper", live ? "ll-live" : "ll-calm")
+          ? cn(
+              "ll-night isolate bg-night text-paper",
+              live ? "ll-live" : "ll-calm",
+              member && "ll-member",
+            )
           : "bg-paper text-ink",
       )}
     >
@@ -310,7 +349,7 @@ export function PageShell({
       >
         Skip to content
       </a>
-      <SiteHeader minimal={minimalHeader} floating={night} />
+      <SiteHeader minimal={minimalHeader} floating={night} themeToggle={themeToggle ?? member} />
       <main id="main" className="flex-1">
         {children}
       </main>

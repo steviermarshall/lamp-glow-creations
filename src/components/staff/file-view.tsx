@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Check, ExternalLink, Loader2, Paperclip, X } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/track";
+import { postAsMe } from "@/lib/server-api";
 import { cn } from "@/lib/utils";
 import { labelFor, QUESTIONS, type Answers } from "@/lib/apply";
-import { downloadApplicationPdf } from "@/lib/application-pdf";
+import { downloadApplicationPdf, type PdfPages } from "@/lib/application-pdf";
 import { detailsToPdf } from "@/lib/application-details";
 import { FileApplication } from "@/components/staff/file-application";
 import {
@@ -76,7 +78,6 @@ type DocRow = {
 
 const FILE_COLUMNS =
   "id,user_id,status,rep_slug,answers,first_name,business_name,phone,email,amount_requested,purpose,phone_consent_at,phone_consent_text,staff_notes,created_at,assigned_at,submitted_at,funded_at,closed_at";
-const SIGNED_URL_SECONDS = 60;
 
 const DOC_TAG: Record<DocStatus, string> = {
   received: "To review",
@@ -168,6 +169,10 @@ export function FileView({
     load();
   }, [load]);
 
+  useEffect(() => {
+    void logActivity("open_file", { applicationId: fileId });
+  }, [fileId]);
+
   /** Runs one write; an update the rules refuse comes back with no rows, not an error. */
   const run = async (key: string, write: () => Promise<{ ok: boolean }>) => {
     if (busy) return;
@@ -196,49 +201,38 @@ export function FileView({
         .update(patch)
         .eq("id", fileId)
         .select("id");
-      return { ok: !err && data.length === 1 };
+      const ok = !err && data.length === 1;
+      if (ok && patch.status)
+        void logActivity("change_stage", { applicationId: fileId, detail: patch.status });
+      return { ok };
     });
 
   const review = (doc: DocRow, status: "accepted" | "rejected") =>
     run(`doc:${doc.id}`, async () => {
-      const sb = getSupabase();
-      if (!sb) return { ok: false };
-      const { data, error: err } = await sb
-        .from("documents")
-        .update({ status, reviewed_by: userId, reviewed_at: new Date().toISOString() })
-        .eq("id", doc.id)
-        .select("id");
-      if (err || data.length !== 1) return { ok: false };
-      // The document table has no timeline trigger, so the review is logged here, as the
-      // signed-in user (the events policy refuses any other actor).
-      await sb.from("events").insert({
-        application_id: fileId,
-        actor_user_id: userId,
-        kind: "document_reviewed",
-        body: `${status === "accepted" ? "Accepted" : "Not accepted"}: ${docName(doc)}`,
-        payload: { document_id: doc.id, status },
-      });
-      return { ok: true };
+      // the server saves the review and logs it on the timeline, as the signed-in user
+      const r = await postAsMe("/api/documents", { action: "review", document_id: doc.id, status });
+      return { ok: r.ok };
     });
 
   const open = async (doc: DocRow) => {
-    const sb = getSupabase();
-    if (!sb) return;
-    // Open the tab inside the click so it isn't blocked, then point it at the signed URL.
+    // Open the tab inside the click so it isn't blocked, then point it at the signed URL. The
+    // server makes the link and records who opened which document.
     const tab = window.open("about:blank", "_blank");
-    const { data, error: err } = await sb.storage
-      .from(doc.bucket)
-      .createSignedUrl(doc.storage_path, SIGNED_URL_SECONDS);
-    if (err || !data) {
+    const r = await postAsMe<{ url: string }>("/api/documents", {
+      action: "open",
+      document_id: doc.id,
+    }).catch(() => null);
+    const url = r?.ok ? r.data.url : undefined;
+    if (!url) {
       tab?.close();
-      setError(`Couldn't open ${docName(doc)}.`);
+      setError(r?.data.error || `Couldn't open ${docName(doc)}.`);
       return;
     }
     if (tab) {
       tab.opener = null;
-      tab.location.href = data.signedUrl;
+      tab.location.href = url;
     } else {
-      window.location.href = data.signedUrl;
+      window.location.href = url;
     }
   };
 
@@ -265,6 +259,57 @@ export function FileView({
     slug ? (reps.find((r) => r.slug === slug)?.name ?? slug) : "Unassigned";
   const mine = !!repSlug && file.rep_slug === repSlug;
 
+  // The lender copy is page 1, flat; the signing record adds the schedule and how it was signed.
+  async function downloadPdf(pages: PdfPages) {
+    if (!file) return;
+    void logActivity("download_pdf", {
+      applicationId: fileId,
+      detail: pages === "all" ? "signing record" : "application",
+    });
+    setBusy(pages === "all" ? "record" : "pdf");
+    setError("");
+    try {
+      // The PDF carries full SSNs, so the database logs it like Show SSN. Staff who can't
+      // see the full application get the quick answers only.
+      const pdfFull =
+        full && full !== RESTRICTED ? await revealFullApplication(fileId, "application_pdf") : null;
+      // the drawn signatures and how it was signed go on the PDF too
+      const signature = pdfFull && {
+        name: pdfFull.signedName,
+        at: pdfFull.signedAt,
+        image: pdfFull.signatureImage,
+        name2: pdfFull.signedName2,
+        image2: pdfFull.signatureImage2,
+        via: pdfFull.signedVia,
+        ip: pdfFull.signerIp,
+        agent: pdfFull.signerAgent,
+        consent: pdfFull.consentVersion,
+        version: pdfFull.version,
+        replaces: pdfFull.replaces,
+      };
+      await downloadApplicationPdf(
+        {
+          answers: file.answers,
+          first_name: file.first_name,
+          business_name: file.business_name,
+          phone: file.phone,
+          email: file.email,
+          amount_requested: file.amount_requested,
+          repName: file.rep_slug ? repName(file.rep_slug) : null,
+        },
+        pdfFull && signature
+          ? detailsToPdf(pdfFull.details, signature, file.rep_slug ? repName(file.rep_slug) : null)
+          : undefined,
+        pages,
+        pages === "all" ? " (signing record)" : "",
+      );
+    } catch {
+      setError("Couldn't build the application PDF. Try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="mt-6">
       <Link
@@ -282,65 +327,31 @@ export function FileView({
             {file.business_name || "Unnamed business"}
           </h2>
         </div>
-        <button
-          type="button"
-          className={cn(btnOutline, "px-4 py-2.5")}
-          disabled={busy === "pdf"}
-          onClick={async () => {
-            setBusy("pdf");
-            setError("");
-            try {
-              // The PDF carries full SSNs, so the database logs it like Show SSN. Staff who can't
-              // see the full application get the quick answers only.
-              const pdfFull =
-                full && full !== RESTRICTED
-                  ? await revealFullApplication(fileId, "application_pdf")
-                  : null;
-              // the drawn signatures and how it was signed go on the PDF too
-              const signature = pdfFull && {
-                name: pdfFull.signedName,
-                at: pdfFull.signedAt,
-                image: pdfFull.signatureImage,
-                name2: pdfFull.signedName2,
-                image2: pdfFull.signatureImage2,
-                via: pdfFull.signedVia,
-                ip: pdfFull.signerIp,
-                agent: pdfFull.signerAgent,
-                consent: pdfFull.consentVersion,
-                version: pdfFull.version,
-                replaces: pdfFull.replaces,
-              };
-              await downloadApplicationPdf(
-                {
-                  answers: file.answers,
-                  first_name: file.first_name,
-                  business_name: file.business_name,
-                  phone: file.phone,
-                  email: file.email,
-                  amount_requested: file.amount_requested,
-                  repName: file.rep_slug ? repName(file.rep_slug) : null,
-                },
-                pdfFull && signature
-                  ? detailsToPdf(
-                      pdfFull.details,
-                      signature,
-                      file.rep_slug ? repName(file.rep_slug) : null,
-                    )
-                  : undefined,
-              );
-            } catch {
-              setError("Couldn't build the application PDF. Try again.");
-            } finally {
-              setBusy(null);
-            }
-          }}
-        >
-          {busy === "pdf"
-            ? "Building PDF…"
-            : full && full !== RESTRICTED && full.signedAt
-              ? "Signed application PDF"
-              : "Application PDF"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={cn(btnOutline, "px-4 py-2.5")}
+            disabled={busy === "pdf"}
+            onClick={() => void downloadPdf("lender")}
+          >
+            {busy === "pdf"
+              ? "Building PDF…"
+              : full && full !== RESTRICTED && full.signedAt
+                ? "Signed application PDF"
+                : "Application PDF"}
+          </button>
+          {full && full !== RESTRICTED && full.signedAt && (
+            <button
+              type="button"
+              className={cn(btnOutline, "px-4 py-2.5")}
+              disabled={busy === "record"}
+              onClick={() => void downloadPdf("all")}
+              title="Every page: the application, the real estate schedule and how it was signed"
+            >
+              {busy === "record" ? "Building PDF…" : "Signing record"}
+            </button>
+          )}
+        </div>
       </div>
 
       {file.user_id === null && (

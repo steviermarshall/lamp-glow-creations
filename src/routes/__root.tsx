@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -13,10 +14,12 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 import { SITE } from "../lib/site";
+import { THEME_SCRIPT } from "../lib/theme";
+import { track } from "../lib/track";
 
 const SITE_URL = SITE.url;
 
-// Tells search engines what Lamp is: a financial service brokering in NJ and NYC.
+// Tells search engines what Lamp is: a financial service brokering for businesses across the U.S.
 const ORG_JSON_LD = {
   "@context": "https://schema.org",
   "@type": "FinancialService",
@@ -29,7 +32,7 @@ const ORG_JSON_LD = {
   ...(SITE.phone ? { telephone: SITE.phone } : {}),
   description:
     "Small-business working capital brokerage. Lamp shops a merchant's file to third-party funders and lays the offers out side by side in plain English.",
-  areaServed: SITE.areaServed.map((name) => ({ "@type": "AdministrativeArea", name })),
+  areaServed: SITE.areaServed.map((name) => ({ "@type": "Country", name })),
 };
 
 function NotFoundComponent() {
@@ -124,7 +127,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:image", content: `${SITE_URL}/og.png` },
       { property: "og:image:alt", content: "Lamp: working capital, made clear." },
     ],
-    scripts: [{ type: "application/ld+json", children: JSON.stringify(ORG_JSON_LD) }],
+    scripts: [
+      { children: THEME_SCRIPT },
+      { type: "application/ld+json", children: JSON.stringify(ORG_JSON_LD) },
+    ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
@@ -149,7 +155,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // data-theme is set by THEME_SCRIPT before React hydrates
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
@@ -161,11 +168,21 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** A page view for Lamp's own visit counts, on every route change (staff pages excluded). */
+function PageViews() {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => {
+    if (!path.startsWith("/staff")) track("page_view");
+  }, [path]);
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
+      <PageViews />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
     </QueryClientProvider>

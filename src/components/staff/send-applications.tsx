@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Loader2, Mail, MessageSquare, Plus, Send, X } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/track";
 import { cn } from "@/lib/utils";
 import { SITE } from "@/lib/site";
 import { tel } from "@/lib/engine-leads";
@@ -96,6 +97,7 @@ async function postInvites(body: SendRequest): Promise<SendResult[]> {
   });
   const data = (await res.json().catch(() => ({}))) as { results?: SendResult[]; error?: string };
   if (!res.ok) throw new Error(data.error || `The server answered ${res.status}.`);
+  void logActivity("send_application", { detail: `${(data.results ?? []).length} links` });
   return data.results ?? [];
 }
 

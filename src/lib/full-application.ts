@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
+import { postAsMe } from "@/lib/server-api";
 import { fromRow, type Details } from "@/lib/application-details";
 import type { StaffVersions } from "@/lib/application-changes";
 
@@ -47,8 +48,6 @@ type Row = {
   replaces?: string | null;
 } | null;
 
-type RpcError = { code?: string; message?: string } | null;
-
 const toFull = (r: Row): FullApplication | null =>
   r
     ? {
@@ -67,22 +66,12 @@ const toFull = (r: Row): FullApplication | null =>
       }
     : null;
 
-// PGRST202: the function is not in the database yet (code published before the SQL ran).
-const notDeployed = (e: RpcError) => e?.code === "PGRST202";
-const refused = (e: RpcError) => e?.code === "42501";
-
-async function readTable(fileId: string): Promise<Row> {
-  const sb = getSupabase();
-  if (!sb) return null;
-  const { data } = await sb
-    .from("application_details")
-    .select(
-      "business,owners,balances,request,real_estate,signed_name,signed_at,signed_name_2,signature_image,signature_image_2,signed_via,signer_ip,signer_agent,consent_version",
-    )
-    .eq("application_id", fileId)
-    .maybeSingle();
-  return data as Row;
-}
+/** One read through the site's server, which asks the database as the signed-in staff member. */
+const ask = (fileId: string, purpose?: string) =>
+  postAsMe<{ details: Row; refused: boolean }>("/api/application-details", {
+    application_id: fileId,
+    ...(purpose ? { purpose } : {}),
+  });
 
 /** The full application with SSNs cut to the last four and dates of birth hidden. */
 export function useFullApplication(fileId: string, reload = 0) {
@@ -90,17 +79,16 @@ export function useFullApplication(fileId: string, reload = 0) {
     undefined,
   );
   useEffect(() => {
-    const sb = getSupabase();
-    if (!sb) return;
+    if (!getSupabase()) return;
     let live = true;
     (async () => {
-      const { data, error } = await sb.rpc("staff_application_details", {
-        _application_id: fileId,
-      });
       let next: FullApplication | typeof RESTRICTED | null;
-      if (refused(error)) next = RESTRICTED;
-      else if (notDeployed(error)) next = toFull(await readTable(fileId));
-      else next = toFull(data as unknown as Row);
+      try {
+        const r = await ask(fileId);
+        next = r.data.refused ? RESTRICTED : toFull(r.ok ? (r.data.details ?? null) : null);
+      } catch {
+        next = null;
+      }
       if (live) setFull(next);
     })();
     return () => {
@@ -114,18 +102,20 @@ export function useFullApplication(fileId: string, reload = 0) {
 export function useVersions(fileId: string, reload = 0) {
   const [out, setOut] = useState<StaffVersions | typeof RESTRICTED | null | undefined>(undefined);
   useEffect(() => {
-    const sb = getSupabase();
-    if (!sb) return;
+    if (!getSupabase()) return;
     let live = true;
     (async () => {
-      const { data, error } = await sb.rpc("staff_application_versions", {
-        _application_id: fileId,
-      });
       let next: StaffVersions | typeof RESTRICTED | null;
-      if (refused(error)) next = RESTRICTED;
-      // not in the database yet, or a hiccup: the file screen works without it
-      else if (error) next = null;
-      else next = data as unknown as StaffVersions;
+      try {
+        const r = await postAsMe<{ versions: StaffVersions | null; refused: boolean }>(
+          "/api/application-details",
+          { application_id: fileId, versions: true },
+        );
+        // not in the database yet, or a hiccup: the file screen works without it
+        next = r.data.refused ? RESTRICTED : r.ok ? (r.data.versions ?? null) : null;
+      } catch {
+        next = null;
+      }
       if (live) setOut(next);
     })();
     return () => {
@@ -140,17 +130,16 @@ export async function revealVersion(
   fileId: string,
   version: number,
 ): Promise<FullApplication | null> {
-  const sb = getSupabase();
-  if (!sb) return null;
-  const { data, error } = await sb.rpc("reveal_application_version", {
-    _application_id: fileId,
-    _version: version,
-  });
-  if (error) throw new Error(error.message || "Couldn't open that version.");
-  const r = data as unknown as (Row & { version: number }) | null;
-  if (!r) return null;
-  const full = toFull(r);
-  return full && { ...full, version: r.version };
+  if (!getSupabase()) return null;
+  const r = await postAsMe<{ details: (Row & { version: number }) | null }>(
+    "/api/application-details",
+    { application_id: fileId, version },
+  );
+  if (!r.ok) throw new Error(r.data.error || "Couldn't open that version.");
+  const row = r.data.details ?? null;
+  if (!row) return null;
+  const full = toFull(row);
+  return full && { ...full, version: row.version };
 }
 
 /**
@@ -161,13 +150,8 @@ export async function revealFullApplication(
   fileId: string,
   purpose: "reveal_ssn" | "application_pdf" | "funder_submission",
 ): Promise<FullApplication | null> {
-  const sb = getSupabase();
-  if (!sb) return null;
-  const { data, error } = await sb.rpc("reveal_application_details", {
-    _application_id: fileId,
-    _purpose: purpose,
-  });
-  if (notDeployed(error)) return toFull(await readTable(fileId));
-  if (error) throw new Error(error.message || "Couldn't open the full application.");
-  return toFull(data as unknown as Row);
+  if (!getSupabase()) return null;
+  const r = await ask(fileId, purpose);
+  if (!r.ok) throw new Error(r.data.error || "Couldn't open the full application.");
+  return toFull(r.data.details ?? null);
 }

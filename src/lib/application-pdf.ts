@@ -9,28 +9,17 @@
 // drawing existed). What the paper form has no box for goes on a second page: the real estate
 // schedule, the other answers and the electronic signature record. The quick answers alone never
 // carry SSN or date of birth. Nothing here uploads or sends: the PDF is built in the browser.
+//
+// A signed application is flattened: every answer is printed into the page, nothing is left to
+// edit. Its lender copy is page 1 alone, the way funders take an application; the full copy
+// (with the schedule and the signature record) is what the merchant downloads and Lamp keeps.
 import {
   BlendMode,
-  PDFArray,
-  PDFDict,
   PDFDocument,
-  PDFHexString,
   PDFName,
-  PDFNumber,
-  PDFRawStream,
-  PDFStream,
   StandardFonts,
-  beginText,
-  decodePDFRawStream,
-  endText,
-  popGraphicsState,
-  pushGraphicsState,
   rgb,
   setCharacterSpacing,
-  setFillingColor,
-  setFontAndSize,
-  setTextMatrix,
-  showText,
   type Color,
   type PDFFont,
   type PDFForm,
@@ -38,6 +27,7 @@ import {
   type PDFPage,
   type PDFTextField,
 } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 
 type FieldAppearanceOptions = NonNullable<Parameters<PDFTextField["addToPage"]>[1]>;
 import { labelFor, type Answers } from "@/lib/apply";
@@ -241,11 +231,14 @@ const clear = (box: Box) =>
     backgroundColor: undefined,
   }) as unknown as FieldAppearanceOptions;
 
+/** Every filled-in answer prints at this one size, in the template's own face (Inter). */
+const VALUE_PT = 8.5;
+
 function addText(form: PDFForm, page: PDFPage, name: string, box: Box, value: string) {
   const field = form.createTextField(name);
   if (value) field.setText(value);
   field.addToPage(page, clear(box));
-  field.setFontSize(box[3] - box[1] >= 14 ? 9 : 8);
+  field.setFontSize(VALUE_PT);
   return field;
 }
 
@@ -1256,11 +1249,9 @@ function addSchedulePages(
 
 /**
  * The template's balances tab reads "CURRENT LOAN / CASH ADVANCE BALANCES", and merchants get
- * this PDF, so the tab is drawn again over it, wider, with the new label. The label is set in
- * the template's own Inter Bold (its glyphs are on the page as Type3 fonts) at the other tabs'
- * size, tracking and kerning, so it reads as printed; Helvetica Bold stands in if those glyphs
- * are missing. Measured from the template (8px of its padding is 4.811pt); drop this once the
- * template itself is re-exported with the new label.
+ * this PDF, so the tab is drawn again over it, wider, with the new label in Inter Bold (the
+ * template's own face) at the other tabs' size and tracking. Measured from the template (8px of
+ * its padding is 4.811pt); drop this once the template itself is re-exported with the new label.
  */
 const BALANCES_TAB = {
   label: "CURRENT FUNDING / CASH ADVANCE BALANCES",
@@ -1274,115 +1265,68 @@ const BALANCES_TAB = {
   /** In em, after every letter. */
   tracking: 0.14,
 };
-/** Inter Bold's kerning for the label's pairs, in 1/2048 em, as the template sets them. */
-const TAB_KERN: Record<string, number> = { CA: -56, AS: -31, DV: -82, VA: -162 };
 /** The template's own tab fill: FOREST as it writes it, which some viewers round one shade off. */
 const TAB_FILL = rgb(0.0549, 0.2314, 0.1725);
 
-type Glyph = { font: PDFName; code: number; advance: number };
-
-/** The template's Inter Bold glyphs by character, from its Type3 fonts (one per glyph range). */
-function interBoldGlyphs(page: PDFPage): Map<string, Glyph> {
-  const glyphs = new Map<string, Glyph>();
-  const fonts = page.node.Resources()?.lookupMaybe(PDFName.of("Font"), PDFDict);
-  for (const [name] of fonts?.entries() ?? []) {
-    try {
-      const font = fonts?.lookupMaybe(name, PDFDict);
-      if (!font || font.get(PDFName.of("Subtype")) !== PDFName.of("Type3")) continue;
-      const desc = font.lookupMaybe(PDFName.of("FontDescriptor"), PDFDict);
-      const fontName = desc?.lookupMaybe(PDFName.of("FontName"), PDFName)?.decodeText() ?? "";
-      if (!fontName.endsWith("Inter-Bold")) continue;
-      const first = font.lookupMaybe(PDFName.of("FirstChar"), PDFNumber)?.asNumber() ?? 0;
-      const widths = font.lookupMaybe(PDFName.of("Widths"), PDFArray);
-      const matrix = font.lookupMaybe(PDFName.of("FontMatrix"), PDFArray);
-      const scale = matrix?.lookupMaybe(0, PDFNumber)?.asNumber();
-      const toUnicode = font.lookupMaybe(PDFName.of("ToUnicode"), PDFStream);
-      if (!widths || !scale || !(toUnicode instanceof PDFRawStream)) continue;
-      const add = (code: number, unicode: number) => {
-        const width = widths.lookupMaybe(code - first, PDFNumber)?.asNumber();
-        const ch = String.fromCodePoint(unicode);
-        if (width && !glyphs.has(ch)) glyphs.set(ch, { font: name, code, advance: width * scale });
-      };
-      const cmap = new TextDecoder().decode(decodePDFRawStream(toUnicode).decode());
-      for (const [, body = ""] of cmap.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) {
-        for (const [, code = "", to = ""] of body.matchAll(/<(\w+)>\s*<(\w{4})>/g)) {
-          add(parseInt(code, 16), parseInt(to, 16));
-        }
-      }
-      for (const [, body = ""] of cmap.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
-        for (const [, lo = "", hi = "", to = ""] of body.matchAll(
-          /<(\w+)>\s*<(\w+)>\s*<(\w{4})>/g,
-        )) {
-          for (let c = parseInt(lo, 16); c <= parseInt(hi, 16); c++) {
-            add(c, parseInt(to, 16) + c - parseInt(lo, 16));
-          }
-        }
-      }
-    } catch {
-      // a font we can't read is one we don't use
-    }
-  }
-  return glyphs;
-}
-
-async function relabelBalancesTab(doc: PDFDocument, page: PDFPage) {
+function relabelBalancesTab(page: PDFPage, bold: PDFFont) {
   const t = BALANCES_TAB;
-  const chars = [...t.label];
-  const glyphs = interBoldGlyphs(page);
-  const helvetica = chars.every((c) => glyphs.has(c))
-    ? null
-    : await doc.embedFont(StandardFonts.HelveticaBold);
-  // each letter's pen position from the label's start
-  const at: number[] = [];
-  let x = 0;
-  chars.forEach((c, i) => {
-    at.push(x);
-    const advance = helvetica ? helvetica.widthOfTextAtSize(c, 1) : glyphs.get(c)!.advance;
-    const kern = helvetica ? 0 : (TAB_KERN[c + (chars[i + 1] ?? "")] ?? 0) / 2048;
-    x += (advance + t.tracking + kern) * t.size;
-  });
-  const w = x + 2 * t.pad;
+  const w =
+    bold.widthOfTextAtSize(t.label, t.size) + t.label.length * t.tracking * t.size + 2 * t.pad;
   const { radius: r, height: h } = t;
   page.drawSvgPath(`M0 ${h} L0 ${r} Q0 0 ${r} 0 L${w - r} 0 Q${w} 0 ${w} ${r} L${w} ${h} Z`, {
     x: t.left,
     y: PAGE_HEIGHT - t.top,
     color: TAB_FILL,
   });
-  const left = t.left + t.pad;
-  const y = PAGE_HEIGHT - t.baseline;
-  if (helvetica) {
-    page.pushOperators(setCharacterSpacing(t.tracking * t.size));
-    page.drawText(t.label, { x: left, y, size: t.size, font: helvetica, color: WHITE });
-    page.pushOperators(setCharacterSpacing(0));
-    return;
-  }
-  page.pushOperators(
-    pushGraphicsState(),
-    setFillingColor(WHITE),
-    beginText(),
-    ...chars.flatMap((c, i) => {
-      const g = glyphs.get(c)!;
-      return [
-        setFontAndSize(g.font, t.size),
-        setTextMatrix(1, 0, 0, 1, left + at[i]!, y),
-        showText(PDFHexString.of(g.code.toString(16).padStart(2, "0"))),
-      ];
-    }),
-    endText(),
-    popGraphicsState(),
-  );
+  page.pushOperators(setCharacterSpacing(t.tracking * t.size));
+  page.drawText(t.label, {
+    x: t.left + t.pad,
+    y: PAGE_HEIGHT - t.baseline,
+    size: t.size,
+    font: bold,
+    color: WHITE,
+  });
+  page.pushOperators(setCharacterSpacing(0));
 }
 
-/** Builds the fillable, prefilled application from the template's bytes. */
+/**
+ * Which pages: "lender" is page 1 alone (what goes to reps and funders), "all" adds the schedule
+ * and the signature record. Only a signed application has a lender copy; an unsigned one is a
+ * form to fill in, so it always gets every page.
+ */
+export type PdfPages = "lender" | "all";
+
+/** Inter, the face the template is printed in (public/fonts, SIL Open Font License). */
+export const PDF_FONT_URLS = {
+  regular: "/fonts/Inter-Regular.ttf",
+  bold: "/fonts/Inter-Bold.ttf",
+} as const;
+export type PdfFonts = { regular: Uint8Array; bold: Uint8Array };
+
+/** Builds the prefilled application from the template's bytes: fillable, or flat once signed. */
 export async function buildApplicationPdf(
   template: ArrayBuffer | Uint8Array,
   values: ApplicationValues,
+  pages: PdfPages = "all",
+  fonts?: PdfFonts,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.load(template);
   const page = doc.getPage(0);
-  await relabelBalancesTab(doc, page);
+  const signed = !!values.audit;
+  // Whole fonts, not subsets: pdf-lib's subsetting drops most of Inter's letters (the text
+  // layer stays right but the page prints gaps), and a fillable form needs every letter anyway.
+  let font: PDFFont;
+  let bold: PDFFont;
+  if (fonts) {
+    doc.registerFontkit(fontkit);
+    font = await doc.embedFont(fonts.regular);
+    bold = await doc.embedFont(fonts.bold);
+  } else {
+    font = await doc.embedFont(StandardFonts.Helvetica);
+    bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  }
+  relabelBalancesTab(page, bold);
   const form = doc.getForm();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
   const clean = winAnsi(font);
   const text = { ...values.text };
 
@@ -1411,9 +1355,15 @@ export async function buildApplicationPdf(
     if (values.checked[name as keyof typeof CHECKBOXES]) cb.check();
   }
   form.updateFieldAppearances(font);
+  // signed: print every answer into the page so no PDF reader can change it. pdf-lib leaves the
+  // fields' widget entries on the page after flattening; the template has none of its own.
+  if (signed) {
+    form.flatten();
+    page.node.delete(PDFName.of("Annots"));
+    doc.catalog.delete(PDFName.of("AcroForm"));
+  }
 
-  if (values.realEstate || values.extra?.length || values.audit) {
-    const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  if ((!signed || pages === "all") && (values.realEstate || values.extra?.length || values.audit)) {
     addSchedulePages(doc, { regular: font, bold }, clean, values);
   }
   doc.setTitle("Lamp Working Capital Application");
@@ -1425,24 +1375,39 @@ export async function buildApplicationPdf(
 export async function applicationPdfBytes(
   src: ApplicationSource,
   full?: ApplicationValues,
+  pages: PdfPages = "all",
 ): Promise<Uint8Array> {
-  const res = await fetch(APPLICATION_TEMPLATE_URL);
+  const [res, reg, bold] = await Promise.all([
+    fetch(APPLICATION_TEMPLATE_URL),
+    fetch(PDF_FONT_URLS.regular).catch(() => null),
+    fetch(PDF_FONT_URLS.bold).catch(() => null),
+  ]);
   if (!res.ok) throw new Error("Couldn't load the application form.");
-  return buildApplicationPdf(await res.arrayBuffer(), full ?? applicationValues(src));
+  // without Inter the PDF still builds, in Helvetica
+  const fonts =
+    reg?.ok && bold?.ok
+      ? {
+          regular: new Uint8Array(await reg.arrayBuffer()),
+          bold: new Uint8Array(await bold.arrayBuffer()),
+        }
+      : undefined;
+  return buildApplicationPdf(await res.arrayBuffer(), full ?? applicationValues(src), pages, fonts);
 }
 
 /** Fetches the template, builds the PDF and starts the download. Browser only. */
 export async function downloadApplicationPdf(
   src: ApplicationSource,
   full?: ApplicationValues,
+  pages: PdfPages = "all",
+  suffix = "",
 ): Promise<void> {
-  const bytes = await applicationPdfBytes(src, full);
+  const bytes = await applicationPdfBytes(src, full, pages);
   const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   const name = (src.business_name || "merchant").replace(/[^\w .-]+/g, "").trim() || "merchant";
   a.href = url;
-  a.download = `Lamp application - ${name}.pdf`;
+  a.download = `Lamp application - ${name}${suffix}.pdf`;
   document.body.appendChild(a);
   a.click();
   a.remove();
