@@ -26,7 +26,7 @@ export const Route = createFileRoute("/")({
       path: "/",
       title: "Lamp — Working capital, made clear.",
       description:
-        "Lamp is a small-business working capital brokerage in NJ and NYC. Answer a few questions, see what you qualify for, and compare offers side by side in plain terms.",
+        "Lamp is a small-business working capital brokerage serving businesses across the U.S. Answer a few questions, see what you qualify for, and compare offers side by side in plain terms.",
     }),
   component: Index,
 });
@@ -102,7 +102,7 @@ function Hero() {
     <section className="pb-20 pt-10 sm:pt-16 lg:pb-28 lg:pt-20">
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 sm:px-6 lg:grid-cols-[1.08fr_0.92fr] lg:gap-16">
         <div className="ll-shade relative min-w-0">
-          <Kicker className="rise">Working capital for real businesses · NJ &amp; NYC</Kicker>
+          <Kicker className="rise">Working capital for real businesses · Nationwide</Kicker>
           <h1 className="rise mt-6 font-display text-[3rem] font-bold leading-[0.96] tracking-[-0.045em] [animation-delay:60ms] sm:text-7xl lg:text-[5.6rem]">
             Working capital,
             <em className="block pb-[0.06em] font-serif text-[1.04em] font-normal italic tracking-[-0.03em] text-leaf-hi">
@@ -319,7 +319,7 @@ const TICKER = [
   "No credit hit to check",
   "Offers side by side, in dollars",
   "Say no anytime",
-  "New Jersey & New York City",
+  "Businesses nationwide",
 ];
 
 function Ticker() {
@@ -812,7 +812,7 @@ function WhoItsFor() {
             kicker="Who it's for"
             title="Built for the people who"
             accent="run the place."
-            body="Owner-operators doing $20k to $500k a month across New Jersey and New York City. If you open the doors in the morning and do the books at night, this is for you."
+            body="Owner-operators doing $20k to $500k a month, anywhere in the U.S. If you open the doors in the morning and do the books at night, this is for you."
           />
           <ul className="mt-7 flex flex-wrap gap-2">
             {[
