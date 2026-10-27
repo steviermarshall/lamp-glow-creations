@@ -577,8 +577,9 @@ function WhatChanged({
   );
   const m = useMemo(() => matchItems(request.items, changes), [request.items, changes]);
   const reviewed = !!request.reviewed_at;
+  const notAsked = new Set(m.also);
   const line = (c: Change) => (
-    <li key={c.path} className="break-words">
+    <li key={c.path} className="break-words" data-change={c.path}>
       <span className="font-semibold">{c.label}</span>
       <span className="text-smoke">
         {c.secret
@@ -589,10 +590,18 @@ function WhatChanged({
               ? `: removed (was ${c.before})`
               : `: ${c.before} → ${c.after}`}
       </span>
+      {(c.flag || c.secret) && (
+        <span className="ml-1.5 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
+          check before sending
+        </span>
+      )}
+      {notAsked.has(c) && !c.flag && !c.secret && (
+        <span className="ml-1.5 rounded-full px-2 py-0.5 text-xs font-semibold text-smoke ring-1 ring-line">
+          not asked for
+        </span>
+      )}
     </li>
   );
-  const flagged = m.also.filter((c) => c.flag || c.secret);
-  const other = m.also.filter((c) => !c.flag && !c.secret);
   return (
     <div
       className={cn(
@@ -606,37 +615,34 @@ function WhatChanged({
         {after.version} signed {stamp(after.signed_at)} by {after.signed_name}
       </p>
       {m.asked.length > 0 && (
-        <ul className="mt-3 space-y-2 text-sm">
+        <ul className="mt-3 space-y-1 text-sm" data-asked-items>
           {m.asked.map(({ item, changes: hit }) => (
-            <li key={item.label}>
-              <p
-                className={cn(
-                  "flex items-center gap-1.5 font-semibold",
-                  hit.length ? "text-forest" : "text-destructive",
-                )}
-              >
-                {hit.length ? <Check className="size-4" /> : <AlertTriangle className="size-4" />}
+            <li
+              key={item.label}
+              className={cn(
+                "flex items-start gap-1.5 font-semibold",
+                hit.length ? "text-forest" : "text-destructive",
+              )}
+            >
+              {hit.length ? (
+                <Check className="mt-0.5 size-4 shrink-0" />
+              ) : (
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              )}
+              <span>
                 {item.label}
-                {!hit.length && <span className="font-normal"> · not changed</span>}
-              </p>
-              {hit.length > 0 && <ul className="ml-5 mt-1 space-y-0.5">{hit.map(line)}</ul>}
+                <span className="font-normal">{hit.length ? ` · updated` : " · not changed"}</span>
+              </span>
             </li>
           ))}
         </ul>
       )}
-      {flagged.length > 0 && (
-        <div
-          className="mt-3 rounded-xl bg-destructive/10 p-3 text-sm"
-          data-flagged={flagged.length}
-        >
-          <p className="font-semibold text-destructive">Also changed, check before sending</p>
-          <ul className="mt-1 space-y-0.5">{flagged.map(line)}</ul>
-        </div>
-      )}
-      {other.length > 0 && (
+      {changes.length > 0 && (
         <div className="mt-3 text-sm">
-          <p className="font-semibold">Also changed (not asked for)</p>
-          <ul className="mt-1 space-y-0.5">{other.map(line)}</ul>
+          <p className="text-xs font-semibold uppercase tracking-wide text-smoke">
+            {changes.length} answer{changes.length === 1 ? "" : "s"} changed
+          </p>
+          <ul className="mt-1.5 space-y-1">{changes.map(line)}</ul>
         </div>
       )}
       {changes.length === 0 && (
