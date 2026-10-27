@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
+import { postAsMe } from "@/lib/server-api";
 import { cn } from "@/lib/utils";
 import { btnOutline, btnPrimary, card } from "@/components/site/layout";
 import {
@@ -266,39 +267,20 @@ export function CompleteApplication({
    * sends. Best effort: if it fails, the rep's Send builds the same PDF from the saved answers.
    */
   async function storeSignedCopy(x: Details, s: Signed) {
-    const sb = getSupabase();
-    if (!sb) return;
     try {
       const bytes = await applicationPdfBytes(pdfSource(x), detailsToPdf(x, s, repName), "lender");
-      const path = `${userId}/${Date.now()}-signed-application.pdf`;
-      const up = await sb.storage
-        .from("documents")
-        .upload(path, new Blob([bytes as BlobPart], { type: "application/pdf" }), {
-          upsert: false,
-        });
-      if (up.error) return;
-      const idx = await sb.from("documents").insert({
-        application_id: applicationId,
-        user_id: userId,
-        bucket: "documents",
-        storage_path: path,
-        kind: "funder_application",
-        original_name: "Signed application.pdf",
-        size_bytes: bytes.length,
-        mime_type: "application/pdf",
-      });
-      if (idx.error) await sb.storage.from("documents").remove([path]);
+      const form = new FormData();
+      form.set("application_id", applicationId);
+      form.set("kind", "funder_application");
+      form.set("signed_copy", "1");
+      form.set(
+        "file",
+        new File([bytes as BlobPart], "signed-application.pdf", { type: "application/pdf" }),
+      );
+      // the site's server stores the file and indexes it with the merchant's documents
+      await postAsMe("/api/documents/upload", form);
       // the rep (and Asad and Stevie) get the signed copy and any statements by email
-      const session = (await sb.auth.getSession()).data.session;
-      if (session)
-        await fetch("/api/application/notify", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ application_id: applicationId }),
-        });
+      await postAsMe("/api/application/notify", { application_id: applicationId });
     } catch {
       /* the staff Send builds it from the saved answers instead */
     }

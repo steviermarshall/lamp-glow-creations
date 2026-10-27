@@ -113,7 +113,10 @@ export async function readCapped(
 }
 
 /** A JSON object body of at most max bytes, or the 413/400 response to send back. */
-async function readJson<T extends object>(request: Request, max: number): Promise<T | Response> {
+export async function readJson<T extends object>(
+  request: Request,
+  max: number,
+): Promise<T | Response> {
   let buf: Uint8Array | null;
   try {
     buf = await readCapped(request, max);
@@ -168,7 +171,7 @@ const isDuplicate = (e: unknown) => {
 };
 
 /** The visitor's address as the edge saw it. */
-function clientIp(request: Request): string | null {
+export function clientIp(request: Request): string | null {
   const h = request.headers;
   const ip =
     h.get("cf-connecting-ip") ||

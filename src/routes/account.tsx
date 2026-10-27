@@ -12,7 +12,10 @@ import {
   nextMissingKind,
   REQUIRED_DOCUMENTS,
   type DocumentKind,
+  type DocumentOutcome,
+  type FolderFile,
 } from "@/lib/documents";
+import { postAsMe } from "@/lib/server-api";
 import { cn } from "@/lib/utils";
 import { useStaffAccess } from "@/lib/staff";
 import { seo } from "@/lib/site";
@@ -245,9 +248,8 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
     if (!sb) return;
     const seq = ++refreshSeq.current;
     const [files, rows, apps, asked] = await Promise.all([
-      sb.storage
-        .from(BUCKET)
-        .list(userId, { limit: 1000, sortBy: { column: "created_at", order: "desc" } }),
+      // the folder itself is only reachable through the site's server
+      postAsMe<{ files: FolderFile[] }>("/api/documents", { action: "folder" }).catch(() => null),
       sb
         .from("documents")
         .select("storage_path,status,kind,original_name,application_id,created_at")
@@ -267,7 +269,8 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
         .maybeSingle(),
     ]);
     if (seq !== refreshSeq.current) return; // a newer refresh is on its way
-    if (files.error || rows.error || apps.error) {
+    const folder = files?.ok ? files.data.files : undefined;
+    if (!folder || rows.error || apps.error) {
       // Keep what was on screen, but with no remove buttons: a file whose row failed to
       // load would otherwise look unindexed.
       setListOk(false);
@@ -285,8 +288,8 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
       createdAt: r.created_at,
       removable: canRemoveRow(r.status, submittedAt.get(r.application_id)),
     });
-    const unsent: Doc[] = files.data
-      .filter((f) => f.name !== ".emptyFolderPlaceholder" && !indexed.has(`${userId}/${f.name}`))
+    const unsent: Doc[] = folder
+      .filter((f) => !indexed.has(`${userId}/${f.name}`))
       .map((f) => ({
         name: fileLabel(f.name),
         path: `${userId}/${f.name}`,
@@ -313,35 +316,19 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
   const uploadOne = async (
     file: File,
     kind: DocumentKind,
-  ): Promise<"saved" | "failed" | "unknown"> => {
-    const sb = getSupabase();
-    if (!sb) return "failed";
-    const path = `${userId}/${Date.now()}-${file.name.replace(/[^\w.-]+/g, "_")}`;
-    const { error } = await sb.storage.from(BUCKET).upload(path, file, { upsert: false });
-    if (error) return "failed";
-    const { error: indexError } = await sb.from("documents").insert({
-      application_id: app.id,
-      user_id: userId,
-      bucket: BUCKET,
-      storage_path: path,
-      kind,
-      original_name: file.name,
-      size_bytes: file.size,
-      mime_type: file.type || null,
-    });
-    if (!indexError) return "saved";
-    // The row may have been written even though the reply was lost: then it worked.
-    const { data: row, error: checkError } = await sb
-      .from("documents")
-      .select("id")
-      .eq("bucket", BUCKET)
-      .eq("storage_path", path)
-      .maybeSingle();
-    if (checkError) return "unknown";
-    if (row) return "saved";
-    // No row points at the file, so the database lets it go.
-    await sb.storage.from(BUCKET).remove([path]);
-    return "failed";
+  ): Promise<"saved" | "failed" | "unknown" | { refused: string }> => {
+    const form = new FormData();
+    form.set("application_id", app.id);
+    form.set("kind", kind);
+    form.set("file", file);
+    const r = await postAsMe<{ outcome: DocumentOutcome }>("/api/documents/upload", form).catch(
+      () => null,
+    );
+    if (!r) return "unknown";
+    // a 4xx says why: the type, the size, or an application that isn't theirs
+    if (r.status >= 400 && r.status < 500 && r.data.error) return { refused: r.data.error };
+    const outcome = r.data.outcome;
+    return outcome === "saved" || outcome === "unknown" ? outcome : "failed";
   };
 
   const upload = async (list: FileList | null, kind: DocumentKind) => {
@@ -359,11 +346,13 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
     setUploading(true);
     const failed: string[] = [];
     const unsure: string[] = [];
+    const refused: string[] = [];
     try {
       for (const file of files) {
         const outcome = await uploadOne(file, kind);
         if (outcome === "failed") failed.push(file.name);
         if (outcome === "unknown") unsure.push(file.name);
+        if (typeof outcome === "object") refused.push(`${file.name}: ${outcome.refused}`);
       }
     } finally {
       await refresh();
@@ -372,9 +361,9 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
       setChosenKind(null);
       if (inputRef.current) inputRef.current.value = "";
     }
-    const messages: string[] = [];
+    const messages: string[] = [...refused];
     if (failed.length) {
-      const saved = files.length - failed.length - unsure.length;
+      const saved = files.length - failed.length - unsure.length - refused.length;
       messages.push(
         `${failed.join(", ")} couldn't be saved. Please try again.` +
           (saved ? ` The other ${saved === 1 ? "file was" : `${saved} files were`} saved.` : ""),
@@ -389,35 +378,20 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
   };
 
   const remove = async (doc: Doc) => {
-    const sb = getSupabase();
-    if (!sb || removing.has(doc.path)) return;
+    if (!getSupabase() || removing.has(doc.path)) return;
     setRemoving((s) => new Set(s).add(doc.path));
     setUploadError("");
-    const fail = () => setUploadError(`${doc.name} couldn't be removed. Please try again.`);
     try {
-      // The row goes first; the database lets the file go only once no row points at it.
-      const del = await sb
-        .from("documents")
-        .delete()
-        .eq("bucket", BUCKET)
-        .eq("storage_path", doc.path)
-        .select("id");
-      if (del.error) return fail();
-      if (!del.data.length) {
-        const still = await sb
-          .from("documents")
-          .select("id")
-          .eq("bucket", BUCKET)
-          .eq("storage_path", doc.path)
-          .maybeSingle();
-        if (still.error) return fail();
-        if (still.data) {
-          setUploadError(`${doc.name} is with the team now, so it stays on your file.`);
-          return;
-        }
-      }
-      const rm = await sb.storage.from(BUCKET).remove([doc.path]);
-      if (rm.error) return fail();
+      // The server takes the row out first; the file goes only once no row points at it.
+      const r = await postAsMe<{ outcome: DocumentOutcome }>("/api/documents", {
+        action: "remove",
+        path: doc.path,
+      }).catch(() => null);
+      const outcome = r?.data.outcome;
+      if (outcome === "kept")
+        setUploadError(`${doc.name} is with the team now, so it stays on your file.`);
+      else if (outcome !== "removed")
+        setUploadError(`${doc.name} couldn't be removed. Please try again.`);
     } finally {
       await refresh();
       setRemoving((s) => {
@@ -615,7 +589,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
                   ref={inputRef}
                   type="file"
                   multiple
-                  accept="application/pdf,image/*"
+                  accept="application/pdf,image/jpeg,image/png,image/heic,.pdf,.heic"
                   className="hidden"
                   onChange={(e) => upload(e.target.files, kind)}
                 />
@@ -633,7 +607,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
                   <span className="font-semibold text-ink">
                     {uploading ? "Uploading…" : "Tap to choose files"}
                   </span>
-                  PDF or photo, up to 20 MB each
+                  PDF or photo (JPG, PNG or HEIC), up to 20 MB each
                 </button>
               </div>
             )}
