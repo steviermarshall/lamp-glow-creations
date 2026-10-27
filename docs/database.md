@@ -32,7 +32,7 @@ answer never depends on what the caller can read.
 |---|---|---|
 | anonymous | active reps | leads (insert only, through the site's server) |
 | merchant | own profile, businesses, applications, documents in own folder, visible events, presented offers (`my_offers`) | own profile and businesses; own application answers and contact fields; own documents until reviewed; `accept_offer()` |
-| rep | own files plus the unassigned pool (`pipeline_board`), and only on those files: events, documents, stored files, submissions, offers, and the owner's profile and businesses; own profile; own and untagged leads (and their events); funders; own deals and ledger entries | on own or unassigned files only: stage and staff notes, take an unassigned file for themselves (never assign, hand over or release, never change `source_rep_slug`); events as themselves; submissions; offers; document review; own and untagged leads. No business edits, no `accept_offer()` |
+| rep | own files plus the unassigned pool (`pipeline_board`), and only on those files: events, documents, stored files, submissions, offers, and the owner's profile and businesses; own profile; own and untagged leads (and their events); funders; own deals and ledger entries | on own or unassigned files only: stage and staff notes (`application_internal_notes`), take an unassigned file for themselves (never assign, hand over or release, never change `source_rep_slug`); events as themselves; submissions; offers; document review; own and untagged leads. No business edits, no `accept_offer()` |
 | admin | everything | everything, plus reps, roles, funders, deals, the ledger |
 | service role (server functions, cron) | bypasses RLS | bypasses RLS |
 
@@ -45,6 +45,8 @@ Guardrails the database enforces whatever the app sends:
 - deals and the commission ledger are admin-only writes;
 - a rep changes `rep_slug` only from null to their own slug; reassigning, handing over or releasing a file, and changing `source_rep_slug` (link attribution), are admin-only (`applications_before_update` raises);
 - a rep reads a stored file only when it belongs to a file they can see: through its `documents` row (bucket + storage_path), or, for a file with no row yet, when every application of the folder's owner is theirs or unassigned (`rep_can_read_file()`);
+- staff notes live in `application_internal_notes`, which only admins and staff on their own or unassigned files can read or write; the database stamps who saved a note and when. `applications.staff_notes` is retired and always empty, because merchants can read their own application row: a page still open from before the move that saves into it has its text moved into the table, added after the stored note unless it already contains it, and a new row can't carry one (`applications_staff_notes_moved`);
+- from a browser, only a document's review changes: `status`, `review_note`, `reviewed_at`, and `reviewed_by` as the reviewer (or cleared). Its file (`bucket`, `storage_path`), owner, application, `kind` and every other column change only through the server or an owner-run function such as claiming a file (`documents_fields_guard`), because those columns decide who may open the stored file;
 - a merchant can add a document only as `received`, only for a file that exists under `<own user id>/`, and only with a `kind` from the list below; a merchant cannot change a row afterwards (to relabel a file they remove it and upload it again);
 - a merchant can remove a `received` or `rejected` document only while its application has never been submitted, and can remove a file from storage only when no document row points at it (`storage_object_is_indexed()`), so documents sent to funders stay with the deal;
 - `engine_leads` is written only by the engine (service role, upsert by `(source, source_key)`); staff read every row and may change only `status`, `notes` and `rep_slug` (`engine_leads_before_update` resets everything else, stamps `worked_at` and fills `rep_slug` with the caller's slug on a status change). Anonymous has no access.
@@ -90,6 +92,7 @@ against a local Supabase stack.
 | applications | the file; 11 stages | (user_id, created_at), (rep_slug, status, created_at), (status, created_at), business_id, lower(email) |
 | events | timeline, audit trail and rep activity in one | (application_id, occurred_at), (lead_id, occurred_at), actor, kind |
 | documents | index of the storage bucket, with review state and what each file is (`kind`) | (application_id, created_at), (application_id, kind), user_id, pending-review partial |
+| application_internal_notes | the staff notes on a file, one per file; staff only | pk application_id |
 | leads | email before sign-up, converted on application | lower(email), created_at, rep_slug, unconverted partial |
 | funders | the private lender table with criteria and commission points | active |
 | submissions | one application sent to one funder | unique (application_id, funder_id), funder, open partial |

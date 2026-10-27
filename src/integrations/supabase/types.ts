@@ -89,6 +89,22 @@ export type Database = {
           },
         ];
       };
+      application_internal_notes: {
+        Row: {
+          application_id: string;
+          body: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          application_id: string;
+          body: string;
+        };
+        Update: {
+          body?: string;
+        };
+        Relationships: [];
+      };
       application_invites: {
         Row: {
           application_id: string | null;
