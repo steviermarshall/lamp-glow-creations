@@ -12,6 +12,7 @@ import { EngineLeads } from "@/components/staff/engine-leads";
 import { SentApplications } from "@/components/staff/sent-applications";
 import { Funders } from "@/components/staff/funders";
 import { Money } from "@/components/staff/money";
+import { Dashboard } from "@/components/staff/dashboard";
 
 type StaffSearch = {
   view?: View | undefined;
@@ -20,9 +21,10 @@ type StaffSearch = {
   file?: string | undefined;
 };
 
-type View = "engine" | "sent" | "funders" | "money";
-const VIEWS: readonly View[] = ["engine", "sent", "funders", "money"];
+type View = "dashboard" | "engine" | "sent" | "funders" | "money";
+const VIEWS: readonly View[] = ["dashboard", "engine", "sent", "funders", "money"];
 const VIEW_TITLE: Record<View, string> = {
+  dashboard: "Dashboard",
   engine: "Engine leads",
   sent: "Applications",
   funders: "Funders",
@@ -133,6 +135,8 @@ function Staff() {
             repSlug={access.repSlug}
             reps={reps}
           />
+        ) : search.view === "dashboard" ? (
+          <Dashboard isAdmin={access.isAdmin} repSlug={access.repSlug} />
         ) : search.view === "engine" ? (
           <EngineLeads isAdmin={access.isAdmin} repSlug={access.repSlug} reps={reps} />
         ) : search.view === "sent" ? (
