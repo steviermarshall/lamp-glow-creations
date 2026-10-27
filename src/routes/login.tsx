@@ -4,7 +4,7 @@ import { Loader2, Mail } from "lucide-react";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { seo } from "@/lib/site";
+import { GOOGLE_SIGN_IN, seo } from "@/lib/site";
 import { btnOutline, card, PageShell } from "@/components/site/layout";
 import { GoogleButton, sendMagicLink, signInWithGoogle } from "@/components/site/auth";
 
@@ -67,10 +67,15 @@ function Login() {
             </div>
           ) : (
             <div className="mt-6 space-y-4">
-              <GoogleButton onClick={() => signInWithGoogle()} />
-              <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-smoke">
-                <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
-              </div>
+              {GOOGLE_SIGN_IN && (
+                <>
+                  <GoogleButton onClick={() => signInWithGoogle()} />
+                  <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-smoke">
+                    <span className="h-px flex-1 bg-line" /> or{" "}
+                    <span className="h-px flex-1 bg-line" />
+                  </div>
+                </>
+              )}
               <form onSubmit={submit} className="space-y-3">
                 <input
                   type="email"
