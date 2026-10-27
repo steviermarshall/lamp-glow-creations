@@ -28,13 +28,14 @@ import {
 import { missingRealEstate, usd0, amount } from "@/lib/real-estate";
 import { applicationPdfBytes, downloadApplicationPdf } from "@/lib/application-pdf";
 import {
+  EMAIL_RE,
   MAX_UPLOAD_BYTES,
   saveClaim,
   UPLOAD_TYPES,
   type OpenResponse,
   type SubmitResponse,
 } from "@/lib/application-links";
-import { btnOutline, Eyebrow, PageShell } from "@/components/site/layout";
+import { btnOutline, btnPrimary, Eyebrow, PageShell } from "@/components/site/layout";
 import { GoogleButton, sendMagicLink, signInWithGoogle } from "@/components/site/auth";
 import {
   BusinessSection,
@@ -45,7 +46,8 @@ import {
 } from "@/components/application/sections";
 import { SignBlock } from "@/components/application/sign-block";
 import { emptySigning, uploadType, type Signing } from "@/components/application/form-kit";
-import { inputCls } from "@/components/application/fields";
+import { F, inputCls, Text } from "@/components/application/fields";
+import { PHONE_CONSENT_TEXT } from "@/lib/apply";
 
 /**
  * The full application from a link: getlamp.app/application/<rep>?i=<token> (a personal link a
@@ -140,6 +142,8 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
   const [error, setError] = useState("");
   const [done, setDone] = useState<Done | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
+  // a public link asks for name, phone and email first; a personal link already knows who it's for
+  const [contactDone, setContactDone] = useState(Boolean(token) || hasStarted(repSlug));
   const honeypot = useRef<HTMLInputElement | null>(null);
   const started = useRef(false);
   const topRef = useRef<HTMLDivElement | null>(null);
@@ -151,6 +155,12 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
     values: Parameters<typeof downloadApplicationPdf>[1];
   } | null>(null);
   const key = draftKey(open && open !== "error" ? open.draft : null, repSlug);
+
+  // the application is always the light look (the head script does it on a fresh load; this
+  // covers arriving here from another page of the site)
+  useEffect(() => {
+    document.documentElement.dataset["theme"] = "light";
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -171,6 +181,7 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
         if (o.state !== "open") return;
         const saved = loadDraft(draftKey(o.draft, repSlug));
         if (saved) {
+          setContactDone(true);
           // reopen on the first step with gaps (the SSN and date of birth are never saved), and
           // keep the later steps reachable
           const gaps = missingByStep(saved.d);
@@ -404,7 +415,7 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
     window.scrollTo({ top: 0 });
   }
   return (
-    <PageShell member minimalHeader footer={false} tone="night">
+    <PageShell member themeToggle={false} minimalHeader footer={false} tone="night">
       <div ref={topRef} className="mx-auto max-w-3xl scroll-mt-24 px-4 pb-20 pt-6 sm:px-6 sm:pt-12">
         {open === null ? (
           <div className="grid place-items-center py-40">
@@ -435,120 +446,296 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
               firstName={d.owners[0]?.first ?? ""}
             />
 
-            <Stepper
-              step={step}
-              visited={visited}
-              byStep={byStep}
-              onGo={(i) => i <= visited && go(i)}
-            />
+            {!contactDone ? (
+              <ContactGate
+                repSlug={rep?.slug ?? repSlug}
+                repFirst={repFirst}
+                onDone={(c) => {
+                  markStarted(repSlug);
+                  update((x) => ({
+                    ...x,
+                    business: {
+                      ...x.business,
+                      phone: x.business.phone || c.phone,
+                      email: x.business.email || c.email,
+                    },
+                    owners: [
+                      {
+                        ...x.owners[0]!,
+                        first: c.first,
+                        last: c.last,
+                        mobile: c.phone,
+                        email: c.email,
+                      },
+                      ...x.owners.slice(1),
+                    ],
+                  }));
+                  setContactDone(true);
+                  window.scrollTo({ top: 0 });
+                }}
+              />
+            ) : (
+              <>
+                <Stepper
+                  step={step}
+                  visited={visited}
+                  byStep={byStep}
+                  onGo={(i) => i <= visited && go(i)}
+                />
 
-            <div
-              ref={cardRef}
-              className="ll-glass mt-6 scroll-mt-24 rounded-[1.75rem] p-5 ring-1 ring-line sm:p-9"
-            >
-              <div key={current.id} className="rise">
-                <p className="font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-leaf">
-                  Step {step + 1} of {STEPS.length}
-                </p>
-                <h2
-                  ref={headingRef}
-                  tabIndex={-1}
-                  // focused by script when the step changes, for screen readers; no ring
-                  style={{ outline: "none" }}
-                  className="mt-2 font-display text-2xl font-bold tracking-tight sm:text-3xl"
+                <div
+                  ref={cardRef}
+                  className="ll-glass mt-6 scroll-mt-24 rounded-[1.75rem] p-5 ring-1 ring-line sm:p-9"
                 >
-                  {STEP_HEADLINE[current.id]}
-                </h2>
-                {showMissing && byStep[current.id].length > 0 && (
-                  <p className="mt-4 rounded-2xl bg-sand p-4 text-sm ring-1 ring-line" role="alert">
-                    Still needed here: {byStep[current.id].join(", ")}.
-                  </p>
-                )}
-                <div className="mt-8">
-                  {current.id === "business" && <BusinessSection d={d} update={update} />}
-                  {current.id === "owners" && (
-                    <OwnersSection d={d} update={update} loginEmailNote />
-                  )}
-                  {current.id === "property" && <RealEstateSection d={d} update={update} />}
-                  {current.id === "funding" && <FundingSection d={d} update={update} />}
-                  {current.id === "statements" && <Statements files={files} setFiles={setFiles} />}
-                  {current.id === "sign" && (
-                    <>
-                      <Review d={d} onEdit={(i) => go(i)} files={files.length} />
-                      <div className="mt-10 border-t border-line pt-8">
-                        <SignBlock
-                          d={d}
-                          s={sig}
-                          set={(patch) => setSig((x) => ({ ...x, ...patch }))}
-                          todo={allMissing}
-                          error={error}
-                          busy={busy}
-                          onSign={() => void submit()}
-                          cta={`Sign and send to ${repFirst}`}
-                        />
-                        {uploading && (
-                          <p className="mt-4 flex items-center justify-center gap-2 text-sm text-smoke">
-                            <Loader2 className="size-4 animate-spin" /> Adding {uploading}…
-                          </p>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
+                  <div key={current.id} className="rise">
+                    <p className="font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-leaf">
+                      Step {step + 1} of {STEPS.length}
+                    </p>
+                    <h2
+                      ref={headingRef}
+                      tabIndex={-1}
+                      // focused by script when the step changes, for screen readers; no ring
+                      style={{ outline: "none" }}
+                      className="mt-2 font-display text-2xl font-bold tracking-tight sm:text-3xl"
+                    >
+                      {STEP_HEADLINE[current.id]}
+                    </h2>
+                    {showMissing && byStep[current.id].length > 0 && (
+                      <p
+                        className="mt-4 rounded-2xl bg-sand p-4 text-sm ring-1 ring-line"
+                        role="alert"
+                      >
+                        Still needed here: {byStep[current.id].join(", ")}.
+                      </p>
+                    )}
+                    <div className="mt-8">
+                      {current.id === "business" && <BusinessSection d={d} update={update} />}
+                      {current.id === "owners" && (
+                        <OwnersSection d={d} update={update} loginEmailNote />
+                      )}
+                      {current.id === "property" && <RealEstateSection d={d} update={update} />}
+                      {current.id === "funding" && <FundingSection d={d} update={update} />}
+                      {current.id === "statements" && (
+                        <Statements files={files} setFiles={setFiles} />
+                      )}
+                      {current.id === "sign" && (
+                        <>
+                          <Review d={d} onEdit={(i) => go(i)} files={files.length} />
+                          <div className="mt-10 border-t border-line pt-8">
+                            <SignBlock
+                              d={d}
+                              s={sig}
+                              set={(patch) => setSig((x) => ({ ...x, ...patch }))}
+                              todo={allMissing}
+                              error={error}
+                              busy={busy}
+                              onSign={() => void submit()}
+                              cta={`Sign and send to ${repFirst}`}
+                            />
+                            {uploading && (
+                              <p className="mt-4 flex items-center justify-center gap-2 text-sm text-smoke">
+                                <Loader2 className="size-4 animate-spin" /> Adding {uploading}…
+                              </p>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
 
-              {current.id !== "sign" && (
-                <div className="mt-10 flex items-center justify-between gap-3 border-t border-line pt-6">
-                  <button
-                    type="button"
-                    onClick={() => go(step - 1)}
-                    className={cn(btnOutline, "px-5 py-3", step === 0 && "invisible")}
-                  >
-                    <ArrowLeft className="size-4" /> Back
-                  </button>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    {visited === lastStep && step < lastStep - 1 && (
+                  {current.id !== "sign" && (
+                    <div className="mt-10 flex items-center justify-between gap-3 border-t border-line pt-6">
                       <button
                         type="button"
-                        onClick={() => next(lastStep)}
-                        className={cn(btnOutline, "px-5 py-3")}
+                        onClick={() => go(step - 1)}
+                        className={cn(btnOutline, "px-5 py-3", step === 0 && "invisible")}
                       >
-                        Back to signing
+                        <ArrowLeft className="size-4" /> Back
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => next()}
-                      className="inline-flex items-center justify-center gap-2 rounded-full bg-leaf px-6 py-3.5 font-semibold text-ink transition hover:-translate-y-0.5 hover:brightness-105"
-                    >
-                      {current.id === "statements" && files.length === 0
-                        ? "Skip for now"
-                        : "Continue"}
-                      <ArrowRight className="size-4" />
-                    </button>
-                  </div>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {visited === lastStep && step < lastStep - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => next(lastStep)}
+                            className={cn(btnOutline, "px-5 py-3")}
+                          >
+                            Back to signing
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => next()}
+                          className="inline-flex items-center justify-center gap-2 rounded-full bg-leaf px-6 py-3.5 font-semibold text-ink transition hover:-translate-y-0.5 hover:brightness-105"
+                        >
+                          {current.id === "statements" && files.length === 0
+                            ? "Skip for now"
+                            : "Continue"}
+                          <ArrowRight className="size-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* people never see this field; form-filling bots do */}
-            <input
-              ref={honeypot}
-              name="company_fax"
-              tabIndex={-1}
-              autoComplete="off"
-              aria-hidden="true"
-              className="pointer-events-none absolute -left-[9999px] h-px w-px opacity-0"
-            />
+                {/* people never see this field; form-filling bots do */}
+                <input
+                  ref={honeypot}
+                  name="company_fax"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -left-[9999px] h-px w-px opacity-0"
+                />
 
-            <p className="mt-8 flex items-center justify-center gap-2 text-center text-sm text-smoke">
-              <Lock className="size-3.5" /> Encrypted and private. Saved on this device as you go,
-              except your SSN and date of birth.
-            </p>
+                <p className="mt-8 flex items-center justify-center gap-2 text-center text-sm text-smoke">
+                  <Lock className="size-3.5" /> Encrypted and private. Saved on this device as you
+                  go, except your SSN and date of birth.
+                </p>
+              </>
+            )}
           </>
         )}
       </div>
     </PageShell>
+  );
+}
+
+const startedKey = (rep: string) => `lamp.application.started.rep.${rep}`;
+
+function hasStarted(rep: string): boolean {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(startedKey(rep)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markStarted(rep: string) {
+  try {
+    window.localStorage.setItem(startedKey(rep), "1");
+  } catch {
+    /* the page still works without it */
+  }
+}
+
+/**
+ * A public link's first screen: who this is, before the long form. Saved at once (as a lead with
+ * this rep, who is emailed) so a person who stops halfway can still be called. No account here;
+ * that comes after signing.
+ */
+function ContactGate({
+  repSlug,
+  repFirst,
+  onDone,
+}: {
+  repSlug: string;
+  repFirst: string;
+  onDone: (c: { first: string; last: string; phone: string; email: string }) => void;
+}) {
+  const [first, setFirst] = useState("");
+  const [last, setLast] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!first.trim() || !last.trim()) return setError("Add your first and last name.");
+    if (phone.replace(/\D/g, "").length < 10) return setError("Enter a 10-digit phone number.");
+    if (!EMAIL_RE.test(email.trim())) return setError("Enter a valid email.");
+    setBusy(true);
+    setError("");
+    const params = new URL(window.location.href).searchParams;
+    const utm = Object.fromEntries([...params].filter(([k]) => k.startsWith("utm_")));
+    try {
+      const res = await fetch("/api/application/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rep: repSlug,
+          first_name: first,
+          last_name: last,
+          phone,
+          email,
+          phone_consent: consent ? PHONE_CONSENT_TEXT : null,
+          utm,
+        }),
+      });
+      if (res.status === 400) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        setBusy(false);
+        return setError(j.error ?? "Check your details and try again.");
+      }
+      // saved, or the network or limit got in the way: either way they carry on with the form
+    } catch {
+      /* carry on */
+    }
+    setBusy(false);
+    onDone({
+      first: first.trim(),
+      last: last.trim(),
+      phone: phone.trim(),
+      email: email.trim().toLowerCase(),
+    });
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className="ll-glass mt-6 rounded-[1.75rem] p-5 ring-1 ring-line sm:p-9"
+      noValidate
+    >
+      <p className="font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-leaf">
+        Before you start
+      </p>
+      <h2 className="mt-2 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+        Let's start with you
+      </h2>
+      <p className="mt-2 leading-relaxed text-smoke">
+        Your name and number, so {repFirst} can help if you get stuck. The rest takes about 10
+        minutes, and it saves as you go.
+      </p>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <F label="First name">
+          <Text value={first} onChange={setFirst} autoComplete="given-name" />
+        </F>
+        <F label="Last name">
+          <Text value={last} onChange={setLast} autoComplete="family-name" />
+        </F>
+        <F label="Mobile phone">
+          <Text value={phone} onChange={setPhone} inputMode="tel" autoComplete="tel" />
+        </F>
+        <F label="Email">
+          <Text value={email} onChange={setEmail} type="email" autoComplete="email" />
+        </F>
+      </div>
+      <label htmlFor="start-consent" className="mt-5 flex items-start gap-3">
+        <input
+          id="start-consent"
+          type="checkbox"
+          className="mt-1 size-4 shrink-0"
+          checked={consent}
+          onChange={(e) => setConsent(e.target.checked)}
+        />
+        <span className="text-sm leading-relaxed text-smoke">{PHONE_CONSENT_TEXT}</span>
+      </label>
+      {error && (
+        <p className="mt-4 rounded-2xl bg-sand p-4 text-sm ring-1 ring-line" role="alert">
+          {error}
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={busy}
+        className={cn(btnPrimary, "mt-6 w-full py-4 text-base")}
+      >
+        {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+        Start my application
+        <ArrowRight className="size-4" aria-hidden="true" />
+      </button>
+    </form>
   );
 }
 

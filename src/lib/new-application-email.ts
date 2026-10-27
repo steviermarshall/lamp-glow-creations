@@ -147,3 +147,34 @@ export function newApplicationEmail(a: NewApplication): { subject: string; text:
   lines.push("", `Open the file: ${a.fileUrl}`, "", "Lamp");
   return { subject, text: lines.join("\r\n") };
 }
+
+/**
+ * The heads-up a rep gets the moment someone starts the application on their link (the first
+ * screen: name, phone, email), with Asad and Stevie copied. The best time to call is now.
+ */
+export function startedEmail(a: {
+  repName: string | null;
+  first: string;
+  last: string;
+  phone: string;
+  email: string;
+  textsOk: boolean;
+}): { subject: string; text: string } {
+  const name = `${a.first} ${a.last}`.trim();
+  const subject = `Started: ${name} opened the application${a.repName ? ` on ${a.repName}'s link` : ""}`;
+  const text = [
+    `${a.repName?.split(" ")[0] || "Hi"},`,
+    "",
+    `${name} just started the application on your link. They haven't signed yet, so now is the time to call.`,
+    "",
+    `Name: ${name}`,
+    `Phone: ${a.phone}`,
+    `Email: ${a.email}`,
+    `Texts OK: ${a.textsOk ? "Yes" : "No, calls only"}`,
+    "",
+    "When they sign, you'll get the signed application and their statements in a second email.",
+    "",
+    "Lamp",
+  ].join("\r\n");
+  return { subject, text };
+}

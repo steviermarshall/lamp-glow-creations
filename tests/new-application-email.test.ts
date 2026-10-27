@@ -147,3 +147,20 @@ Deno.test("the message is copied with a Cc header, and refuses a header break", 
   }
   assert(threw);
 });
+
+Deno.test("started: tells the rep who to call, with texts allowed or calls only", async () => {
+  const { startedEmail } = await import("../src/lib/new-application-email.ts");
+  const m = startedEmail({
+    repName: "Stevie Marshall",
+    first: "Ana",
+    last: "Diaz",
+    phone: "(201) 555-0100",
+    email: "ana@test.dev",
+    textsOk: false,
+  });
+  assertEquals(m.subject, "Started: Ana Diaz opened the application on Stevie Marshall's link");
+  const lines = m.text.split("\r\n");
+  assertEquals(lines[0], "Stevie,");
+  assertStringIncludes(m.text, "Phone: (201) 555-0100");
+  assertStringIncludes(m.text, "Texts OK: No, calls only");
+});
