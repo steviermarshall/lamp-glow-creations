@@ -75,6 +75,8 @@ export type FileSummary = {
   requested: number | null;
   openPositions: number | null;
   repName: string | null;
+  /** Which signed version goes out (2 and up: an update the merchant signed after a send-back). */
+  version?: number;
   /** Notes staff added and ticked for funders: not part of what the merchant signed. */
   additions?: { at: string; source: string; body: string }[];
 };
@@ -111,11 +113,14 @@ export function emailText(
   mailbox: string,
 ): { subject: string; body: string } {
   const name = s.legalName || "Unnamed business";
-  const subject = `New submission: ${name} – ${money(s.requested)} – Lamp`;
+  const updated = (s.version ?? 1) > 1;
+  const subject = `${updated ? "Updated application" : "New submission"}: ${name} – ${money(s.requested)} – Lamp`;
   const lines = [
     `Hi ${funderContact?.trim() || "team"},`,
     "",
-    "Please find a new working capital submission from Lamp attached.",
+    updated
+      ? "The merchant signed an updated application; it replaces any version of it Lamp sent before. It's attached with the statements."
+      : "Please find a new working capital submission from Lamp attached.",
     "",
     `Business: ${name}${s.dba ? ` (DBA ${s.dba})` : ""}`,
     `State: ${s.state || "not stated"}`,

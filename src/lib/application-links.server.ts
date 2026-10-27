@@ -240,7 +240,7 @@ export async function emailOf(svc: Svc, userId: string | null): Promise<string |
 }
 
 /** Addresses that belong to Lamp's own team: they never get a merchant link. */
-async function staffEmails(svc: Svc): Promise<Set<string>> {
+export async function staffEmails(svc: Svc): Promise<Set<string>> {
   const roles = await svc.from("user_roles").select("user_id").in("role", ["admin", "rep"]);
   const ids = [...new Set(((roles.data ?? []) as { user_id: string }[]).map((r) => r.user_id))];
   if (!ids.length) return new Set();
@@ -252,7 +252,7 @@ async function staffEmails(svc: Svc): Promise<Set<string>> {
   );
 }
 
-const isLampAddress = (email: string, staff: Set<string>) =>
+export const isLampAddress = (email: string, staff: Set<string>) =>
   staff.has(email) || email.endsWith("@getlamp.app");
 
 /**
@@ -567,6 +567,7 @@ export async function applicationInvites(request: Request): Promise<Response> {
         .eq("email", email)
         .eq("rep_slug", rep.slug)
         .eq("channel", "email")
+        .eq("kind", "new")
         .is("submitted_at", null)
         .is("cancelled_at", null)
         .gte("sent_at", since)

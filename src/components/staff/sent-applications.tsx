@@ -124,14 +124,21 @@ export function SentApplications({
     const sb = getSupabase();
     if (!sb) return;
     const now = new Date().toISOString();
-    let q = sb.from("application_invites").select(COLUMNS).eq("kind", "new");
-    if (isAdmin && rep) q = q.eq("rep_slug", rep);
-    if (filter === "signed") q = q.not("submitted_at", "is", null);
-    if (filter === "waiting")
-      q = q.is("submitted_at", null).is("cancelled_at", null).gte("expires_at", now);
-    if (filter === "stopped")
-      q = q.is("submitted_at", null).or(`cancelled_at.not.is.null,expires_at.lt."${now}"`);
-    const { data, error: err } = await q.order("sent_at", { ascending: false }).limit(LIMIT);
+    // update links ("Send back for changes") live on their file; the kind column comes with
+    // that SQL, so without it the list still loads
+    const query = (newOnly: boolean) => {
+      let q = sb.from("application_invites").select(COLUMNS);
+      if (newOnly) q = q.eq("kind", "new");
+      if (isAdmin && rep) q = q.eq("rep_slug", rep);
+      if (filter === "signed") q = q.not("submitted_at", "is", null);
+      if (filter === "waiting")
+        q = q.is("submitted_at", null).is("cancelled_at", null).gte("expires_at", now);
+      if (filter === "stopped")
+        q = q.is("submitted_at", null).or(`cancelled_at.not.is.null,expires_at.lt."${now}"`);
+      return q.order("sent_at", { ascending: false }).limit(LIMIT);
+    };
+    let { data, error: err } = await query(true);
+    if (err?.code === "42703") ({ data, error: err } = await query(false));
     if (err) {
       setError(
         err.code === "42P01" || err.code === "PGRST205"
@@ -150,17 +157,16 @@ export function SentApplications({
         .select("application_id,status,reviewed_at,created_at")
         .in("application_id", files)
         .order("created_at", { ascending: false });
+      // an open request wins; otherwise any signed update not reviewed yet
       const next: Record<string, "asked" | "received"> = {};
-      const seen = new Set<string>();
       for (const x of (c.data ?? []) as {
         application_id: string;
         status: string;
         reviewed_at: string | null;
       }[]) {
-        if (seen.has(x.application_id)) continue;
-        seen.add(x.application_id);
         if (x.status === "open") next[x.application_id] = "asked";
-        else if (x.status === "submitted" && !x.reviewed_at) next[x.application_id] = "received";
+        else if (x.status === "submitted" && !x.reviewed_at && !next[x.application_id])
+          next[x.application_id] = "received";
       }
       setChanges(next);
     } else setChanges({});

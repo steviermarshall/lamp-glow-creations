@@ -138,8 +138,9 @@ export function ChangeApplication({ repSlug }: { repSlug: string }) {
   }
 
   const info = state && state !== "error" ? state : null;
-  const repName = info?.rep?.name ?? "your Lamp rep";
-  const repFirst = repName.split(" ")[0] ?? repName;
+  // a file can lose its rep after the link went out: then the copy says "your rep"
+  const repName = info?.rep?.name ?? null;
+  const repFirst = repName?.split(" ")[0] || null;
 
   return (
     <PageShell minimalHeader footer={false} tone="night">
@@ -165,15 +166,15 @@ export function ChangeApplication({ repSlug }: { repSlug: string }) {
           <>
             <Header
               repSlug={info?.rep?.slug ?? repSlug}
-              repName={repName}
+              repName={repName ?? "Your Lamp rep"}
               title={info?.rep?.title ?? null}
             />
             <h1 className="mt-8 font-display text-3xl font-bold tracking-tight sm:text-4xl">
               {info?.first_name ? `${info.first_name}, one more thing.` : "One more thing."}
             </h1>
             <p className="mt-3 max-w-xl text-lg leading-relaxed text-smoke">
-              Add what {repFirst} asked for, check it over and sign again. It takes a couple of
-              minutes.
+              Add what {repFirst ?? "your rep"} asked for, check it over and sign again. It takes a
+              couple of minutes.
             </p>
             <div className="mt-8">
               <ChangeForm
@@ -181,10 +182,11 @@ export function ChangeApplication({ repSlug }: { repSlug: string }) {
                 items={opened.o.request.items}
                 message={opened.o.request.message}
                 repName={repName}
+                secondSignedBefore={opened.o.request.second_signed_before}
                 busy={busy}
                 error={error}
                 onSign={(d, s) => void sign(d, s)}
-                cta={`Sign and send to ${repFirst}`}
+                cta={repFirst ? `Sign and send to ${repFirst}` : "Sign and send"}
               />
             </div>
             <input
@@ -203,7 +205,7 @@ export function ChangeApplication({ repSlug }: { repSlug: string }) {
           <>
             <Header
               repSlug={info?.rep?.slug ?? repSlug}
-              repName={repName}
+              repName={repName ?? "Your Lamp rep"}
               title={info?.rep?.title ?? null}
             />
             <div className="ll-glass mx-auto mt-10 max-w-lg rounded-[1.75rem] p-6 ring-1 ring-line sm:p-9">
@@ -211,7 +213,7 @@ export function ChangeApplication({ repSlug }: { repSlug: string }) {
                 {info?.first_name ? `Hi ${info.first_name}.` : "Hi."} First, confirm it's you.
               </h1>
               <p className="mt-3 text-smoke">
-                {repFirst} asked for an update to your application
+                {repFirst ?? "Your Lamp rep"} asked for an update to your application
                 {info?.business_name ? ` for ${info.business_name}` : ""}. Enter the date of birth
                 on your application to open it.
               </p>
@@ -227,11 +229,23 @@ export function ChangeApplication({ repSlug }: { repSlug: string }) {
                   />
                 </F>
                 {state.wrong && (
-                  <p className="text-sm text-destructive" role="alert">
-                    That doesn't match your application.
-                    {typeof state.tries_left === "number" &&
-                      ` ${state.tries_left} ${state.tries_left === 1 ? "try" : "tries"} left.`}
-                  </p>
+                  <div className="space-y-2 text-sm" role="alert">
+                    <p className="text-destructive">
+                      That doesn't match your application.
+                      {typeof state.tries_left === "number" &&
+                        ` ${state.tries_left} ${state.tries_left === 1 ? "try" : "tries"} left.`}
+                    </p>
+                    <p className="text-smoke">
+                      If the date on your application was wrong, sign in with the email this link
+                      came to instead: your application opens in your account, ready to update.{" "}
+                      <Link
+                        to="/login"
+                        className="font-semibold text-forest underline underline-offset-4"
+                      >
+                        Sign in
+                      </Link>
+                    </p>
+                  </div>
                 )}
                 <button
                   type="submit"
@@ -248,7 +262,7 @@ export function ChangeApplication({ repSlug }: { repSlug: string }) {
             </div>
           </>
         ) : (
-          <Closed state={state.state} repName={repName} />
+          <Closed state={state.state} repName={repName ?? "your Lamp rep"} />
         )}
       </div>
     </PageShell>
@@ -305,8 +319,8 @@ function Done({
   signedBefore,
 }: {
   done: ChangesSubmitResponse & { d: Details; s: Signing };
-  repFirst: string;
-  repName: string;
+  repFirst: string | null;
+  repName: string | null;
   firstName: string;
   signedBefore: string | null;
 }) {
@@ -349,11 +363,11 @@ function Done({
           <Check className="size-8" />
         </span>
         <h1 className="mt-6 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          Signed{firstName ? `, ${firstName}` : ""}. {repFirst} has your update.
+          Signed{firstName ? `, ${firstName}` : ""}. {repFirst ?? "Your rep"} has your update.
         </h1>
         <p className="mx-auto mt-3 max-w-md text-lg text-smoke">
-          Your updated application replaces the one you signed before. {repFirst} will take it from
-          here.
+          Your updated application replaces the one you signed before. {repFirst ?? "Your rep"} will
+          take it from here.
         </p>
         <button type="button" onClick={download} className={cn(btnOutline, "mt-6 px-5 py-3")}>
           <Download className="size-4" /> Download my signed copy
@@ -395,11 +409,11 @@ function Closed({ state, repName }: { state: ChangesOpenResponse["state"]; repNa
     expired: ["This link has expired", `Ask ${who} for a new one.`],
     locked: [
       "This link is locked",
-      `The date of birth didn't match too many times. Ask ${who} to send a new link.`,
+      `The date of birth didn't match too many times. Ask ${who} to send a new link, or sign in with the email this link came to and update it from your account.`,
     ],
     sign_in: [
       "Update it from your Lamp account",
-      "Your application is in your Lamp account. Sign in with the email on your application to update it.",
+      "Sign in with the email on your application: your application opens in your account, ready to update.",
     ],
   };
   const [title, text] = notices[state] ?? [
@@ -409,7 +423,7 @@ function Closed({ state, repName }: { state: ChangesOpenResponse["state"]; repNa
   return (
     <Notice title={title}>
       {text}
-      {(state === "done" || state === "sign_in") && (
+      {(state === "done" || state === "sign_in" || state === "locked") && (
         <Link
           to="/login"
           className="mt-6 inline-flex font-semibold text-forest underline underline-offset-4"

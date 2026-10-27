@@ -48,10 +48,13 @@ export function FileNotes({
   fileId,
   userId,
   isAdmin,
+  onChange,
 }: {
   fileId: string;
   userId: string;
   isAdmin: boolean;
+  /** After a note is added or withdrawn, so the file's timeline reloads. */
+  onChange?: () => void;
 }) {
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [adding, setAdding] = useState(false);
@@ -110,6 +113,7 @@ export function FileNotes({
     setShare(false);
     setAdding(false);
     void load();
+    onChange?.();
   }
 
   async function withdraw(n: Note) {
@@ -129,6 +133,7 @@ export function FileNotes({
     setBusy(null);
     if (err || !data?.length) setError("Couldn't withdraw it. Only its author or an admin can.");
     void load();
+    onChange?.();
   }
 
   const item = (n: Note, gone: boolean) => (

@@ -143,6 +143,22 @@ $$;
 create index if not exists application_invites_change_idx
   on public.application_invites (change_request_id) where change_request_id is not null;
 
+-- A version's PDF is logged under its own reason (as 20261024120000_funder_send.sql extends it).
+do $$
+declare c text;
+begin
+  select conname into c from pg_constraint
+  where conrelid = 'public.sensitive_access_log'::regclass and contype = 'c'
+    and pg_get_constraintdef(oid) like '%reveal_ssn%';
+  if c is not null then
+    execute format('alter table public.sensitive_access_log drop constraint %I', c);
+  end if;
+  alter table public.sensitive_access_log add constraint sensitive_access_log_action_check
+    check (action in ('reveal_ssn', 'application_pdf', 'funder_submission', 'version_pdf'));
+exception when duplicate_object then null;
+end;
+$$;
+
 -- ---------- 4. Notes added by Lamp staff (not signed by the merchant) ----------
 create table if not exists public.application_staff_additions (
   id uuid primary key default gen_random_uuid(),
@@ -261,6 +277,7 @@ declare
   b jsonb;
   bssn text;
   k integer;
+  refused text[] := '{}';
 begin
   for k in 0 .. jsonb_array_length(owners) - 1 loop
     o := owners -> k;
@@ -269,18 +286,24 @@ begin
       bssn := regexp_replace(coalesce(b ->> 'ssn', ''), '\D', '', 'g');
       if b is null or not public._same_person(o, b) or length(bssn) <> 9
          or right(bssn, 4) <> right(o ->> 'ssn', 4) then
-        raise exception 'kept_value' using errcode = 'P0001', detail = 'owners.' || k || '.ssn';
+        refused := refused || ('owners.' || k || '.ssn');
+      else
+        o := o || jsonb_build_object('ssn', b ->> 'ssn');
       end if;
-      o := o || jsonb_build_object('ssn', b ->> 'ssn');
     end if;
     if coalesce(o ->> 'dob', '') = '**/**/****' then
       if b is null or not public._same_person(o, b) or coalesce(b ->> 'dob', '') = '' then
-        raise exception 'kept_value' using errcode = 'P0001', detail = 'owners.' || k || '.dob';
+        refused := refused || ('owners.' || k || '.dob');
+      else
+        o := o || jsonb_build_object('dob', b ->> 'dob');
       end if;
-      o := o || jsonb_build_object('dob', b ->> 'dob');
     end if;
     out := out || jsonb_build_array(o);
   end loop;
+  -- all of them at once, so the page can ask for every one in a single round
+  if cardinality(refused) > 0 then
+    raise exception 'kept_value' using errcode = 'P0001', detail = array_to_string(refused, ',');
+  end if;
   return _new || jsonb_build_object('owners', out);
 end;
 $$;
@@ -326,7 +349,7 @@ as $$
        where jsonb_typeof(i.value) <> 'object'
           or coalesce(i.value ->> 'section', '') not in ('business', 'owners', 'property', 'funding', 'other')
           or (coalesce(i.value ->> 'target', '') <> ''
-              and (i.value ->> 'target') !~ '^(business|owners\.(0|1|new)|real_estate(\.properties\.[0-9])?|balances|request|other)$')
+              and (i.value ->> 'target') !~ '^(business|owners\.(0|1|new)|real_estate(\.properties\.(new|[0-9](\.liens(\.[0-9])?)?))?|balances|request|other)$')
           or char_length(btrim(coalesce(i.value ->> 'label', ''))) not between 3 and 140
           or char_length(coalesce(i.value ->> 'note', '')) > 300
           or public._sensitive_text(i.value ->> 'label')
@@ -363,7 +386,9 @@ declare
   app uuid;
 begin
   if want <> '' and want = got then
-    update public.application_invites set verified_at = coalesce(verified_at, now()) where id = _invite_id;
+    update public.application_invites
+       set verified_at = coalesce(verified_at, now()), failed_checks = 0
+     where id = _invite_id;
     return null;
   end if;
   update public.application_invites
@@ -621,6 +646,10 @@ begin
     end if;
     raise exception 'change requests are kept' using errcode = 'insufficient_privilege';
   end if;
+  -- a deleted login's ON DELETE SET NULL arrives through the foreign key, one trigger deep
+  if pg_trigger_depth() > 1 then
+    return new;
+  end if;
   if new.application_id <> old.application_id
      or new.base_version_id <> old.base_version_id
      or new.base_version <> old.base_version
@@ -689,6 +718,10 @@ begin
     end if;
     raise exception 'Notes aren''t deleted; withdraw it instead.' using errcode = 'insufficient_privilege';
   end if;
+  -- a deleted login's ON DELETE SET NULL arrives through the foreign key, one trigger deep
+  if tg_op = 'UPDATE' and pg_trigger_depth() > 1 then
+    return new;
+  end if;
   if tg_op = 'INSERT' then
     select coalesce(nullif(btrim(p.full_name), ''), nullif(btrim(p.first_name), ''), p.email)
       into who from public.profiles p where p.id = auth.uid();
@@ -724,17 +757,253 @@ create trigger application_staff_additions_guard
   for each row execute function public.application_staff_additions_guard();
 
 -- ---------- 12. Nothing goes to funders while the merchant is updating ----------
+-- Each submission records which signed version it carried, so an update can go to a funder that
+-- already has the version before it (and only once per version).
+alter table public.submissions add column if not exists application_version integer;
+update public.submissions set application_version = 1 where application_version is null;
+do $$
+declare c text;
+begin
+  -- the original one-per-funder rule (20261017120200), found by what it is rather than its name
+  for c in
+    select conname from pg_constraint
+    where conrelid = 'public.submissions'::regclass and contype = 'u'
+      and pg_get_constraintdef(oid) = 'UNIQUE (application_id, funder_id)'
+  loop
+    execute format('alter table public.submissions drop constraint %I', c);
+  end loop;
+  alter table public.submissions add constraint submissions_application_funder_version_key
+    unique (application_id, funder_id, application_version);
+exception when duplicate_object or duplicate_table then null;
+end;
+$$;
+
+-- As in 20261024120000_funder_send.sql, except that "already sent" means this funder has the
+-- newest signed version: one that got version 1 can be sent the update.
+create or replace function public._funder_matches(_application_id uuid)
+returns table (
+  funder_id uuid,
+  funder_name text,
+  submission_email text,
+  auto_send boolean,
+  already_sent boolean,
+  eligible boolean,
+  blockers text[],
+  checks text[]
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  a public.applications;
+  d public.application_details;
+  dep_lo numeric; dep_hi numeric;
+  tib_lo numeric; tib_hi numeric;
+  fico_lo numeric; fico_hi numeric;
+  amt_lo numeric; amt_hi numeric;
+  v numeric;
+  st text;
+  ind text;
+  pos int;
+  f public.funders;
+  b text[];
+  c text[];
+  -- the signed version a send would carry now: a funder that has an older one hasn't had this
+  cur_version int := coalesce(
+    (select max(x.version) from public.application_versions x where x.application_id = _application_id), 1);
+begin
+  select * into a from public.applications where id = _application_id;
+  if a.id is null then
+    return;
+  end if;
+  select * into d from public.application_details where application_id = _application_id;
+
+  -- Monthly deposits: the full application's figure, else the quick-apply bucket.
+  v := public._num(d.business ->> 'monthly_revenue');
+  if v is not null and v > 0 then
+    dep_lo := v; dep_hi := v;
+  else
+    case a.answers ->> 'revenue'
+      when 'lt-20k' then dep_lo := 0; dep_hi := 19999;
+      when '20-50k' then dep_lo := 20000; dep_hi := 50000;
+      when '50-100k' then dep_lo := 50000; dep_hi := 100000;
+      when '100-250k' then dep_lo := 100000; dep_hi := 250000;
+      when '250k-plus' then dep_lo := 250000; dep_hi := null;
+      else null;
+    end case;
+  end if;
+
+  -- Months in business: from the start date, else the bucket.
+  if nullif(d.business ->> 'start_date', '') is not null then
+    begin
+      v := (extract(year from age(current_date, (d.business ->> 'start_date')::date)) * 12
+            + extract(month from age(current_date, (d.business ->> 'start_date')::date)));
+      tib_lo := v; tib_hi := v;
+    exception when others then
+      tib_lo := null; tib_hi := null;
+    end;
+  end if;
+  if tib_lo is null then
+    case a.answers ->> 'tib'
+      when 'lt-6m' then tib_lo := 0; tib_hi := 5;
+      when '6-12m' then tib_lo := 6; tib_hi := 12;
+      when '1-2y' then tib_lo := 12; tib_hi := 24;
+      when '2-5y' then tib_lo := 24; tib_hi := 60;
+      when '5y-plus' then tib_lo := 60; tib_hi := null;
+      else null;
+    end case;
+  end if;
+
+  -- Credit: the lowest score any owner gave, else the bucket.
+  select min(public._num(o ->> 'credit')) into v
+  from jsonb_array_elements(coalesce(d.owners, '[]'::jsonb)) o
+  where public._num(o ->> 'credit') between 300 and 850;
+  if v is not null then
+    fico_lo := v; fico_hi := v;
+  else
+    case a.answers ->> 'credit'
+      when 'lt-550' then fico_lo := 300; fico_hi := 549;
+      when '550-649' then fico_lo := 550; fico_hi := 649;
+      when '650-699' then fico_lo := 650; fico_hi := 699;
+      when '700-plus' then fico_lo := 700; fico_hi := 850;
+      else null;
+    end case;
+  end if;
+
+  -- Amount requested.
+  v := coalesce(public._num(d.request ->> 'amount'), a.amount_requested);
+  if v is not null and v > 0 then
+    amt_lo := v; amt_hi := v;
+  else
+    case a.answers ->> 'amount'
+      when 'lt-25k' then amt_lo := 0; amt_hi := 25000;
+      when '25-50k' then amt_lo := 25000; amt_hi := 50000;
+      when '50-100k' then amt_lo := 50000; amt_hi := 100000;
+      when '100-250k' then amt_lo := 100000; amt_hi := 250000;
+      when '250k-plus' then amt_lo := 250000; amt_hi := null;
+      else null;
+    end case;
+  end if;
+
+  st := upper(nullif(trim(d.business ->> 'state'), ''));
+  ind := lower(coalesce(nullif(trim(d.business ->> 'industry'), ''), a.answers ->> 'industry'));
+
+  -- Open positions: balances still owed on another advance.
+  if d.application_id is not null then
+    select count(*) into pos
+    from jsonb_array_elements(coalesce(d.balances, '[]'::jsonb)) x
+    where coalesce(public._num(x ->> 'current'), 0) > 0 or coalesce(public._num(x ->> 'payment'), 0) > 0;
+  end if;
+
+  for f in select * from public.funders where active order by name loop
+    b := '{}';
+    c := '{}';
+
+    if f.submission_email is null or f.submission_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
+      b := array_append(b, ('no submission email on the funder')::text);
+    end if;
+
+    if f.min_monthly_deposits is not null then
+      if dep_lo is null then
+        c := array_append(c, (format('no monthly deposits on file (minimum $%s)', to_char(f.min_monthly_deposits, 'FM999,999,999')))::text);
+      elsif dep_lo >= f.min_monthly_deposits then
+        null;
+      elsif dep_hi is not null and dep_hi < f.min_monthly_deposits then
+        b := array_append(b, (format('deposits under the $%s monthly minimum', to_char(f.min_monthly_deposits, 'FM999,999,999')))::text);
+      else
+        c := array_append(c, (format('deposits may be under the $%s monthly minimum: check the statements', to_char(f.min_monthly_deposits, 'FM999,999,999')))::text);
+      end if;
+    end if;
+
+    if f.min_months_in_business is not null then
+      if tib_lo is null then
+        c := array_append(c, (format('no time in business on file (minimum %s months)', f.min_months_in_business))::text);
+      elsif tib_lo >= f.min_months_in_business then
+        null;
+      elsif tib_hi is not null and tib_hi < f.min_months_in_business then
+        b := array_append(b, (format('under %s months in business', f.min_months_in_business))::text);
+      else
+        c := array_append(c, (format('may be under %s months in business', f.min_months_in_business))::text);
+      end if;
+    end if;
+
+    if f.min_credit_score is not null then
+      if fico_lo is null then
+        c := array_append(c, (format('no credit score on file (minimum %s)', f.min_credit_score))::text);
+      elsif fico_lo >= f.min_credit_score then
+        null;
+      elsif fico_hi is not null and fico_hi < f.min_credit_score then
+        b := array_append(b, (format('credit under %s', f.min_credit_score))::text);
+      else
+        c := array_append(c, (format('credit may be under %s', f.min_credit_score))::text);
+      end if;
+    end if;
+
+    if f.min_amount is not null and amt_hi is not null and amt_hi < f.min_amount then
+      b := array_append(b, (format('asks for less than the $%s minimum', to_char(f.min_amount, 'FM999,999,999')))::text);
+    end if;
+    if f.max_amount is not null and amt_lo is not null and amt_lo > f.max_amount then
+      b := array_append(b, (format('asks for more than the $%s maximum', to_char(f.max_amount, 'FM999,999,999')))::text);
+    end if;
+
+    if st is not null and exists (select 1 from unnest(f.states_excluded) s where upper(trim(s)) = st) then
+      b := array_append(b, (format('does not fund in %s', st))::text);
+    elsif st is null and coalesce(array_length(f.states_excluded, 1), 0) > 0 then
+      c := array_append(c, ('no business state on file')::text);
+    end if;
+
+    if ind is not null and exists (
+      select 1 from unnest(f.industries_excluded) x
+      where length(trim(x)) > 0 and (ind like '%' || lower(trim(x)) || '%' or lower(trim(x)) like '%' || ind || '%')
+    ) then
+      b := array_append(b, (format('does not fund %s', ind))::text);
+    end if;
+
+    if f.max_positions is not null then
+      if pos is null then
+        c := array_append(c, (format('open positions unknown (maximum %s)', f.max_positions))::text);
+      elsif pos > f.max_positions then
+        b := array_append(b, (format('%s open positions, maximum %s', pos, f.max_positions))::text);
+      end if;
+    end if;
+
+    funder_id := f.id;
+    funder_name := f.name;
+    submission_email := f.submission_email;
+    auto_send := f.auto_send;
+    already_sent := exists (
+      select 1 from public.submissions s
+      where s.application_id = _application_id and s.funder_id = f.id
+        and coalesce(s.application_version, 1) = cur_version
+    );
+    eligible := coalesce(array_length(b, 1), 0) = 0;
+    blockers := b;
+    checks := c;
+    return next;
+  end loop;
+end;
+$$;
+revoke all on function public._funder_matches(uuid) from public, anon, authenticated;
+grant execute on function public._funder_matches(uuid) to service_role;
+
 -- The send-back locks the file row; a submission waits for it, then sees the open request.
+-- (FOR NO KEY UPDATE, not FOR SHARE: two first sends of one file queue instead of deadlocking on
+-- submissions_stamp_application's update of the same row.)
 create or replace function public.submissions_change_guard()
 returns trigger
 language plpgsql security definer
 set search_path = public
 as $$
 begin
+  new.application_version := coalesce(
+    (select max(v.version) from public.application_versions v where v.application_id = new.application_id),
+    1);
   if coalesce(new.sent_via, 'manual') not in ('email', 'auto_email') then
     return new;
   end if;
-  perform 1 from public.applications where id = new.application_id for share;
+  perform 1 from public.applications where id = new.application_id for no key update;
   if exists (select 1 from public.application_change_requests r
              where r.application_id = new.application_id and r.status = 'open') then
     raise exception 'changes_requested' using errcode = 'P0001';
@@ -820,6 +1089,22 @@ begin
              where r.application_id = _application_id and r.status = 'open') then
     raise exception 'already_open' using errcode = 'P0001';
   end if;
+  -- the last update first: what changed in it is reviewed before anything else is asked
+  if exists (select 1 from public.application_change_requests r
+             where r.application_id = _application_id and r.status = 'submitted' and r.reviewed_at is null) then
+    raise exception 'unreviewed' using errcode = 'P0001';
+  end if;
+  -- a file with no account gets its update link at the email it was signed with, and only there
+  if a.user_id is null then
+    if lower(btrim(coalesce(a.claim_email, ''))) !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}$' then
+      raise exception 'no_email' using errcode = 'P0001';
+    end if;
+    if lower(btrim(a.claim_email)) like '%@getlamp.app' or exists (
+         select 1 from public.profiles p join public.user_roles ur on ur.user_id = p.id
+         where lower(p.email) = lower(btrim(a.claim_email)) and ur.role in ('admin', 'rep')) then
+      raise exception 'lamp_address' using errcode = 'P0001';
+    end if;
+  end if;
   if (select count(*) from public.application_change_requests r
       where r.application_id = _application_id and r.created_at > now() - interval '1 day') >= 3 then
     raise exception 'too_many' using errcode = 'P0001';
@@ -886,6 +1171,9 @@ begin
   if r.status <> 'open' then
     raise exception 'not_open' using errcode = 'P0001';
   end if;
+  if a.rep_slug is null then
+    raise exception 'unassigned' using errcode = 'P0001';
+  end if;
   if _actor is null or not (
        public.has_role('admin', _actor)
        or (public.is_staff(_actor) and a.rep_slug is not null and a.rep_slug = public.current_rep_slug(_actor))) then
@@ -903,7 +1191,7 @@ begin
     end if;
     select lower(email) into em from auth.users where id = a.user_id;
     update public.application_change_requests
-       set channel = 'account', notified_at = now(), sends = sends + 1
+       set channel = 'account', sends = sends + 1
      where id = r.id;
     -- an update link sent before they had an account stops working
     if r.invite_id is not null then
@@ -961,6 +1249,33 @@ begin
 end;
 $$;
 
+-- Lamp's server, after the email to a merchant with an account went out: "Email again" waits 10
+-- minutes from here, not from a send that failed.
+create or replace function public.change_notice_sent(_request_id uuid)
+returns void
+language sql volatile security definer
+set search_path = public
+as $$
+  update public.application_change_requests set notified_at = now()
+   where id = _request_id and status = 'open' and channel = 'account';
+$$;
+
+-- Setting a document's status to itself re-runs documents_queue_auto_send (after insert or update
+-- of status) and its checks, without changing anything: automatic sends a send-back held up get
+-- their chance once it's cancelled.
+create or replace function public._poke_auto_send(_application_id uuid)
+returns void
+language sql volatile security definer
+set search_path = public
+as $$
+  update public.documents set status = status
+   where id = (select d.id from public.documents d
+               where d.application_id = _application_id
+                 and d.kind in ('funder_application', 'bank_statement')
+                 and d.status in ('received', 'accepted')
+               order by d.created_at desc limit 1);
+$$;
+
 -- The rep (or an admin) no longer needs the update. The signed application stands as it was.
 create or replace function public.cancel_change_request(_request_id uuid, _reason text default null)
 returns jsonb
@@ -992,6 +1307,7 @@ begin
   values (r.application_id, uid, 'note', 'Update request cancelled' || coalesce(': ' || reason, ''));
   insert into public.events (application_id, actor_user_id, kind, body, visible_to_merchant)
   values (r.application_id, uid, 'system', 'Your rep no longer needs an update. Nothing else to do.', true);
+  perform public._poke_auto_send(r.application_id);
   return jsonb_build_object('request_id', r.id, 'cancelled', true);
 end;
 $$;
@@ -1336,7 +1652,8 @@ begin
   end if;
   select p.name into rep_name from public.reps p where p.slug = a.rep_slug;
   select * into r from public.application_change_requests
-   where application_id = a.id and status = 'open';
+   where application_id = a.id and status = 'open'
+     and a.status not in ('funded', 'withdrawn', 'closed');
   return jsonb_build_object(
     'rep', jsonb_build_object('name', rep_name),
     'open', case when r.id is null then null else jsonb_build_object(
@@ -1528,7 +1845,7 @@ begin
   end if;
   insert into public.sensitive_access_log (actor_user_id, actor_email, application_id, action)
   values (auth.uid(), (select email from public.profiles where id = auth.uid()),
-          _application_id, 'application_pdf');
+          _application_id, 'version_pdf');
   return jsonb_build_object(
     'version', v.version, 'business', v.business, 'owners', v.owners, 'balances', v.balances,
     'request', v.request, 'real_estate', v.real_estate, 'signed_name', v.signed_name,
@@ -1589,6 +1906,7 @@ revoke all on function public._sensitive_text(text) from public, anon, authentic
 revoke all on function public._valid_change_items(jsonb) from public, anon, authenticated;
 revoke all on function public._link_prefill(public.application_versions) from public, anon, authenticated;
 revoke all on function public._check_change_dob(uuid, text, text) from public, anon, authenticated;
+revoke all on function public._poke_auto_send(uuid) from public, anon, authenticated;
 revoke all on function public.application_details_guard() from public, anon, authenticated;
 revoke all on function public.application_details_record_version() from public, anon, authenticated;
 revoke all on function public.application_versions_guard() from public, anon, authenticated;
@@ -1618,6 +1936,8 @@ revoke all on function public.open_change_link(text, text, text) from public, an
 revoke all on function public.resubmit_change_request(text, text, uuid, uuid, integer, jsonb, text, text, text, text, text, text, text, text)
   from public, anon, authenticated;
 grant execute on function public.issue_change_link(uuid, text, uuid) to service_role;
+revoke all on function public.change_notice_sent(uuid) from public, anon, authenticated;
+grant execute on function public.change_notice_sent(uuid) to service_role;
 grant execute on function public.open_change_link(text, text, text) to service_role;
 grant execute on function public.resubmit_change_request(text, text, uuid, uuid, integer, jsonb, text, text, text, text, text, text, text, text)
   to service_role;

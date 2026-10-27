@@ -260,7 +260,7 @@ export async function sendToFunders(request: Request): Promise<Response> {
       appId,
       actor,
       "submitted_to_funder",
-      `Sent to ${f.funder_name} at ${f.submission_email}${mode === "auto" ? " (automatic)" : ""}`,
+      `Sent ${pkg.summary.version && pkg.summary.version > 1 ? `the updated application (version ${pkg.summary.version}) ` : ""}to ${f.funder_name} at ${f.submission_email}${mode === "auto" ? " (automatic)" : ""}`,
       { funder_id: f.funder_id, message_id: msg.id ?? null, attachments: names },
     );
     results.push({
@@ -360,7 +360,8 @@ async function buildPackage(
       return {
         error: "review what changed in the merchant's update first (Mark reviewed on the file)",
       };
-    if (!body.application_pdf)
+    // a preview lists the PDF by name; a real send needs the one the page just built
+    if (!body.application_pdf && !body.dry_run)
       return { error: "the updated application's PDF didn't arrive: send it again from the file" };
   }
   const a = app.data as {
@@ -396,6 +397,7 @@ async function buildPackage(
       ? balances.filter((x) => (num(x.current) ?? 0) > 0 || (num(x.payment) ?? 0) > 0).length
       : null,
     repName,
+    version: latest?.version ?? 1,
     additions: ((notes.data ?? []) as { created_at: string; source: string; body: string }[]).map(
       (n) => ({
         at: n.created_at,
@@ -431,6 +433,13 @@ async function buildPackage(
       return { error: "the application PDF didn't arrive intact" };
     }
     attachments.push({ name: `Lamp application - ${label}.pdf`, mime: "application/pdf", bytes });
+  } else if (latest && latest.version >= 2) {
+    // a preview of an updated application: the stored PDF is an older version, never attached
+    attachments.push({
+      name: `Lamp application - ${label}.pdf`,
+      mime: "application/pdf",
+      bytes: new Uint8Array(),
+    });
   } else if (storedApp) {
     const f = await download(svc, storedApp);
     if ("error" in f) return f;

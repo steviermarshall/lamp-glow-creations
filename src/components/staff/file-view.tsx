@@ -574,7 +574,12 @@ export function FileView({
           <FileApplication fileId={fileId} full={full} />
 
           {full !== undefined && full !== RESTRICTED && (
-            <FileNotes fileId={file.id} userId={userId} isAdmin={isAdmin} />
+            <FileNotes
+              fileId={file.id}
+              userId={userId}
+              isAdmin={isAdmin}
+              onChange={() => void load()}
+            />
           )}
 
           <section className={cn(card, "p-6")}>

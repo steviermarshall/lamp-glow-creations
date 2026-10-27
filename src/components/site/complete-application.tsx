@@ -109,6 +109,8 @@ export function CompleteApplication({
   const [repName, setRepName] = useState<string | null>(null);
   const [changes, setChanges] = useState<Changes | null>(null);
   const [updating, setUpdating] = useState(false);
+  // the confirmation after an update is signed (until the page is left)
+  const [justUpdated, setJustUpdated] = useState(false);
   // bumped after an update is signed, to read everything again
   const [tick, setTick] = useState(0);
 
@@ -373,20 +375,27 @@ export function CompleteApplication({
         error?: string;
         missing?: string[];
       };
-      if (!res.ok) {
+      // a second tap while the first was saving finds it signed already: that's a success
+      const alreadySigned =
+        res.status === 409 && (out as { code?: string }).code === "already_signed";
+      if (!res.ok && !alreadySigned) {
         setError(
           out.missing?.length
             ? `Still needed: ${out.missing.join(", ")}.`
             : (out.error ?? "Couldn't sign your update. Try again, or call your rep."),
         );
+        setUpdating(false);
         return;
       }
+      // leave the form at once, then read the signed version back
+      setError("");
+      setJustUpdated(true);
+      setChanges((c) => (c ? { ...c, open: null } : c));
       setTick((n) => n + 1);
     } catch {
       setError("Couldn't reach Lamp. Check your connection and try again.");
-    } finally {
-      setUpdating(false);
     }
+    setUpdating(false);
   }
 
   if (signed.at && changes?.open) {
@@ -407,7 +416,8 @@ export function CompleteApplication({
             base={d}
             items={changes.open.items}
             message={changes.open.message}
-            repName={changes.rep?.name ?? repName ?? "Your rep"}
+            repName={changes.rep?.name ?? repName}
+            secondSignedBefore={!!signed.name2}
             busy={updating}
             error={error}
             onSign={(next, s) => void signUpdate(next, s)}
@@ -438,6 +448,11 @@ export function CompleteApplication({
           {updated ? " (updated)" : ""}. Your rep has it. To change anything now, call or text your
           rep.
         </p>
+        {justUpdated && (
+          <p className="mt-3 rounded-xl bg-sand px-4 py-3 text-sm font-semibold" role="status">
+            Signed. Your rep has your update.
+          </p>
+        )}
         {signed.image && (
           <div className="mt-4 inline-block rounded-xl bg-[#fbfaf5] px-4 py-2 ring-1 ring-black/10">
             <img

@@ -10,9 +10,11 @@ import {
   doNotContact,
   emailOf,
   gmailSend,
+  isLampAddress,
   notReady,
   PNG,
   readJson,
+  staffEmails,
   tryAgain,
   UUID,
   type Svc,
@@ -28,7 +30,7 @@ import {
   signatureMatches,
   type Details,
 } from "@/lib/application-details";
-import { cleanEmail, hashToken, isToken, newToken } from "@/lib/application-links";
+import { cleanEmail, EMAIL_RE, hashToken, isToken, newToken } from "@/lib/application-links";
 import {
   changesEmail,
   changesUrl,
@@ -73,6 +75,7 @@ const STAFF_ERR: Record<string, [number, string]> = {
     409,
     "The email on the application is a Lamp address, so no update link goes to it.",
   ],
+  unreviewed: [409, "Review the merchant's last update first (Mark reviewed), then send it back."],
 };
 
 const dbError = (
@@ -89,6 +92,7 @@ type FileRow = {
   id: string;
   user_id: string | null;
   claim_email: string | null;
+  phone: string | null;
   status: string;
   rep_slug: string | null;
 };
@@ -96,7 +100,7 @@ type FileRow = {
 async function fileOf(svc: Svc, id: string): Promise<FileRow | null | undefined> {
   const r = await svc
     .from("applications")
-    .select("id,user_id,claim_email,status,rep_slug")
+    .select("id,user_id,claim_email,phone,status,rep_slug")
     .eq("id", id)
     .maybeSingle();
   if (r.error) return undefined;
@@ -128,6 +132,9 @@ async function deliver(
   ask: { items: ChangeItem[]; message: string | null },
 ): Promise<Response> {
   const claimed = file.claimed;
+  // Google first: a mailbox that can't send must not rotate the link or use up a send
+  const access = await gmailAccessToken(svc).catch(() => ({ error: "Couldn't reach Google." }));
+  if ("error" in access) return json(412, { error: access.error });
   const token = claimed ? null : newToken();
   const issued = await svc.rpc("issue_change_link", {
     _request_id: requestId,
@@ -141,7 +148,6 @@ async function deliver(
     json(200, { request_id: requestId, status, detail } satisfies SendBackResult);
   if (!to) return result("failed", "There's no email address to send it to. Call the merchant.");
 
-  const access = await gmailAccessToken(svc).catch(() => ({ error: "Couldn't reach Google." }));
   const repName = x.rep_name ?? "Your Lamp rep";
   const mode = x.channel === "account" ? "account" : "link";
   const url =
@@ -163,7 +169,6 @@ async function deliver(
       `Email failed: ${why}. The request is still open: press Email again, or cancel it.`,
     );
   };
-  if ("error" in access) return fail(access.error);
   const mail = changesEmail({
     firstName: x.first_name ?? "",
     businessName: x.business_name ?? "",
@@ -186,6 +191,8 @@ async function deliver(
     html: mail.html,
   });
   if ("error" in sent) return fail(sent.error);
+  // "Email again" counts its 10 minutes from a sent email, not a failed one
+  if (mode === "account") await svc.rpc("change_notice_sent", { _request_id: requestId });
   if (x.invite_id)
     await svc
       .from("application_invites")
@@ -252,7 +259,7 @@ export async function sendBack(
     if (file === undefined) return tryAgain();
     if (!file) return json(404, { error: STAFF_ERR["file_not_found"]![1] });
     const to = file.user_id ? await emailOf(svc, file.user_id) : cleanEmail(file.claim_email);
-    const dnc = await doNotContact(svc, to ?? "", "");
+    const dnc = await doNotContact(svc, to ?? "", file.phone ?? "");
     if (dnc === null)
       return json(503, { error: "Couldn't check the do-not-contact list. Try again." });
     if (dnc) return json(409, { error: "Marked do not contact. Call them instead." });
@@ -274,13 +281,21 @@ export async function sendBack(
   if (!checked.items.length && !message)
     return json(422, { error: "Tick what's missing or write a message." });
 
+  // only an admin or the file's rep: asked through the caller's own client, before anything else
+  const allowed = await who.client.rpc("can_see_application_details", {
+    _application_id: body.application_id,
+  });
+  if (allowed.error) return tryAgain();
+  if (allowed.data !== true) return json(403, { error: STAFF_ERR["not_allowed"]![1] });
   const file = await fileOf(svc, body.application_id);
   if (file === undefined) return tryAgain();
   if (!file) return json(404, { error: STAFF_ERR["file_not_found"]![1] });
-  // who it goes to, checked before anything is recorded
+  // who it goes to, checked before anything is recorded (the database checks it again)
   const to = file.user_id ? await emailOf(svc, file.user_id) : cleanEmail(file.claim_email);
-  if (!to) return json(409, { error: STAFF_ERR["no_email"]![1] });
-  const dnc = await doNotContact(svc, to, "");
+  if (!to || !EMAIL_RE.test(to)) return json(409, { error: STAFF_ERR["no_email"]![1] });
+  if (!file.user_id && isLampAddress(to, await staffEmails(svc)))
+    return json(409, { error: STAFF_ERR["lamp_address"]![1] });
+  const dnc = await doNotContact(svc, to, file.phone ?? "");
   if (dnc === null)
     return json(503, { error: "Couldn't check the do-not-contact list. Try again." });
   if (dnc) return json(409, { error: "Marked do not contact. Call them instead." });
@@ -426,13 +441,20 @@ export async function changeApplication(request: Request): Promise<Response> {
   });
   if (res.error) {
     if (res.error.message === "kept_value") {
-      const [, i, field] = /^owners\.(\d)\.(ssn|dob)$/.exec(res.error.details ?? "") ?? [];
-      const whose = i === "1" ? "the second owner's" : "your";
-      const what = field === "dob" ? "date of birth" : "SSN";
+      // every on-file value that can't be kept, e.g. "owners.0.ssn,owners.0.dob"
+      const fields = (res.error.details ?? "")
+        .split(",")
+        .filter((f) => /^owners\.[01]\.(ssn|dob)$/.test(f));
+      const names = fields.map((f) => {
+        const [, i, what] = f.split(".");
+        return `${i === "1" ? "the second owner's" : "your"} ${what === "dob" ? "date of birth" : "SSN"}`;
+      });
+      const list =
+        names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
       return json(422, {
-        error: `Type ${whose} ${what} again: the one on file can't be used for these answers.`,
+        error: `Type ${list ?? "the SSN and date of birth"} again: a name changed, so what's on file can't be used.`,
         code: "kept_value",
-        field: res.error.details ?? null,
+        fields,
       });
     }
     const known = CHG_ERR[res.error.message];
@@ -507,7 +529,8 @@ export async function changeApplication(request: Request): Promise<Response> {
           signer: name,
           businessName: d.business.legal_name,
           version: out.version,
-          asked: items.length,
+          // asks that nothing here can check ("something else") aren't counted either way
+          asked: m.asked.filter((a) => !a.byHand).length,
           answered: m.asked.filter((a) => a.changes.length > 0).length,
           changed: changes.length,
           identity: changes.some((c) => c.flag || c.secret),

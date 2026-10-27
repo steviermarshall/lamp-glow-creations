@@ -270,30 +270,38 @@ export function diffDetails(
     secrets(out, i, who, a, b, secretChanges);
   }
 
-  const balances = Math.max(before.balances.length, after.balances.length);
-  for (let i = 0; i < balances; i++) {
-    const a = before.balances[i];
-    const b = after.balances[i];
-    const name = `Balance ${i + 1}`;
+  // a row added after signing is numbered after the signed rows, so its path is its own
+  let addedBal = 0;
+  pairRows(before.balances, after.balances, (x) => norm(x.funder)).forEach(([i, j]) => {
+    const a = i === null ? undefined : before.balances[i];
+    const b = j === null ? undefined : after.balances[j];
+    const at = i ?? before.balances.length + addedBal++;
+    const name = `Balance ${(j ?? i ?? 0) + 1}`;
     if (!a || !b) {
       const x = (a ?? b)!;
       out.push({
-        path: `balances.${i}`,
+        path: `balances.${at}`,
         section: "funding",
         label: name,
         before: a ? [x.funder, x.current].filter(Boolean).join(", ") || "listed" : "",
         after: b ? [x.funder, x.current].filter(Boolean).join(", ") || "added" : "",
         kind: a ? "removed" : "added",
       });
-      continue;
+      return;
     }
-    fields(out, "funding", `balances.${i}`, `${name}:`, a, b, BALANCE);
-  }
+    fields(out, "funding", `balances.${at}`, `${b.funder.trim() || name}:`, a, b, BALANCE);
+  });
 
+  // the uses in the application's own order, so unticking and ticking one again isn't a change
+  const uses = (r: Details["request"]) =>
+    [
+      ...USES.filter((u) => r.uses.includes(u.id)).map((u) => u.label),
+      ...r.uses.filter((u) => !labelOf(USES, u)),
+    ].join(", ");
   const req = (r: Details["request"]) => ({
     amount: r.amount,
     term: r.term ? `${r.term} months` : "",
-    uses: r.uses.map((u) => labelOf(USES, u) || u).join(", "),
+    uses: uses(r),
   });
   fields(out, "funding", "request", "", req(before.request), req(after.request), [
     { key: "amount", label: "Amount requested" },
@@ -304,12 +312,14 @@ export function diffDetails(
   const ra = before.real_estate;
   const rb = after.real_estate;
   fields(out, "property", "real_estate", "", ra, rb, REAL_ESTATE);
-  const props = Math.max(ra.properties.length, rb.properties.length);
-  for (let i = 0; i < props; i++) {
-    const a = ra.properties[i];
-    const b = rb.properties[i];
-    const name = props > 1 || i > 0 ? `Property ${i + 1}` : "Property";
-    const base = `real_estate.properties.${i}`;
+  const props = pairRows(ra.properties, rb.properties, (p) => `${norm(p.address)}|${norm(p.zip)}`);
+  let addedProp = 0;
+  props.forEach(([i, j]) => {
+    const a = i === null ? undefined : ra.properties[i];
+    const b = j === null ? undefined : rb.properties[j];
+    const name = props.length > 1 ? `Property ${(j ?? i ?? 0) + 1}` : "Property";
+    // paths keep the signed application's numbering, which is what the rep's asks point at
+    const base = `real_estate.properties.${i ?? ra.properties.length + addedProp++}`;
     if (!a || !b) {
       out.push({
         path: base,
@@ -319,7 +329,7 @@ export function diffDetails(
         after: b ? place(b) || "added" : "",
         kind: a ? "removed" : "added",
       });
-      continue;
+      return;
     }
     const at = place(b) || place(a);
     const pname = at ? `${at}:` : `${name}:`;
@@ -336,31 +346,70 @@ export function diffDetails(
     }
     const la = a.free_clear ? [] : a.liens.filter((l) => l.type);
     const lb = b.free_clear ? [] : b.liens.filter((l) => l.type);
-    const liens = Math.max(la.length, lb.length);
-    for (let j = 0; j < liens; j++) {
-      const x = la[j];
-      const y = lb[j];
-      const kind = labelOf(LIEN_TYPES, (y ?? x)!.type) || "Balance";
+    let addedLien = 0;
+    pairRows(la, lb, (l) => `${l.type}|${norm(l.holder)}`).forEach(([x, y]) => {
+      const xa = x === null ? undefined : la[x];
+      const yb = y === null ? undefined : lb[y];
+      const kind = labelOf(LIEN_TYPES, (yb ?? xa)!.type) || "Balance";
       const lname = `${pname} ${kind.charAt(0).toLowerCase()}${kind.slice(1)}`;
-      if (!x || !y) {
-        const l = (x ?? y)!;
+      const lpath = `${base}.liens.${x ?? la.length + addedLien++}`;
+      if (!xa || !yb) {
+        const l = (xa ?? yb)!;
         out.push({
-          path: `${base}.liens.${j}`,
+          path: lpath,
           section: "property",
           label: lname,
-          before: x
+          before: xa
             ? [l.holder, l.balance && `balance ${l.balance}`].filter(Boolean).join(", ") || "listed"
             : "",
-          after: y
+          after: yb
             ? [l.holder, l.balance && `balance ${l.balance}`].filter(Boolean).join(", ") || "added"
             : "",
-          kind: x ? "removed" : "added",
+          kind: xa ? "removed" : "added",
         });
-        continue;
+        return;
       }
-      fields(out, "property", `${base}.liens.${j}`, lname, x, y, LIEN);
+      fields(out, "property", lpath, lname, xa, yb, LIEN);
+    });
+  });
+  return out;
+}
+
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Pairs the rows of a list by what they are (a funder, an address, a lien), not where they sit,
+ * so removing a middle row doesn't read as every later row changing. Rows that match nothing
+ * (an edited name or address) pair up in order; what's left was added or removed. Returns
+ * [before index | null, after index | null] in the after order, removed rows last.
+ */
+export function pairRows<T>(
+  a: T[],
+  b: T[],
+  key: (x: T) => string,
+): [number | null, number | null][] {
+  const toB = new Map<number, number>();
+  const usedB = new Set<number>();
+  a.forEach((x, i) => {
+    const k = key(x);
+    if (!k.replace(/\|/g, "")) return;
+    const j = b.findIndex((y, jj) => !usedB.has(jj) && key(y) === k);
+    if (j >= 0) {
+      toB.set(i, j);
+      usedB.add(j);
     }
-  }
+  });
+  const restA = a.map((_, i) => i).filter((i) => !toB.has(i));
+  const restB = b.map((_, j) => j).filter((j) => !usedB.has(j));
+  restA.slice(0, restB.length).forEach((i, n) => {
+    toB.set(i, restB[n]!);
+    usedB.add(restB[n]!);
+  });
+  const fromB = new Map([...toB].map(([i, j]) => [j, i]));
+  const out: [number | null, number | null][] = b.map((_, j) => [fromB.get(j) ?? null, j]);
+  a.forEach((_, i) => {
+    if (!toB.has(i)) out.push([i, null]);
+  });
   return out;
 }
 
@@ -368,12 +417,14 @@ export function diffDetails(
 export function matchItems(
   items: ChangeItem[],
   changes: Change[],
-): { asked: { item: ChangeItem; changes: Change[] }[]; also: Change[] } {
+): { asked: { item: ChangeItem; changes: Change[]; byHand: boolean }[]; also: Change[] } {
   const used = new Set<Change>();
   const asked = items.map((item) => {
-    const hit = changes.filter((c) => covers(item, c));
+    // "Something else" with no part of the application: nothing here can tell if it's answered
+    const byHand = item.section === "other" && (!item.target || item.target === "other");
+    const hit = byHand ? [] : changes.filter((c) => covers(item, c));
     hit.forEach((c) => used.add(c));
-    return { item, changes: hit };
+    return { item, changes: hit, byHand };
   });
   return { asked, also: changes.filter((c) => !used.has(c)) };
 }
@@ -382,8 +433,16 @@ function covers(item: ChangeItem, c: Change): boolean {
   const t = item.target;
   if (t && t !== "other") {
     if (t === "owners.new") return c.path === "owners.1" && c.kind === "added";
+    // a property that wasn't on the application: a property added (or "owns real estate" now)
+    if (t === "real_estate.properties.new")
+      return (
+        (/^real_estate\.properties\.\d+$/.test(c.path) && c.kind === "added") ||
+        c.path === "real_estate.owns"
+      );
+    // what's owed on one property: its balances, or "owned free and clear"
+    if (/^real_estate\.properties\.\d+\.liens$/.test(t))
+      return c.path.startsWith(`${t}.`) || c.path === t.replace(/liens$/, "free_clear");
     return c.path === t || c.path.startsWith(`${t}.`);
   }
-  if (item.section === "other") return false;
   return c.section === item.section;
 }

@@ -98,7 +98,9 @@ export function FileChanges({
     newest && newest.version > 1
       ? requests.find((r) => r.result_version === newest.version)
       : undefined;
-  const canSendBack = canAct && !open && !CLOSED_STAGES.has(stage);
+  // an update nobody has reviewed yet is looked at before anything else is asked
+  const unreviewed = requests.some((r) => r.status === "submitted" && !r.reviewed_at);
+  const canSendBack = canAct && !open && !unreviewed && !CLOSED_STAGES.has(stage);
 
   async function act(key: string, body: SendBackRequest, ask?: string) {
     if (busy) return;
@@ -199,7 +201,7 @@ export function FileChanges({
         </p>
       )}
 
-      {composing && (
+      {composing && canSendBack && (
         <Composer
           details={full.details}
           stage={stage}
@@ -616,26 +618,35 @@ function WhatChanged({
       </p>
       {m.asked.length > 0 && (
         <ul className="mt-3 space-y-1 text-sm" data-asked-items>
-          {m.asked.map(({ item, changes: hit }) => (
+          {m.asked.map(({ item, changes: hit, byHand }) => (
             <li
               key={item.label}
               className={cn(
                 "flex items-start gap-1.5 font-semibold",
-                hit.length ? "text-forest" : "text-destructive",
+                byHand ? "text-smoke" : hit.length ? "text-forest" : "text-destructive",
               )}
             >
-              {hit.length ? (
+              {byHand ? (
+                <FileText className="mt-0.5 size-4 shrink-0" />
+              ) : hit.length ? (
                 <Check className="mt-0.5 size-4 shrink-0" />
               ) : (
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               )}
               <span>
                 {item.label}
-                <span className="font-normal">{hit.length ? ` · updated` : " · not changed"}</span>
+                <span className="font-normal">
+                  {byHand ? " · check by hand" : hit.length ? " · updated" : " · not changed"}
+                </span>
               </span>
             </li>
           ))}
         </ul>
+      )}
+      {before?.signed_name_2 && !after.signed_name_2 && (
+        <p className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
+          {before.signed_name_2} signed the version before but not this one: check before sending.
+        </p>
       )}
       {changes.length > 0 && (
         <div className="mt-3 text-sm">

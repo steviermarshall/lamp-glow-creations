@@ -26,7 +26,7 @@ export type ChangeSection = "business" | "owners" | "property" | "funding" | "ot
 export type ChangeItem = { section: ChangeSection; target?: string; label: string; note?: string };
 
 const TARGET_RE =
-  /^(business|owners\.(0|1|new)|real_estate(\.properties\.[0-9])?|balances|request|other)$/;
+  /^(business|owners\.(0|1|new)|real_estate(\.properties\.(new|[0-9](\.liens(\.[0-9])?)?))?|balances|request|other)$/;
 /** SSN-shaped text, as the database's _sensitive_text: nine digits, dashed or not. */
 const SENSITIVE = /(^|\D)\d{3}[- ]?\d{2}[- ]?\d{4}(\D|$)/;
 export const sensitiveText = (s: string) => SENSITIVE.test(s);
@@ -96,14 +96,14 @@ export function changeSuggestions(d: Details): Suggestion[] {
           out.push({
             key: `lien-${i}-${j}`,
             section: "property",
-            target,
+            target: `${target}.liens.${j}`,
             label: `The ${blank} for the ${kind} on ${where}`.slice(0, 140),
           });
       });
       out.push({
         key: `owed-${i}`,
         section: "property",
-        target,
+        target: `${target}.liens`,
         label: `Everything owed on ${where} (mortgages, equity lines) and the balances`.slice(
           0,
           140,
@@ -113,14 +113,14 @@ export function changeSuggestions(d: Details): Suggestion[] {
     out.push({
       key: "property-missing",
       section: "property",
-      target: "real_estate",
+      target: "real_estate.properties.new",
       label: "A property you own that isn't on the application",
     });
   } else {
     out.push({
       key: "property-any",
       section: "property",
-      target: "real_estate",
+      target: "real_estate.properties.new",
       label: "Any real estate you own, and what's owed on it",
     });
   }
@@ -203,7 +203,7 @@ export function changesEmail(o: {
     ask,
     ...(list.length ? ["What's needed:", ...list] : []),
     how,
-    "Your SSN and date of birth stay on file; you don't need to type them again.",
+    "Your SSN and date of birth stay on file, so you won't type them again unless an owner's name changes.",
   ];
   const footer = [
     `You're getting this because you applied with ${o.repName} at Lamp. Not interested? Reply "stop" and we won't email you again.`,
