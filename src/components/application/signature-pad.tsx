@@ -72,8 +72,19 @@ export function SignaturePad({
     changed.current(null);
   }, []);
 
-  // Size the bitmap to the box's CSS size times the device ratio. A real resize (rotating the
-  // phone) clears the drawing, since the strokes can't be rescaled cleanly.
+  const report = useCallback(
+    () =>
+      changed.current(
+        ink.current >= MIN_INK && bounds.current.maxX - bounds.current.minX >= MIN_WIDTH
+          ? exportInk(canvasRef.current!)
+          : null,
+      ),
+    [],
+  );
+
+  // Size the bitmap to the box's CSS size times the device ratio. When the box changes size
+  // with a signature on it (a scrollbar appearing, a phone rotating), the drawing is scaled into
+  // the new size rather than lost.
   const fit = useCallback(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -82,18 +93,32 @@ export function SignaturePad({
     const w = Math.round(r.width * dpr);
     const h = Math.round(r.height * dpr);
     if (c.width === w && c.height === h) return;
+    let kept: HTMLCanvasElement | null = null;
+    if (strokes.current && c.width && c.height) {
+      kept = document.createElement("canvas");
+      kept.width = c.width;
+      kept.height = c.height;
+      kept.getContext("2d")?.drawImage(c, 0, 0);
+    }
+    const scaleX = c.width ? w / c.width : 1;
     c.width = w;
     c.height = h;
     const ctx = c.getContext("2d");
-    if (ctx) {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = INK;
-      ctx.fillStyle = INK;
+    if (!ctx) return;
+    if (kept) ctx.drawImage(kept, 0, 0, kept.width, kept.height, 0, 0, w, h);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = INK;
+    ctx.fillStyle = INK;
+    if (kept) {
+      bounds.current = {
+        minX: bounds.current.minX * scaleX,
+        maxX: bounds.current.maxX * scaleX,
+      };
+      report();
     }
-    if (strokes.current) wipe();
-  }, [wipe]);
+  }, [report]);
 
   useEffect(() => {
     fit();
@@ -106,13 +131,6 @@ export function SignaturePad({
   useEffect(() => {
     changed.current(null);
   }, []);
-
-  const report = () =>
-    changed.current(
-      ink.current >= MIN_INK && bounds.current.maxX - bounds.current.minX >= MIN_WIDTH
-        ? exportInk(canvasRef.current!)
-        : null,
-    );
 
   const down = (e: PointerEvent<HTMLCanvasElement>) => {
     if (active.current !== null) return;
@@ -206,8 +224,7 @@ export function SignaturePad({
       setFromTyped(true);
       report();
     },
-    // report reads refs only
-    [],
+    [report],
   );
 
   // a typed signature follows the typed name; once the name is too short it goes away

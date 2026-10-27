@@ -439,7 +439,9 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
                 <h2
                   ref={headingRef}
                   tabIndex={-1}
-                  className="mt-2 font-display text-2xl font-bold tracking-tight outline-none sm:text-3xl"
+                  // focused by script when the step changes, for screen readers; no ring
+                  style={{ outline: "none" }}
+                  className="mt-2 font-display text-2xl font-bold tracking-tight sm:text-3xl"
                 >
                   {STEP_HEADLINE[current.id]}
                 </h2>
