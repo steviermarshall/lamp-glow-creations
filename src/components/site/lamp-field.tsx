@@ -201,7 +201,10 @@ export function LampField() {
       gl.uniform1f(D.vol, FIELD.volume);
       gl.uniform1f(D.sides, FIELD.sides);
       gl.uniform1f(D.glow, FIELD.glow);
-      const pal = document.documentElement.dataset["theme"] === "light" ? DAY : FIELD;
+      const pal =
+        document.documentElement.dataset["theme"] === "light" && host.closest(".ll-member")
+          ? DAY
+          : FIELD;
       gl.uniform3fv(D.c1, pal.dot);
       gl.uniform3fv(D.c2, pal.deep);
       gl.uniform3fv(D.hot, pal.hot);

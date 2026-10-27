@@ -61,8 +61,11 @@ const NAV = [
 export function SiteHeader({
   minimal = false,
   floating = false,
+  themeToggle = false,
 }: {
   minimal?: boolean;
+  /** The light/dark switch: member pages only (staff portal, account, application links). */
+  themeToggle?: boolean;
   /** Lamplight pages: a glass bar floating over the dot field instead of a full-width band. */
   floating?: boolean;
 }) {
@@ -112,7 +115,7 @@ export function SiteHeader({
         )}
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
+          {themeToggle && <ThemeToggle />}
           <Link
             to={user ? "/account" : "/login"}
             className="hidden rounded-full px-4 py-2.5 text-[0.95rem] font-semibold text-mist transition hover:text-paper sm:inline-flex"
@@ -298,6 +301,7 @@ export function PageShell({
   minimalHeader = false,
   footer = true,
   tone = "paper",
+  member = false,
 }: {
   children: ReactNode;
   minimalHeader?: boolean;
@@ -309,6 +313,11 @@ export function PageShell({
    * Both re-map the app's light classes (white cards, ink text, hairlines) in styles.css.
    */
   tone?: "paper" | "night" | "night-calm";
+  /**
+   * Pages for members (staff portal, a merchant's account, the application link): they get the
+   * light/dark switch and follow it. The public site always stays in the green night look.
+   */
+  member?: boolean;
 }) {
   const live = tone === "night";
   const night = live || tone === "night-calm";
@@ -318,7 +327,11 @@ export function PageShell({
       className={cn(
         "font-body relative flex min-h-screen flex-col overflow-x-clip antialiased",
         night
-          ? cn("ll-night isolate bg-night text-paper", live ? "ll-live" : "ll-calm")
+          ? cn(
+              "ll-night isolate bg-night text-paper",
+              live ? "ll-live" : "ll-calm",
+              member && "ll-member",
+            )
           : "bg-paper text-ink",
       )}
     >
@@ -334,7 +347,7 @@ export function PageShell({
       >
         Skip to content
       </a>
-      <SiteHeader minimal={minimalHeader} floating={night} />
+      <SiteHeader minimal={minimalHeader} floating={night} themeToggle={member} />
       <main id="main" className="flex-1">
         {children}
       </main>

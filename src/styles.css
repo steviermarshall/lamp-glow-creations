@@ -624,7 +624,8 @@ h3 {
 }
 
 /* ---------------------------------------------------------------------------------------------
- * Lamplight by day: the light mode (src/lib/theme.ts sets <html data-theme="light">). The same
+ * Lamplight by day: the light mode, for member pages only (PageShell member: staff portal, account,
+ * application links; the public site always stays green). src/lib/theme.ts sets <html data-theme>. The same
  * pages and components, repainted by swapping the night tokens for paper ones: light text on the
  * dark ground becomes ink, ink panels become sand, the bright greens become forest. The literal
  * white hairlines and fills that the dark look uses get ink equivalents.
@@ -633,7 +634,7 @@ h3 {
 [data-theme="light"] .ll-when-dark {
   display: none;
 }
-[data-theme="light"] .ll-night {
+[data-theme="light"] .ll-member {
   --night: oklch(0.974 0.007 115.7);
   --paper: oklch(0.18 0.017 159.8);
   --ink: oklch(0.947 0.013 126.4);
@@ -647,10 +648,10 @@ h3 {
   --hair: oklch(0.18 0.017 159.8 / 0.12);
   --hair-strong: oklch(0.18 0.017 159.8 / 0.3);
 }
-[data-theme="light"]:root:has(.ll-night) body {
+[data-theme="light"]:root:has(.ll-member) body {
   background: var(--paper);
 }
-[data-theme="light"]:root:has(.ll-night) {
+[data-theme="light"]:root:has(.ll-member) {
   --background: oklch(0.974 0.007 115.7);
   --foreground: oklch(0.18 0.017 159.8);
   --card: oklch(1 0 0);
@@ -672,90 +673,90 @@ h3 {
 }
 
 /* the glass and the light around it */
-[data-theme="light"] .ll-night .ll-glass {
+[data-theme="light"] .ll-member .ll-glass {
   background: linear-gradient(170deg, oklch(1 0 0 / calc(0.62 + var(--glass-a))), oklch(0.985 0.006 140 / calc(0.5 + var(--glass-a))));
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.9),
     0 26px 60px -32px oklch(0.321 0.042 165.3 / 0.38);
 }
-[data-theme="light"] .ll-night .ll-glass::before {
+[data-theme="light"] .ll-member .ll-glass::before {
   background: linear-gradient(calc(135deg + var(--tilt)), oklch(0.321 0.042 165.3 / 0.24), oklch(0.321 0.042 165.3 / 0.07) 38%, transparent 60%, oklch(0.321 0.042 165.3 / 0.07));
 }
-[data-theme="light"] .ll-atmos {
+[data-theme="light"] .ll-member .ll-atmos {
   background: radial-gradient(60% 55% at 70% 18%, oklch(0.8 0.1 150 / 0.2), oklch(0.9 0.05 150 / 0.06) 50%, transparent 75%);
 }
-[data-theme="light"] .ll-shade::before {
+[data-theme="light"] .ll-member .ll-shade::before {
   background: radial-gradient(70% 70% at 35% 45%, oklch(0.974 0.007 115.7 / 0.9), oklch(0.974 0.007 115.7 / 0.55) 55%, transparent 80%);
 }
 
 /* text that has to stay readable on paper */
-[data-theme="light"] .ll-night .text-leaf {
+[data-theme="light"] .ll-member .text-leaf {
   color: oklch(0.48 0.11 152);
 }
-[data-theme="light"] .ll-night .bg-leaf.text-ink,
-[data-theme="light"] .ll-night .bg-leaf .text-ink,
-[data-theme="light"] .ll-night .bg-ink.text-white {
+[data-theme="light"] .ll-member .bg-leaf.text-ink,
+[data-theme="light"] .ll-member .bg-leaf .text-ink,
+[data-theme="light"] .ll-member .bg-ink.text-white {
   color: oklch(0.18 0.017 159.8);
 }
-[data-theme="light"] .ll-night .placeholder\:text-smoke\/60::placeholder {
+[data-theme="light"] .ll-member .placeholder\:text-smoke\/60::placeholder {
   color: oklch(0.454 0.021 158.5 / 0.6);
 }
 
 /* fills, hairlines and rings that are literal white in the dark look */
-[data-theme="light"] .ll-night .bg-line {
+[data-theme="light"] .ll-member .bg-line {
   background-color: oklch(0.18 0.017 159.8 / 0.1);
 }
-[data-theme="light"] .ll-night .hover\:bg-sand:hover,
-[data-theme="light"] .ll-night .hover\:bg-white\/5:hover {
+[data-theme="light"] .ll-member .hover\:bg-sand:hover,
+[data-theme="light"] .ll-member .hover\:bg-white\/5:hover {
   background-color: oklch(0.18 0.017 159.8 / 0.05);
 }
-[data-theme="light"] .ll-night .bg-white.shadow-sm {
+[data-theme="light"] .ll-member .bg-white.shadow-sm {
   background-color: oklch(1 0 0);
   box-shadow: 0 1px 3px oklch(0.18 0.017 159.8 / 0.14);
 }
-[data-theme="light"] .ll-night .bg-white\/5 {
+[data-theme="light"] .ll-member .bg-white\/5 {
   background-color: oklch(0.18 0.017 159.8 / 0.04);
 }
-[data-theme="light"] .ll-night .bg-white\/10 {
+[data-theme="light"] .ll-member .bg-white\/10 {
   background-color: oklch(0.18 0.017 159.8 / 0.06);
 }
-[data-theme="light"] .ll-night .bg-white\/15 {
+[data-theme="light"] .ll-member .bg-white\/15 {
   background-color: oklch(0.18 0.017 159.8 / 0.08);
 }
-[data-theme="light"] .ll-night .border-white\/10,
-[data-theme="light"] .ll-night .divide-white\/10 > :not(:last-child) {
+[data-theme="light"] .ll-member .border-white\/10,
+[data-theme="light"] .ll-member .divide-white\/10 > :not(:last-child) {
   border-color: var(--hair);
 }
-[data-theme="light"] .ll-night .ring-white\/5 {
+[data-theme="light"] .ll-member .ring-white\/5 {
   --tw-ring-color: oklch(0.18 0.017 159.8 / 0.06);
 }
-[data-theme="light"] .ll-night .ring-white\/10,
-[data-theme="light"] .ll-night .ring-white\/12 {
+[data-theme="light"] .ll-member .ring-white\/10,
+[data-theme="light"] .ll-member .ring-white\/12 {
   --tw-ring-color: oklch(0.18 0.017 159.8 / 0.12);
 }
-[data-theme="light"] .ll-night .ring-white\/15,
-[data-theme="light"] .ll-night .ring-white\/20,
-[data-theme="light"] .ll-night .ring-white\/25 {
+[data-theme="light"] .ll-member .ring-white\/15,
+[data-theme="light"] .ll-member .ring-white\/20,
+[data-theme="light"] .ll-member .ring-white\/25 {
   --tw-ring-color: oklch(0.18 0.017 159.8 / 0.2);
 }
-[data-theme="light"] .ll-night .stroke-white\/25 {
+[data-theme="light"] .ll-member .stroke-white\/25 {
   stroke: oklch(0.18 0.017 159.8 / 0.25);
 }
-[data-theme="light"] .ll-night .stroke-white\/40 {
+[data-theme="light"] .ll-member .stroke-white\/40 {
   stroke: oklch(0.18 0.017 159.8 / 0.4);
 }
-[data-theme="light"] .ll-night .ll-range::-webkit-slider-runnable-track {
+[data-theme="light"] .ll-member .ll-range::-webkit-slider-runnable-track {
   background: linear-gradient(90deg, var(--leaf) var(--p), oklch(0.18 0.017 159.8 / 0.14) var(--p));
 }
-[data-theme="light"] .ll-night .ll-range::-moz-range-track {
+[data-theme="light"] .ll-member .ll-range::-moz-range-track {
   background: linear-gradient(90deg, var(--leaf) var(--p), oklch(0.18 0.017 159.8 / 0.14) var(--p));
 }
 
 /* native form controls read as light again */
-[data-theme="light"] .ll-night input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
-[data-theme="light"] .ll-night select,
-[data-theme="light"] .ll-night textarea,
-[data-theme="light"] .ll-night input[type="checkbox"],
-[data-theme="light"] .ll-night input[type="radio"] {
+[data-theme="light"] .ll-member input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+[data-theme="light"] .ll-member select,
+[data-theme="light"] .ll-member textarea,
+[data-theme="light"] .ll-member input[type="checkbox"],
+[data-theme="light"] .ll-member input[type="radio"] {
   color-scheme: light;
 }

@@ -404,7 +404,7 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
     window.scrollTo({ top: 0 });
   }
   return (
-    <PageShell minimalHeader footer={false} tone="night">
+    <PageShell member minimalHeader footer={false} tone="night">
       <div ref={topRef} className="mx-auto max-w-3xl scroll-mt-24 px-4 pb-20 pt-6 sm:px-6 sm:pt-12">
         {open === null ? (
           <div className="grid place-items-center py-40">
