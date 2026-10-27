@@ -14,7 +14,7 @@ import {
   type Answers,
 } from "@/lib/apply";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { SITE, type Rep } from "@/lib/site";
+import { GOOGLE_SIGN_IN, SITE, type Rep } from "@/lib/site";
 import { useAuth, recordLead, saveDraftToAccount } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { btnOutline, btnPrimary, card, PageShell } from "@/components/site/layout";
@@ -460,10 +460,15 @@ function ResultStep({
           </div>
         ) : (
           <div className="mt-6 space-y-4">
-            <GoogleButton onClick={() => signInWithGoogle()} />
-            <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-smoke">
-              <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
-            </div>
+            {GOOGLE_SIGN_IN && (
+              <>
+                <GoogleButton onClick={() => signInWithGoogle()} />
+                <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-smoke">
+                  <span className="h-px flex-1 bg-line" /> or{" "}
+                  <span className="h-px flex-1 bg-line" />
+                </div>
+              </>
+            )}
             <form onSubmit={onEmail} className="space-y-3">
               <label htmlFor="apply-email" className="sr-only">
                 Email address

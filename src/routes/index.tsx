@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { AMOUNT_OPTIONS } from "@/lib/apply";
 import { cn } from "@/lib/utils";
-import { SITE, seo } from "@/lib/site";
+import { GOOGLE_SIGN_IN, SITE, seo } from "@/lib/site";
 import { btnGhost, btnPrimary, PageShell } from "@/components/site/layout";
 import { FAQS, FaqList } from "@/components/site/faq";
 import { LampOrb } from "@/components/site/lamp-orb";
@@ -353,7 +353,7 @@ function HowItWorks() {
           n="01"
           tag="About a minute"
           title="Answer a few questions"
-          body="How much, what for, and a little about the business. Then create your account with Google or email to save your spot."
+          body={`How much, what for, and a little about the business. Then create your account with ${GOOGLE_SIGN_IN ? "Google or email" : "your email"} to save your spot.`}
         >
           <p className="font-display text-[0.95rem] font-semibold">How much are you looking for?</p>
           <div className="my-3 h-1 overflow-hidden rounded bg-white/10">

@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { findRep } from "@/lib/site";
+import { findRep, GOOGLE_SIGN_IN } from "@/lib/site";
 import {
   cleanDetails,
   CONSENT_VERSION,
@@ -962,10 +962,15 @@ function DoneScreen({
                 Email me a sign-in link
               </button>
             </form>
-            <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-smoke">
-              <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
-            </div>
-            <GoogleButton onClick={() => void signInWithGoogle("/account")} />
+            {GOOGLE_SIGN_IN && (
+              <>
+                <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-smoke">
+                  <span className="h-px flex-1 bg-line" /> or{" "}
+                  <span className="h-px flex-1 bg-line" />
+                </div>
+                <GoogleButton onClick={() => void signInWithGoogle("/account")} />
+              </>
+            )}
             {state === "error" && <p className="text-sm text-destructive">{err}</p>}
           </div>
         )}
