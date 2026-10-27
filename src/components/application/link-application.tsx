@@ -356,7 +356,7 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
       return up.ok ? null : (j.error ?? "Didn't upload");
     };
     try {
-      const bytes = await applicationPdfBytes(src, values);
+      const bytes = await applicationPdfBytes(src, values, "lender");
       await upload(
         new Blob([bytes as BlobPart], { type: "application/pdf" }),
         "Signed application.pdf",
@@ -377,6 +377,20 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
       }
     }
     setUploading(null);
+    // Now the rep (and Asad and Stevie) get the email, with the signed copy and the statements
+    // attached. Best effort: the file is on the rep's board either way.
+    try {
+      await fetch("/api/application/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          application_id: out.application_id,
+          claim_token: out.claim_token,
+        }),
+      });
+    } catch {
+      /* the file shows as Signed on the rep's Applications tab */
+    }
     setBusy(false);
     setDone({
       application_id: out.application_id,

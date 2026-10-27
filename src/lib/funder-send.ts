@@ -153,16 +153,19 @@ export function safeFilename(name: string): string {
 export function buildMime(opts: {
   from: string;
   to: string;
+  cc?: string[];
   subject: string;
   body: string;
   attachments: Attachment[];
   boundary?: string;
 }): string {
-  if (/[\r\n]/.test(opts.to) || /[\r\n]/.test(opts.from)) throw new Error("bad address");
+  const cc = opts.cc ?? [];
+  if ([opts.to, opts.from, ...cc].some((v) => /[\r\n]/.test(v))) throw new Error("bad address");
   const boundary = opts.boundary ?? `lamp-${crypto.randomUUID()}`;
   const head = [
     `From: ${opts.from}`,
     `To: ${opts.to}`,
+    ...(cc.length ? [`Cc: ${cc.join(", ")}`] : []),
     `Subject: ${encodeHeader(opts.subject.replace(/[\r\n]+/g, " "))}`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/mixed; boundary="${boundary}"`,

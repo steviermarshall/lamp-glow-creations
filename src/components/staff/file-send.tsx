@@ -163,6 +163,7 @@ export function FileSend({
               },
               repName,
             ),
+            "lender",
           );
           application_pdf = toBase64(bytes);
         }
