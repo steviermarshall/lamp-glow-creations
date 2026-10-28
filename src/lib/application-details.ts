@@ -340,6 +340,20 @@ const digits = (s: string) => s.replace(/\D/g, "");
 
 /** What still has to be filled before the application can be signed, in plain words. */
 /**
+ * 18 or older on `today` (YYYY-MM-DD dates): a minor can't sign a funding agreement, so an owner
+ * under 18 counts as a missing answer.
+ */
+export function isAdult(dob: string, today = new Date()): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const ty = today.getFullYear();
+  const birthdayPassed =
+    today.getMonth() + 1 > mo || (today.getMonth() + 1 === mo && today.getDate() >= d);
+  return ty - y - (birthdayPassed ? 0 : 1) >= 18;
+}
+
+/**
  * What's still needed before signing. The paper form (propertyDetails false) only asks whether
  * they own real estate; the rep gets the property details afterwards.
  */
@@ -373,7 +387,10 @@ export function missing(d: Details, { propertyDetails = true } = {}): string[] {
     );
     need(digits(o.mobile).length >= 10, `${who}'s mobile phone`);
     need(/\S+@\S+\.\S+/.test(o.email), `${who}'s email`);
-    need(!!o.dob, `${who}'s date of birth`);
+    need(
+      !!o.dob && isAdult(o.dob),
+      o.dob ? `${who}'s date of birth (they must be 18 or older)` : `${who}'s date of birth`,
+    );
     need(digits(o.ssn).length === 9 || isMaskedSsn(o.ssn), `${who}'s SSN (nine digits)`);
   });
   if (propertyDetails) out.push(...missingRealEstate(d.real_estate));

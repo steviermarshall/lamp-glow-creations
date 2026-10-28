@@ -8,6 +8,7 @@ import {
   emptyBalance,
   emptyOwner,
   ENTITY_TYPES,
+  isAdult,
   US_STATES,
   type Balance,
   type Business,
@@ -188,7 +189,7 @@ const ownerFields = (i: number): PaperField[] => {
       input: "date",
       get: (d) => o(d)?.dob ?? "",
       set: own(i, "dob"),
-      ok: (d) => !needed(d) || !!o(d)?.dob,
+      ok: (d) => !needed(d) || isAdult(o(d)?.dob ?? ""),
     }),
   ];
 };

@@ -3,7 +3,7 @@
 
 export const SITE = {
   name: "Lamp",
-  legalName: "Lamp Financial Group LLC",
+  legalName: "Lamp Capital Group LLC",
   url: "https://getlamp.app",
   email: "hello@getlamp.app",
   partnersEmail: "partners@getlamp.app",

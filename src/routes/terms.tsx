@@ -17,8 +17,8 @@ function Terms() {
   return (
     <ProsePage eyebrow="Legal" title="Terms of Use" intro="Last updated September 28, 2026.">
       <p>
-        These terms govern your use of this website and services provided by Lamp Financial Group
-        LLC ("Lamp", "we"). By using the site or creating an account, you agree to them.
+        These terms govern your use of this website and services provided by Lamp Capital Group LLC
+        ("Lamp", "we"). By using the site or creating an account, you agree to them.
       </p>
       <h2>Lamp is a broker, not a lender</h2>
       <p>

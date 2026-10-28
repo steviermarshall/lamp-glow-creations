@@ -11,6 +11,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import fontsCss from "../fonts.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 import { SITE } from "../lib/site";
@@ -132,12 +133,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { type: "application/ld+json", children: JSON.stringify(ORG_JSON_LD) },
     ],
     links: [
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Commissioner:wght@600;700;800&family=JetBrains+Mono:wght@500;600&family=Newsreader:ital,opsz,wght@1,6..72,400&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap",
-      },
+      // the site's fonts are served from getlamp.app (src/fonts.css), never from Google
+      { rel: "stylesheet", href: fontsCss },
       {
         rel: "stylesheet",
         href: appCss,
