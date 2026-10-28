@@ -1021,6 +1021,22 @@ export type Database = {
         }
         Relationships: []
       }
+      offer_internal_notes: {
+        Row: {
+          body: string
+          offer_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          body: string
+          offer_id: string
+        }
+        Update: {
+          body?: string
+        }
+        Relationships: []
+      }
       offers: {
         Row: {
           accepted_at: string | null
@@ -1466,39 +1482,7 @@ export type Database = {
         }[]
       }
       _num: { Args: { _t: string }; Returns: number }
-      accept_offer: {
-        Args: { _offer_id: string }
-        Returns: {
-          accepted_at: string | null
-          amount: number
-          application_id: string
-          created_at: string
-          created_by: string | null
-          declined_at: string | null
-          expires_at: string | null
-          factor_rate: number | null
-          fees: number
-          frequency: Database["public"]["Enums"]["payment_frequency"]
-          funder_id: string
-          id: string
-          notes: string | null
-          payback: number
-          payment: number | null
-          payments: number
-          presented_at: string | null
-          received_net: number | null
-          status: Database["public"]["Enums"]["offer_status"]
-          submission_id: string | null
-          terms: Json
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "offers"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      accept_offer: { Args: { _offer_id: string }; Returns: Json }
       claim_applications: { Args: { _tokens?: string[] }; Returns: number }
       cancel_change_request: {
         Args: { _reason?: string | null; _request_id: string }
@@ -1580,6 +1564,7 @@ export type Database = {
         }[]
       }
       mask_owner: { Args: { _owner: Json }; Returns: Json }
+      offer_funder_name: { Args: { _offer_id: string }; Returns: string }
       rep_can_read_file: { Args: { _name: string }; Returns: boolean }
       rep_can_see_application: {
         Args: { _application_id: string }
