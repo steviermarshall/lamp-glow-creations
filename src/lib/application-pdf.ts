@@ -223,11 +223,14 @@ const toPdfRect = ([l, t, r, b]: Box) => ({
 });
 
 /** No border and no fill, so the template's own boxes, squares and green panels show through.
- *  pdf-lib paints white unless the key is present and empty, which its types don't allow. */
+ *  pdf-lib paints white and a black border unless both keys are present and empty, which its
+ *  types don't allow. A border width of 0 alone isn't enough: in PDF a 0-width line is the
+ *  thinnest line the viewer can draw, so every answer got a hairline box when flattened. */
 const clear = (box: Box) =>
   ({
     ...toPdfRect(box),
     borderWidth: 0,
+    borderColor: undefined,
     backgroundColor: undefined,
   }) as unknown as FieldAppearanceOptions;
 
