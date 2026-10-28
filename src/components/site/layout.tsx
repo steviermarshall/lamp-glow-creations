@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
-import { Menu, Moon, Sun, X } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { LogOut, Menu, Moon, Sun, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { currentTheme, setTheme, type Theme } from "@/lib/theme";
 import { useAuth } from "@/hooks/use-auth";
+import { getSupabase } from "@/lib/supabase";
 import { SITE, telHref } from "@/lib/site";
 import { LampField } from "@/components/site/lamp-field";
 import { LampOrb } from "@/components/site/lamp-orb";
@@ -122,6 +123,7 @@ export function SiteHeader({
           >
             {user ? "My account" : "Sign in"}
           </Link>
+          {user && <SignOut />}
           {!minimal && (
             <Link to="/apply" className={cn(btnPrimary, "hidden px-5 py-2.5 sm:inline-flex")}>
               Check my options
@@ -179,6 +181,27 @@ export function SiteHeader({
         </nav>
       )}
     </header>
+  );
+}
+
+/** Signed in anywhere on the site (staff included, whom /account sends back to /staff): sign out. */
+function SignOut() {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      className="inline-flex h-11 items-center gap-2 rounded-full px-3 text-[0.95rem] font-semibold text-mist ring-1 ring-white/20 transition hover:text-paper sm:px-4"
+      aria-label="Sign out"
+      title="Sign out"
+      data-sign-out
+      onClick={async () => {
+        await getSupabase()?.auth.signOut();
+        navigate({ to: "/" });
+      }}
+    >
+      <LogOut className="size-4" />
+      <span className="hidden sm:inline">Sign out</span>
+    </button>
   );
 }
 

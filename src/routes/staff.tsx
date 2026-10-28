@@ -14,6 +14,7 @@ import { SentApplications } from "@/components/staff/sent-applications";
 import { Funders } from "@/components/staff/funders";
 import { Money } from "@/components/staff/money";
 import { Dashboard } from "@/components/staff/dashboard";
+import { AppLinks } from "@/components/staff/app-links";
 
 type StaffSearch = {
   view?: View | undefined;
@@ -131,6 +132,9 @@ function Staff() {
               </Link>
             ))}
           </nav>
+        )}
+        {!search.file && !search.view && (
+          <AppLinks isAdmin={access.isAdmin} repSlug={access.repSlug} reps={reps} />
         )}
         {search.file ? (
           <FileView
