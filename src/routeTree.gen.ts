@@ -31,6 +31,7 @@ import { Route as ApplicationRepRouteImport } from './routes/application.$rep'
 import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
 import { Route as ApiApplicationNotifyRouteImport } from './routes/api.application.notify'
 import { Route as ApiApplicationOpenRouteImport } from './routes/api.application.open'
+import { Route as ApiApplicationProgressRouteImport } from './routes/api.application.progress'
 import { Route as ApiApplicationStartRouteImport } from './routes/api.application.start'
 import { Route as ApiApplicationSubmitRouteImport } from './routes/api.application.submit'
 import { Route as ApiApplicationUploadRouteImport } from './routes/api.application.upload'
@@ -150,6 +151,11 @@ const ApiApplicationOpenRoute = ApiApplicationOpenRouteImport.update({
   path: '/api/application/open',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiApplicationProgressRoute = ApiApplicationProgressRouteImport.update({
+  id: '/api/application/progress',
+  path: '/api/application/progress',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiApplicationStartRoute = ApiApplicationStartRouteImport.update({
   id: '/api/application/start',
   path: '/api/application/start',
@@ -214,6 +220,7 @@ export interface FileRoutesByFullPath {
   '/apply/$rep': typeof ApplyRepRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
+  '/api/application/progress': typeof ApiApplicationProgressRoute
   '/api/application/start': typeof ApiApplicationStartRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
@@ -246,6 +253,7 @@ export interface FileRoutesByTo {
   '/apply/$rep': typeof ApplyRepRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
+  '/api/application/progress': typeof ApiApplicationProgressRoute
   '/api/application/start': typeof ApiApplicationStartRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
@@ -279,6 +287,7 @@ export interface FileRoutesById {
   '/apply_/$rep': typeof ApplyRepRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
+  '/api/application/progress': typeof ApiApplicationProgressRoute
   '/api/application/start': typeof ApiApplicationStartRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
@@ -313,6 +322,7 @@ export interface FileRouteTypes {
     | '/apply/$rep'
     | '/api/application/notify'
     | '/api/application/open'
+    | '/api/application/progress'
     | '/api/application/start'
     | '/api/application/submit'
     | '/api/application/upload'
@@ -345,6 +355,7 @@ export interface FileRouteTypes {
     | '/apply/$rep'
     | '/api/application/notify'
     | '/api/application/open'
+    | '/api/application/progress'
     | '/api/application/start'
     | '/api/application/submit'
     | '/api/application/upload'
@@ -377,6 +388,7 @@ export interface FileRouteTypes {
     | '/apply_/$rep'
     | '/api/application/notify'
     | '/api/application/open'
+    | '/api/application/progress'
     | '/api/application/start'
     | '/api/application/submit'
     | '/api/application/upload'
@@ -410,6 +422,7 @@ export interface RootRouteChildren {
   ApplyRepRoute: typeof ApplyRepRoute
   ApiApplicationNotifyRoute: typeof ApiApplicationNotifyRoute
   ApiApplicationOpenRoute: typeof ApiApplicationOpenRoute
+  ApiApplicationProgressRoute: typeof ApiApplicationProgressRoute
   ApiApplicationStartRoute: typeof ApiApplicationStartRoute
   ApiApplicationSubmitRoute: typeof ApiApplicationSubmitRoute
   ApiApplicationUploadRoute: typeof ApiApplicationUploadRoute
@@ -575,6 +588,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiApplicationOpenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/application/progress': {
+      id: '/api/application/progress'
+      path: '/api/application/progress'
+      fullPath: '/api/application/progress'
+      preLoaderRoute: typeof ApiApplicationProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/application/start': {
       id: '/api/application/start'
       path: '/api/application/start'
@@ -669,6 +689,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApplyRepRoute: ApplyRepRoute,
   ApiApplicationNotifyRoute: ApiApplicationNotifyRoute,
   ApiApplicationOpenRoute: ApiApplicationOpenRoute,
+  ApiApplicationProgressRoute: ApiApplicationProgressRoute,
   ApiApplicationStartRoute: ApiApplicationStartRoute,
   ApiApplicationSubmitRoute: ApiApplicationSubmitRoute,
   ApiApplicationUploadRoute: ApiApplicationUploadRoute,

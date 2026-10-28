@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { SITE } from "@/lib/site";
 import { card } from "@/components/site/layout";
 import { chip, input } from "@/components/staff/field-styles";
-import { applicationPdfUrl, applicationUrl, BLANK_APPLICATION_PDF } from "@/lib/application-links";
+import { applicationPdfUrl, applicationUrl } from "@/lib/application-links";
 import { CopyButton } from "@/components/staff/send-applications";
 
 /**
@@ -30,7 +30,7 @@ export function AppLinks({
         {
           tag: "A",
           title: "Online application",
-          note: "They fill it in and sign on the page. The signed file lands in your files.",
+          note: "Step by step: they fill it in and sign. The signed file lands in your files.",
           url: applicationUrl(SITE.url, slug),
           // staff browsers aren't counted on the online page
           open: applicationUrl(SITE.url, slug),
@@ -38,10 +38,10 @@ export function AppLinks({
         {
           tag: "B",
           title: "PDF application",
-          note: "The whole form on one page. They type in it or print it, sign, and send it back.",
+          note: "The whole form on one page: they fill it in and sign right on it. The signed file lands in your files.",
           url: applicationPdfUrl(SITE.url, slug),
-          // the file itself, so looking at it from here isn't counted as an open
-          open: BLANK_APPLICATION_PDF,
+          // staff browsers aren't counted on either page
+          open: applicationPdfUrl(SITE.url, slug),
         },
       ]
     : [];
@@ -99,7 +99,8 @@ export function AppLinks({
       )}
       {isAdmin && links.length > 0 && (
         <p className="mt-2 text-xs text-smoke">
-          Opens of each link show under Dashboard → Website → Page.
+          Under Dashboard → Website → Page: /application/&lt;rep&gt; and …/pdf are opens, …/signed
+          are signed files.
         </p>
       )}
     </section>
