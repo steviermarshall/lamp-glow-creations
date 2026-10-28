@@ -51,7 +51,7 @@ type Row = {
   result: SendResult | null;
 };
 
-type Rep = { slug: string; name: string };
+type Rep = { slug: string; name: string; admin_slug?: string | null };
 
 let nextKey = 1;
 const toRow = (s: SendSeed): Row => {
@@ -133,7 +133,12 @@ export function SendApplications({
   }, []);
 
   const sender = isAdmin ? sendAs : (repSlug ?? "");
-  const senderName = reps.find((r) => r.slug === sender)?.name ?? "";
+  const senderRep = reps.find((r) => r.slug === sender);
+  const senderName = senderRep?.name ?? "";
+  // a rep on an admin's team sends in the admin's name (the server does the same)
+  const facingName =
+    (senderRep?.admin_slug && reps.find((r) => r.slug === senderRep.admin_slug)?.name) ||
+    senderName;
   const pending = rows.filter((r) => !isDone(r) && !isBlank(r));
   const open = rows.filter((r) => !isDone(r));
   const over = pending.length > MAX_RECIPIENTS;
@@ -191,7 +196,7 @@ export function SendApplications({
   const preview = inviteEmail({
     firstName: sample?.first_name ?? "",
     businessName: sample?.business_name ?? "",
-    repName: senderName || "Your name",
+    repName: facingName || "Your name",
     note,
     url: `${applicationUrl(origin(), sender || "you")}?i=…`,
     legalName: SITE.legalName,
@@ -249,9 +254,14 @@ export function SendApplications({
 
       <p className="mt-4 text-xs text-smoke">
         <span className="font-semibold">Email it</span>: Lamp emails the link from{" "}
-        partners@getlamp.app as "{senderName || "the rep"} at Lamp", and replies go to{" "}
-        {isAdmin ? "the rep" : "you"}. <span className="font-semibold">Copy link</span>: you get the
-        link to text or email yourself.
+        partners@getlamp.app as "{facingName || "the rep"} at Lamp", and replies go to{" "}
+        {facingName && facingName !== senderName
+          ? `${facingName} and ${isAdmin ? senderName : "you"}`
+          : isAdmin
+            ? "the rep"
+            : "you"}
+        . <span className="font-semibold">Copy link</span>: you get the link to text or email
+        yourself.
       </p>
 
       <ul className="mt-3 space-y-2">

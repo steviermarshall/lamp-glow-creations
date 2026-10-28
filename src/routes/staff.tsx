@@ -14,6 +14,7 @@ import { SentApplications } from "@/components/staff/sent-applications";
 import { Funders } from "@/components/staff/funders";
 import { Money } from "@/components/staff/money";
 import { Dashboard } from "@/components/staff/dashboard";
+import { Team } from "@/components/staff/team";
 import { AppLinks } from "@/components/staff/app-links";
 
 type StaffSearch = {
@@ -23,14 +24,17 @@ type StaffSearch = {
   file?: string | undefined;
 };
 
-type View = "dashboard" | "engine" | "sent" | "funders" | "money";
-const VIEWS: readonly View[] = ["dashboard", "engine", "sent", "funders", "money"];
+type View = "dashboard" | "engine" | "sent" | "funders" | "money" | "team";
+const VIEWS: readonly View[] = ["dashboard", "engine", "sent", "funders", "money", "team"];
+/** Tabs only admins see. */
+const ADMIN_VIEWS: readonly View[] = ["team"];
 const VIEW_TITLE: Record<View, string> = {
   dashboard: "Dashboard",
   engine: "Engine leads",
   sent: "Applications",
   funders: "Funders",
   money: "Money",
+  team: "Team",
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,7 +65,8 @@ function Staff() {
   const access = useStaffAccess(user?.id ?? null, loading);
   const search = Route.useSearch();
   const navigate = useNavigate({ from: "/staff" });
-  const [reps, setReps] = useState<{ slug: string; name: string }[]>([]);
+  const [reps, setReps] = useState<{ slug: string; name: string; admin_slug: string | null }[]>([]);
+  const [repsTick, setRepsTick] = useState(0);
 
   const isStaff = access.state === "staff";
   useEffect(() => {
@@ -72,10 +77,10 @@ function Staff() {
     const sb = getSupabase();
     if (!sb || !isStaff) return;
     sb.from("reps")
-      .select("slug,name")
+      .select("slug,name,admin_slug")
       .order("name")
       .then(({ data }) => setReps(data ?? []));
-  }, [isStaff]);
+  }, [isStaff, repsTick]);
 
   if (access.state === "loading") {
     return (
@@ -120,7 +125,7 @@ function Staff() {
             <Link to="/staff" search={{}} className={viewTab(!search.view)} data-staff-view="files">
               Files
             </Link>
-            {VIEWS.map((v) => (
+            {VIEWS.filter((v) => access.isAdmin || !ADMIN_VIEWS.includes(v)).map((v) => (
               <Link
                 key={v}
                 to="/staff"
@@ -154,6 +159,12 @@ function Staff() {
           <Funders isAdmin={access.isAdmin} />
         ) : search.view === "money" ? (
           <Money isAdmin={access.isAdmin} userId={access.userId} reps={reps} />
+        ) : search.view === "team" ? (
+          access.isAdmin ? (
+            <Team onChanged={() => setRepsTick((t) => t + 1)} />
+          ) : (
+            <p className="mt-8 text-sm text-smoke">Only admins manage the team.</p>
+          )
         ) : (
           <Board
             isAdmin={access.isAdmin}

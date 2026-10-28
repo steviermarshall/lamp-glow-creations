@@ -20,6 +20,7 @@ import {
   type Stage,
 } from "@/lib/staff";
 import { btnOutline, btnPrimary, card } from "@/components/site/layout";
+import { CameIn } from "@/components/staff/came-in";
 import { FileOffers } from "@/components/staff/file-offers";
 import { FileSend } from "@/components/staff/file-send";
 
@@ -88,7 +89,7 @@ export function FileView({
   userId: string;
   isAdmin: boolean;
   repSlug: string | null;
-  reps: { slug: string; name: string }[];
+  reps: { slug: string; name: string; admin_slug?: string | null }[];
 }) {
   const [file, setFile] = useState<FileRow | null | undefined>(undefined);
   const [events, setEvents] = useState<EventRow[]>([]);
@@ -310,6 +311,7 @@ export function FileView({
           <p className="text-sm text-smoke">
             {STAGE_LABEL[file.status]} · {repName(file.rep_slug)} · filed {stamp(file.created_at)}
           </p>
+          <CameIn fileId={file.id} reps={reps} />
           <h2 className="mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">
             {file.business_name || "Unnamed business"}
           </h2>
