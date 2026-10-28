@@ -17,7 +17,7 @@ function Privacy() {
   return (
     <ProsePage eyebrow="Legal" title="Privacy Policy" intro="Last updated September 28, 2026.">
       <p>
-        This policy explains what information Lamp Financial Group LLC ("Lamp", "we") collects when
+        This policy explains what information Lamp Capital Group LLC ("Lamp", "we") collects when
         you use this website, how we use it, and the choices you have.
       </p>
       <h2>Information we collect</h2>
