@@ -106,6 +106,22 @@ export function applicationUrl(site: string, repSlug: string, token?: string | n
   return token ? `${base}?i=${token}` : base;
 }
 
+/**
+ * The rep's PDF link, getlamp.app/application/<rep>/pdf: the whole application as one fillable
+ * page, opened straight in the browser's PDF viewer. Tested against applicationUrl (A/B); each
+ * open is counted as a page view of this path.
+ */
+export function applicationPdfUrl(site: string, repSlug: string): string {
+  return `${applicationUrl(site, repSlug)}/pdf`;
+}
+
+/**
+ * The blank fillable form the PDF link opens: the template with a field over every box, made by
+ * buildApplicationPdf(template, { text: {}, checked: {} }, "all", Inter). Rebuild it when the
+ * template in public/forms changes.
+ */
+export const BLANK_APPLICATION_PDF = "/forms/lamp-application.pdf";
+
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
