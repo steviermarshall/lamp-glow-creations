@@ -107,16 +107,17 @@ export function applicationUrl(site: string, repSlug: string, token?: string | n
 }
 
 /**
- * The rep's PDF link, getlamp.app/application/<rep>/pdf: the whole application as one fillable
- * page, opened straight in the browser's PDF viewer. Tested against applicationUrl (A/B); each
- * open is counted as a page view of this path.
+ * The rep's PDF link, getlamp.app/application/<rep>/pdf: the whole one-page form, filled in and
+ * signed on the page. Tested against applicationUrl (A/B); both count opens as page views and
+ * signed files as .../signed (see recordSigned).
  */
 export function applicationPdfUrl(site: string, repSlug: string): string {
   return `${applicationUrl(site, repSlug)}/pdf`;
 }
 
 /**
- * The blank fillable form the PDF link opens: the template with a field over every box, made by
+ * The blank fillable form, for "Prefer paper? Download the PDF": the template with a field over
+ * every box, made by
  * buildApplicationPdf(template, { text: {}, checked: {} }, "all", Inter). Rebuild it when the
  * template in public/forms changes.
  */

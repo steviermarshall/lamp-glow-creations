@@ -190,7 +190,7 @@ function SignOut() {
   return (
     <button
       type="button"
-      className="inline-flex h-11 items-center gap-2 rounded-full px-3 text-[0.95rem] font-semibold text-mist ring-1 ring-white/20 transition hover:text-paper sm:px-4"
+      className="inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[0.95rem] font-semibold text-mist ring-1 ring-white/20 transition hover:text-paper sm:px-4"
       aria-label="Sign out"
       title="Sign out"
       data-sign-out

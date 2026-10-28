@@ -48,6 +48,7 @@ import { SignBlock } from "@/components/application/sign-block";
 import { emptySigning, uploadType, type Signing } from "@/components/application/form-kit";
 import { F, inputCls, Text } from "@/components/application/fields";
 import { PHONE_CONSENT_TEXT } from "@/lib/apply";
+import { reportStage, saveProgressToken } from "@/lib/application-progress";
 
 /**
  * The full application from a link: getlamp.app/application/<rep>?i=<token> (a personal link a
@@ -70,7 +71,7 @@ type StepId = (typeof STEPS)[number]["id"];
 
 const MAX_FILES = 8;
 
-type Done = SubmitResponse & { uploads: { name: string; ok: boolean; error?: string }[] };
+export type Done = SubmitResponse & { uploads: { name: string; ok: boolean; error?: string }[] };
 
 /** Which step each missing answer belongs to, by the wording missing() uses. */
 function missingByStep(d: Details): Record<StepId, string[]> {
@@ -252,6 +253,9 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
     if (current.id === "sign" && to !== step) setSig((x) => ({ ...x, image: null, image2: null }));
     setStep(to);
     setVisited((v) => Math.max(v, to));
+    // a public link's lead: the furthest step reached (the server keeps the furthest)
+    if (!token && to > 0)
+      reportStage(repSlug, STEPS[to]!.id as Exclude<StepId, "business">, "online");
     setShowMissing(false);
     saveDraft(key, d, to);
     window.requestAnimationFrame(() => {
@@ -661,6 +665,7 @@ function ContactGate({
           email,
           phone_consent: consent ? PHONE_CONSENT_TEXT : null,
           utm,
+          form: "online",
         }),
       });
       if (res.status === 400) {
@@ -668,6 +673,9 @@ function ContactGate({
         setBusy(false);
         return setError(j.error ?? "Check your details and try again.");
       }
+      // how far they get from here is reported against this lead (see application-progress)
+      const j = (await res.json().catch(() => ({}))) as { progress?: unknown };
+      if (res.ok && typeof j.progress === "string") saveProgressToken(repSlug, j.progress);
       // saved, or the network or limit got in the way: either way they carry on with the form
     } catch {
       /* carry on */
@@ -870,7 +878,7 @@ function Stepper({
   );
 }
 
-function Statements({ files, setFiles }: { files: File[]; setFiles: (f: File[]) => void }) {
+export function Statements({ files, setFiles }: { files: File[]; setFiles: (f: File[]) => void }) {
   const [note, setNote] = useState("");
   const add = (list: FileList | null) => {
     if (!list) return;
@@ -1062,7 +1070,7 @@ function Review({
   );
 }
 
-function DoneScreen({
+export function DoneScreen({
   done,
   firstName,
   onDownload,

@@ -54,6 +54,7 @@ import {
   type SubmitResponse,
 } from "@/lib/application-links";
 import { NEW_APPLICATION_COPY, SITE } from "@/lib/site";
+import { recordSigned } from "@/lib/tracking.server";
 import {
   einVariants,
   newApplicationEmail,
@@ -750,6 +751,8 @@ type SubmitBody = {
   details?: unknown;
   signature?: { name?: unknown; image?: unknown; name2?: unknown; image2?: unknown };
   consent_version?: unknown;
+  /** "pdf": signed on the one-page paper form, which asks only whether they own real estate */
+  form?: unknown;
   /** honeypot: a field people never see */
   company_fax?: unknown;
 };
@@ -788,7 +791,8 @@ export async function submitApplication(request: Request): Promise<Response> {
   if (token === null && !SLUG.test(rep)) return json(404, { error: ERR["unknown_rep"]![1] });
 
   const d = cleanDetails(fromRow((body.details ?? {}) as Record<string, unknown>));
-  const todo = missing(d);
+  const paper = body.form === "pdf";
+  const todo = missing(d, { propertyDetails: !paper });
   if (todo.length) return json(422, { error: "Some answers are missing.", missing: todo });
   const owner = d.owners[0]!;
   const sig = body.signature ?? {};
@@ -857,6 +861,9 @@ export async function submitApplication(request: Request): Promise<Response> {
   }
 
   // the rep's email waits for the signed PDF and the statements: see notifyNewApplication
+
+  // for the online-or-paper A/B test: a signed file counts as a page view of .../signed
+  await recordSigned(request, out.rep_slug, paper);
 
   return json(200, {
     application_id: out.application_id,

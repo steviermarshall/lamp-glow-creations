@@ -8,6 +8,7 @@ import { btnPrimary, card } from "@/components/site/layout";
 import { chip, input } from "@/components/staff/field-styles";
 import { CopyButton, LinkTools, SendApplications } from "@/components/staff/send-applications";
 import { applicationUrl, type SendRequest, type SendResult } from "@/lib/application-links";
+import { StartedLeads } from "@/components/staff/started-leads";
 
 /**
  * Applications: every application link sent, newest first, and where each one stands (sent,
@@ -271,6 +272,8 @@ export function SentApplications({
           </p>
         )}
       </section>
+
+      <StartedLeads isAdmin={isAdmin} rep={rep} reps={reps} />
 
       {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 

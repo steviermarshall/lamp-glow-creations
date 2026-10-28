@@ -339,7 +339,11 @@ export function prefill(app: {
 const digits = (s: string) => s.replace(/\D/g, "");
 
 /** What still has to be filled before the application can be signed, in plain words. */
-export function missing(d: Details): string[] {
+/**
+ * What's still needed before signing. The paper form (propertyDetails false) only asks whether
+ * they own real estate; the rep gets the property details afterwards.
+ */
+export function missing(d: Details, { propertyDetails = true } = {}): string[] {
   const out: string[] = [];
   const b = d.business;
   const need = (ok: boolean, what: string) => {
@@ -372,7 +376,8 @@ export function missing(d: Details): string[] {
     need(!!o.dob, `${who}'s date of birth`);
     need(digits(o.ssn).length === 9 || isMaskedSsn(o.ssn), `${who}'s SSN (nine digits)`);
   });
-  out.push(...missingRealEstate(d.real_estate));
+  if (propertyDetails) out.push(...missingRealEstate(d.real_estate));
+  else if (!d.real_estate.owns) out.push("whether you own any real estate");
   return out;
 }
 
@@ -594,6 +599,10 @@ export function detailsToPdf(d: Details, signed: PdfSignature, repName: string |
     }),
   );
   if (d.real_estate.owns === "no") extra.push({ label: "Owns real estate", value: "No" });
+  // the paper form asks only yes or no; the rep gets the property details afterwards
+  const noSchedule = d.real_estate.owns === "yes" && d.real_estate.properties.length === 0;
+  if (noSchedule)
+    extra.push({ label: "Owns real estate", value: "Yes (property details to follow)" });
   const checked: Record<string, boolean> = {
     use_working_capital: d.request.uses.includes("working_capital"),
     use_inventory: d.request.uses.includes("inventory"),
@@ -611,7 +620,7 @@ export function detailsToPdf(d: Details, signed: PdfSignature, repName: string |
   };
   const out: PdfFill = { text, checked };
   if (images.owner1_signature || images.owner2_signature) out.images = images;
-  if (d.real_estate.owns === "yes") out.realEstate = d.real_estate;
+  if (d.real_estate.owns === "yes" && !noSchedule) out.realEstate = d.real_estate;
   if (extra.length) out.extra = extra;
   if (audit) out.audit = audit;
   return out;

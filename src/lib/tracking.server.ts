@@ -151,40 +151,30 @@ export async function recordActivity(request: Request): Promise<Response> {
 }
 
 /**
- * GET /application/<rep>/pdf: a PDF carries no visitor id, so each open is counted as its own
- * visitor's page view of that path, the way /api/track counts pages. Unknown reps and bots aren't
- * counted. Best effort: never throws.
+ * A signed application, counted as a page view of /application/<rep>/signed (online) or
+ * /application/<rep>/pdf/signed (the paper form), so Dashboard > Website > Page sets each
+ * link's opens next to its signed files. Best effort: never throws.
  */
-export async function recordPdfOpen(request: Request, slug: string): Promise<void> {
-  if (notReady()) return;
+export async function recordSigned(request: Request, slug: string, paper: boolean): Promise<void> {
+  if (notReady() || !/^[a-z0-9][a-z0-9-]{1,31}$/.test(slug)) return;
   const ua = request.headers.get("user-agent") ?? "";
-  if (!ua || isBot(ua) || !/^[a-z0-9][a-z0-9-]{1,31}$/.test(slug)) return;
   try {
-    const svc = service();
-    const rep = await svc.from("reps").select("active").eq("slug", slug).maybeSingle();
-    if (rep.error || !(rep.data as { active: boolean } | null)?.active) return;
-    let referrerHost: string | null = null;
-    try {
-      const ref = request.headers.get("referer");
-      referrerHost = ref ? text(new URL(ref).hostname, 120) : null;
-    } catch {
-      /* not a URL */
-    }
-    const url = new URL(request.url);
-    await svc.from("site_events" as never).insert({
-      visitor: crypto.randomUUID(),
-      kind: "page_view",
-      path: `/application/${slug}/pdf`,
-      step: null,
-      question: null,
-      referrer_host: referrerHost,
-      utm_source: text(url.searchParams.get("utm_source"), 80),
-      utm_medium: text(url.searchParams.get("utm_medium"), 80),
-      utm_campaign: text(url.searchParams.get("utm_campaign"), 120),
-      device: deviceOf(ua),
-      ...placeOf(request),
-    } as never);
+    await service()
+      .from("site_events" as never)
+      .insert({
+        visitor: crypto.randomUUID(),
+        kind: "page_view",
+        path: `/application/${slug}${paper ? "/pdf" : ""}/signed`,
+        step: null,
+        question: null,
+        referrer_host: null,
+        utm_source: null,
+        utm_medium: null,
+        utm_campaign: null,
+        device: deviceOf(ua),
+        ...placeOf(request),
+      } as never);
   } catch {
-    /* counting is best effort; the form still opens */
+    /* counting is best effort; the file is saved either way */
   }
 }
