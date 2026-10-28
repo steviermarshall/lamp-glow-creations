@@ -15,6 +15,7 @@ import { Funders } from "@/components/staff/funders";
 import { Money } from "@/components/staff/money";
 import { Dashboard } from "@/components/staff/dashboard";
 import { Team } from "@/components/staff/team";
+import { NotificationsBell } from "@/components/staff/notifications";
 import { AppLinks } from "@/components/staff/app-links";
 
 type StaffSearch = {
@@ -113,13 +114,18 @@ function Staff() {
   return (
     <PageShell member wide footer={false} tone="night">
       <div className="w-full px-5 pb-24 pt-10 sm:px-8 sm:pt-14">
-        <p className="text-sm text-smoke">
-          {user?.email} · {access.isAdmin ? "Admin" : "Rep"}
-          {access.repSlug && ` · /${access.repSlug}`}
-        </p>
-        <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          {search.view ? VIEW_TITLE[search.view] : "Files"}
-        </h1>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm text-smoke">
+              {user?.email} · {access.isAdmin ? "Admin" : "Rep"}
+              {access.repSlug && ` · /${access.repSlug}`}
+            </p>
+            <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">
+              {search.view ? VIEW_TITLE[search.view] : "Files"}
+            </h1>
+          </div>
+          <NotificationsBell />
+        </div>
         {!search.file && (
           <nav className="mt-4 flex flex-wrap gap-2 text-sm" aria-label="Staff views">
             <Link to="/staff" search={{}} className={viewTab(!search.view)} data-staff-view="files">
