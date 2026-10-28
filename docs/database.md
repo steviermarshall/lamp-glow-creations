@@ -31,8 +31,8 @@ answer never depends on what the caller can read.
 | Role | Reads | Writes |
 |---|---|---|
 | anonymous | active reps | leads (insert only, through the site's server) |
-| merchant | own profile, businesses, applications, documents in own folder, visible events, presented offers (`my_offers`) | own profile and businesses; own application answers and contact fields; own documents until reviewed; `accept_offer()` |
-| rep | own files plus the unassigned pool (`pipeline_board`), and only on those files: events, documents, stored files, submissions, offers, and the owner's profile and businesses; own profile; own and untagged leads (and their events); funders; own deals and ledger entries | on own or unassigned files only: stage and staff notes (`application_internal_notes`), take an unassigned file for themselves (never assign, hand over or release, never change `source_rep_slug`); events as themselves; submissions; offers; document review; own and untagged leads. No business edits, no `accept_offer()` |
+| merchant | own profile, businesses, applications, documents in own folder, visible events, presented offers (`my_offers`, with the funder's name only) | own profile and businesses; own application answers and contact fields; own documents until reviewed; `accept_offer()` |
+| rep | own files plus the unassigned pool (`pipeline_board`), and only on those files: events, documents, stored files, submissions, offers, and the owner's profile and businesses; own profile; own and untagged leads (and their events); funders; own deals and ledger entries | on own or unassigned files only: stage and staff notes (`application_internal_notes`), take an unassigned file for themselves (never assign, hand over or release, never change `source_rep_slug`); events as themselves; submissions; offers and their notes (`offer_internal_notes`); document review; own and untagged leads. No business edits, no `accept_offer()` |
 | admin | everything | everything, plus reps, roles, funders, deals, the ledger |
 | service role (server functions, cron) | bypasses RLS | bypasses RLS |
 
@@ -41,6 +41,8 @@ Guardrails the database enforces whatever the app sends:
 - a merchant cannot change `status`, `rep_slug`, `staff_notes`, `user_id`, `assigned_at`, the phone-consent stamps or the `submitted_at`, `funded_at` and `closed_at` stamps (`applications_before_update` raises);
 - `submitted_at` means the file has gone to funders: it is stamped on the first move to any stage from `submitted` on, and when a `submissions` row is recorded;
 - an offer with status `received` is invisible to the merchant;
+- a merchant reads no `funders` rows: `my_offers` takes the funder's name from `offer_funder_name()`, which gives only the name, and only for an offer the caller may see (the merchant once it is presented, or staff; the service role and the SQL editor always);
+- offer notes live in `offer_internal_notes`, which only admins and staff on their own or unassigned files can read or write. `offers.notes` is retired and always empty, because merchants read their presented offers' rows: a page still open from before the move that saves an offer with a note has it moved into the table (`offers_notes_moved`). `accept_offer()` returns only the offer's id, file, status and `accepted_at`;
 - at most one accepted offer per application (partial unique index), and `accept_offer()` refuses anything not `presented` or past `expires_at`, and any caller other than the merchant who owns the file or an admin;
 - deals and the commission ledger are admin-only writes;
 - a rep changes `rep_slug` only from null to their own slug; reassigning, handing over or releasing a file, and changing `source_rep_slug` (link attribution), are admin-only (`applications_before_update` raises);
@@ -93,6 +95,7 @@ against a local Supabase stack.
 | events | timeline, audit trail and rep activity in one | (application_id, occurred_at), (lead_id, occurred_at), actor, kind |
 | documents | index of the storage bucket, with review state and what each file is (`kind`) | (application_id, created_at), (application_id, kind), user_id, pending-review partial |
 | application_internal_notes | the staff notes on a file, one per file; staff only | pk application_id |
+| offer_internal_notes | the rep's note on an offer, one per offer; staff only | pk offer_id |
 | leads | email before sign-up, converted on application | lower(email), created_at, rep_slug, unconverted partial |
 | funders | the private lender table with criteria and commission points | active |
 | submissions | one application sent to one funder | unique (application_id, funder_id), funder, open partial |
