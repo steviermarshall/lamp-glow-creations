@@ -183,7 +183,7 @@ export function clientIp(request: Request): string | null {
 }
 
 /** Never throws: a failure comes back as { error } for the caller to record, and a batch goes on. */
-async function gmailSend(
+export async function gmailSend(
   access: string,
   msg: {
     to: string;
@@ -228,17 +228,48 @@ type Rep = {
   title: string | null;
   user_id: string | null;
   active: boolean;
+  admin_slug: string | null;
+  /** The admin this rep reports to, when that admin is active: the name merchants see. */
+  lead: { name: string; title: string | null; user_id: string | null } | null;
 };
 
 /** The rep, or null when there's none. Throws when the lookup itself failed. */
 async function repBySlug(svc: Svc, slug: string): Promise<Rep | null> {
   const r = await svc
     .from("reps")
-    .select("slug,name,title,user_id,active")
+    .select("slug,name,title,user_id,active,admin_slug")
     .eq("slug", slug)
     .maybeSingle();
   if (r.error) throw r.error;
-  return (r.data as Rep | null) ?? null;
+  const rep = r.data as Omit<Rep, "lead"> | null;
+  if (!rep) return null;
+  let lead: Rep["lead"] = null;
+  if (rep.admin_slug) {
+    const a = await svc
+      .from("reps")
+      .select("name,title,user_id,active")
+      .eq("slug", rep.admin_slug)
+      .maybeSingle();
+    const row = a.data as (Rep["lead"] & { active: boolean }) | null;
+    if (row?.active) lead = { name: row.name, title: row.title, user_id: row.user_id };
+  }
+  return { ...rep, lead };
+}
+
+/**
+ * Who merchants see: the admin a rep reports to, or the rep themselves. Application emails,
+ * the application page and the signed PDF's "Lamp rep" box use this name; the file itself
+ * still lands with the rep who sent it.
+ */
+const facing = (r: Rep) => r.lead ?? { name: r.name, title: r.title, user_id: r.user_id };
+
+/** Replies go to the admin and the rep, so either can answer; else to whoever sent it. */
+async function replyToFor(svc: Svc, rep: Rep, senderId: string): Promise<string | null> {
+  const emails = [
+    rep.lead ? await emailOf(svc, rep.lead.user_id) : null,
+    await emailOf(svc, rep.user_id),
+  ].filter((e, i, all): e is string => !!e && all.indexOf(e) === i);
+  return emails.length ? emails.join(", ") : await emailOf(svc, senderId);
 }
 
 async function emailOf(svc: Svc, userId: string | null): Promise<string | null> {
@@ -420,11 +451,11 @@ export async function applicationInvites(request: Request): Promise<Response> {
         .eq("id", inv.id);
       return json(412, { error: access.error });
     }
-    const replyTo = (await emailOf(svc, rep.user_id)) ?? (await emailOf(svc, who.userId));
+    const replyTo = await replyToFor(svc, rep, who.userId);
     const mail = inviteEmail({
       firstName: inv.first_name ?? "",
       businessName: inv.business_name ?? "",
-      repName: rep.name,
+      repName: facing(rep).name,
       note,
       url,
       legalName: SITE.legalName,
@@ -432,7 +463,7 @@ export async function applicationInvites(request: Request): Promise<Response> {
     });
     const sent = await gmailSend(access.access, {
       to: inv.email!,
-      fromName: `${rep.name} at Lamp`,
+      fromName: `${facing(rep).name} at Lamp`,
       replyTo,
       subject: mail.subject,
       text: mail.text,
@@ -500,7 +531,7 @@ export async function applicationInvites(request: Request): Promise<Response> {
 
   const note = typeof body.note === "string" ? body.note.slice(0, MAX_NOTE) : "";
   const staff = await staffEmails(svc);
-  const replyTo = (await emailOf(svc, rep.user_id)) ?? (await emailOf(svc, who.userId));
+  const replyTo = await replyToFor(svc, rep, who.userId);
   let access: { access: string } | { error: string } | null = null;
   const since = new Date(Date.now() - 10 * 60_000).toISOString();
   const results: SendResult[] = [];
@@ -616,7 +647,7 @@ export async function applicationInvites(request: Request): Promise<Response> {
     const mail = inviteEmail({
       firstName,
       businessName: business,
-      repName: rep.name,
+      repName: facing(rep).name,
       note,
       url,
       legalName: SITE.legalName,
@@ -624,7 +655,7 @@ export async function applicationInvites(request: Request): Promise<Response> {
     });
     const sent = await gmailSend(access.access, {
       to: email,
-      fromName: `${rep.name} at Lamp`,
+      fromName: `${facing(rep).name} at Lamp`,
       replyTo,
       subject: mail.subject,
       text: mail.text,
@@ -693,7 +724,8 @@ export async function openApplication(request: Request): Promise<Response> {
   const svc = service();
   const none = (state: OpenResponse["state"]): Response =>
     json(200, { state, draft: null, rep: null, prefill: null } satisfies OpenResponse);
-  const repOut = (r: Rep) => ({ slug: r.slug, name: r.name, title: r.title });
+  // merchants see the admin's name when the rep reports to one (see facing)
+  const repOut = (r: Rep) => ({ slug: r.slug, name: facing(r).name, title: facing(r).title });
 
   if (body.token != null) {
     if (!isToken(body.token)) return none("not_found");
@@ -864,6 +896,22 @@ export async function submitApplication(request: Request): Promise<Response> {
 
   // for the online-or-paper A/B test: a signed file counts as a page view of .../signed
   await recordSigned(request, out.rep_slug, paper);
+  // and the file says which form it came in on, for the "How it came in" line staff see
+  if (paper) {
+    const row = await svc
+      .from("applications")
+      .select("utm")
+      .eq("id", out.application_id)
+      .maybeSingle();
+    const utm = ((row.data as { utm: Record<string, unknown> | null } | null)?.utm ?? {}) as Record<
+      string,
+      unknown
+    >;
+    await svc
+      .from("applications")
+      .update({ utm: { ...utm, form: "pdf" } } as never)
+      .eq("id", out.application_id);
+  }
 
   return json(200, {
     application_id: out.application_id,

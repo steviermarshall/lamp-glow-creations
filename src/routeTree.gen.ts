@@ -26,6 +26,7 @@ import { Route as ApiApplicationInvitesRouteImport } from './routes/api.applicat
 import { Route as ApiDocumentsRouteImport } from './routes/api.documents'
 import { Route as ApiLeadsRouteImport } from './routes/api.leads'
 import { Route as ApiServerCheckRouteImport } from './routes/api.server-check'
+import { Route as ApiTeamRouteImport } from './routes/api.team'
 import { Route as ApiTrackRouteImport } from './routes/api.track'
 import { Route as ApplicationRepRouteImport } from './routes/application.$rep'
 import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
@@ -126,6 +127,11 @@ const ApiServerCheckRoute = ApiServerCheckRouteImport.update({
   path: '/api/server-check',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTeamRoute = ApiTeamRouteImport.update({
+  id: '/api/team',
+  path: '/api/team',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiTrackRoute = ApiTrackRouteImport.update({
   id: '/api/track',
   path: '/api/track',
@@ -215,6 +221,7 @@ export interface FileRoutesByFullPath {
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/leads': typeof ApiLeadsRoute
   '/api/server-check': typeof ApiServerCheckRoute
+  '/api/team': typeof ApiTeamRoute
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
@@ -248,6 +255,7 @@ export interface FileRoutesByTo {
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/leads': typeof ApiLeadsRoute
   '/api/server-check': typeof ApiServerCheckRoute
+  '/api/team': typeof ApiTeamRoute
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
@@ -282,6 +290,7 @@ export interface FileRoutesById {
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/leads': typeof ApiLeadsRoute
   '/api/server-check': typeof ApiServerCheckRoute
+  '/api/team': typeof ApiTeamRoute
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply_/$rep': typeof ApplyRepRoute
@@ -317,6 +326,7 @@ export interface FileRouteTypes {
     | '/api/documents'
     | '/api/leads'
     | '/api/server-check'
+    | '/api/team'
     | '/api/track'
     | '/application/$rep'
     | '/apply/$rep'
@@ -350,6 +360,7 @@ export interface FileRouteTypes {
     | '/api/documents'
     | '/api/leads'
     | '/api/server-check'
+    | '/api/team'
     | '/api/track'
     | '/application/$rep'
     | '/apply/$rep'
@@ -383,6 +394,7 @@ export interface FileRouteTypes {
     | '/api/documents'
     | '/api/leads'
     | '/api/server-check'
+    | '/api/team'
     | '/api/track'
     | '/application/$rep'
     | '/apply_/$rep'
@@ -417,6 +429,7 @@ export interface RootRouteChildren {
   ApiDocumentsRoute: typeof ApiDocumentsRouteWithChildren
   ApiLeadsRoute: typeof ApiLeadsRoute
   ApiServerCheckRoute: typeof ApiServerCheckRoute
+  ApiTeamRoute: typeof ApiTeamRoute
   ApiTrackRoute: typeof ApiTrackRoute
   ApplicationRepRoute: typeof ApplicationRepRoute
   ApplyRepRoute: typeof ApplyRepRoute
@@ -553,6 +566,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiServerCheckRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/team': {
+      id: '/api/team'
+      path: '/api/team'
+      fullPath: '/api/team'
+      preLoaderRoute: typeof ApiTeamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/track': {
       id: '/api/track'
       path: '/api/track'
@@ -684,6 +704,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDocumentsRoute: ApiDocumentsRouteWithChildren,
   ApiLeadsRoute: ApiLeadsRoute,
   ApiServerCheckRoute: ApiServerCheckRoute,
+  ApiTeamRoute: ApiTeamRoute,
   ApiTrackRoute: ApiTrackRoute,
   ApplicationRepRoute: ApplicationRepRoute,
   ApplyRepRoute: ApplyRepRoute,

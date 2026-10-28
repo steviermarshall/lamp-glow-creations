@@ -61,7 +61,7 @@ export function Board({
   repSlug: string | null;
   stage: Stage | undefined;
   rep: RepFilter;
-  reps: { slug: string; name: string }[];
+  reps: { slug: string; name: string; admin_slug?: string | null }[];
   onStage: (s: Stage | undefined) => void;
   onRep: (r: RepFilter) => void;
 }) {
@@ -113,8 +113,13 @@ export function Board({
     };
   }, [isAdmin, repSlug, stageFilter, rep]);
 
-  const repName = (slug: string | null) =>
-    slug ? (reps.find((r) => r.slug === slug)?.name ?? slug) : null;
+  /** The rep, with their admin's team when they report to one: "Zeus · Stevie's team". */
+  const repName = (slug: string | null) => {
+    if (!slug) return null;
+    const r = reps.find((x) => x.slug === slug);
+    const lead = r?.admin_slug ? reps.find((x) => x.slug === r.admin_slug)?.name : null;
+    return `${r?.name ?? slug}${lead ? ` · ${lead.split(" ")[0]}'s team` : ""}`;
+  };
 
   /** Moves a file to a stage: on the board at once, put back if the database refuses. */
   async function move(id: string, to: Stage) {
