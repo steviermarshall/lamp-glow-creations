@@ -63,8 +63,11 @@ export function SiteHeader({
   minimal = false,
   floating = false,
   themeToggle = false,
+  wide = false,
 }: {
   minimal?: boolean;
+  /** Full window width, for the staff portal's wide boards. */
+  wide?: boolean;
   /** The light/dark switch: member pages only (staff portal, account, application links). */
   themeToggle?: boolean;
   /** Lamplight pages: a glass bar floating over the dot field instead of a full-width band. */
@@ -82,7 +85,8 @@ export function SiteHeader({
     >
       <div
         className={cn(
-          "mx-auto flex max-w-6xl items-center justify-between",
+          "mx-auto flex items-center justify-between",
+          wide ? "max-w-none" : "max-w-6xl",
           floating ? "ll-glass rounded-[1.4rem] py-2.5 pl-4 pr-2.5 sm:pl-5" : "px-5 py-3.5 sm:px-6",
         )}
       >
@@ -149,7 +153,11 @@ export function SiteHeader({
           className={cn(
             "px-5 pb-6 pt-2 md:hidden",
             floating
-              ? "mx-auto mt-2 max-w-6xl rounded-[1.4rem] bg-night/90 ring-1 ring-white/10 backdrop-blur-xl"
+              ? cn(
+                  "mx-auto mt-2 rounded-[1.4rem]",
+                  wide ? "max-w-none" : "max-w-6xl",
+                  "bg-night/90 ring-1 ring-white/10 backdrop-blur-xl",
+                )
               : "border-t border-white/10",
           )}
         >
@@ -325,8 +333,11 @@ export function PageShell({
   tone = "paper",
   member = false,
   themeToggle,
+  wide = false,
 }: {
   children: ReactNode;
+  /** Header and page at full window width (the staff portal). */
+  wide?: boolean;
   minimalHeader?: boolean;
   footer?: boolean;
   /**
@@ -372,7 +383,12 @@ export function PageShell({
       >
         Skip to content
       </a>
-      <SiteHeader minimal={minimalHeader} floating={night} themeToggle={themeToggle ?? member} />
+      <SiteHeader
+        minimal={minimalHeader}
+        floating={night}
+        themeToggle={themeToggle ?? member}
+        wide={wide}
+      />
       <main id="main" className="flex-1">
         {children}
       </main>
