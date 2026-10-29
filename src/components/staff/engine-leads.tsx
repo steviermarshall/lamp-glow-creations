@@ -256,7 +256,7 @@ export function EngineLeads({
             Search
           </span>
           <span className="relative block">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-smoke" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-smoke" />
             <input
               type="search"
               className="w-full rounded-full bg-white py-2 pl-10 pr-4 text-sm ring-1 ring-line"
