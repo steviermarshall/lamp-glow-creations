@@ -195,3 +195,130 @@ export function leadsFromCsv(
   });
   return { leads, problems };
 }
+
+/**
+ * The search box as a PostgREST `or` filter over name, phone, email, city and industry, or null
+ * for an empty box. Characters that mean something to the filter are dropped; a term that is
+ * all digits and dashes also matches phones however they're written ("7185551212" finds
+ * "(718) 555-1212").
+ */
+export function searchFilter(term: string): string | null {
+  const t = term
+    .replace(/[^\p{L}\p{N} @.&'_-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!t) return null;
+  const like = `%${t}%`;
+  const parts = ["name", "email", "city", "industry"].map((c) => `${c}.ilike."${like}"`);
+  const digits = t.replace(/\D/g, "");
+  parts.push(
+    /^[\d\s-]+$/.test(t) && digits.length >= 3
+      ? `phone.ilike."%${digits.split("").join("%")}%"`
+      : `phone.ilike."${like}"`,
+  );
+  return parts.join(",");
+}
+
+/** One engine lead as the page shows it, for the admin's CSV download. */
+export type LeadExport = {
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  state: string | null;
+  industry: string | null;
+  tier: string | null;
+  need: number | null;
+  reason: string | null;
+  signals: unknown;
+  first_found: string | null;
+  status: string;
+  notes: string;
+  rep_slug: string | null;
+  worked_at: string | null;
+};
+
+/**
+ * The picked leads as a CSV that opens in Excel or Sheets: a byte-order mark for the accents,
+ * and a cell that starts like a formula (=, +, -, @) gets a leading apostrophe so a
+ * spreadsheet shows it as text instead of running it.
+ */
+export function leadsToCsv(rows: LeadExport[], repName: (slug: string | null) => string): string {
+  const cell = (v: unknown) => {
+    let s = v == null ? "" : String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const head = [
+    "Business",
+    "Phone",
+    "Email",
+    "City",
+    "State",
+    "Industry",
+    "Tier",
+    "Need",
+    "Why",
+    "Signals",
+    "Found",
+    "Status",
+    "Notes",
+    "Rep",
+    "Last worked",
+  ];
+  const lines = rows.map((r) =>
+    [
+      r.name,
+      r.phone,
+      r.email,
+      r.city,
+      r.state,
+      r.industry,
+      r.tier,
+      r.need,
+      r.reason,
+      signalSummary(r.signals),
+      r.first_found,
+      ENGINE_STATUS_LABEL[r.status as EngineStatus] ?? r.status,
+      r.notes,
+      repName(r.rep_slug),
+      r.worked_at ? r.worked_at.slice(0, 10) : "",
+    ]
+      .map(cell)
+      .join(","),
+  );
+  return "﻿" + [head.join(","), ...lines].join("\r\n") + "\r\n";
+}
+
+/**
+ * The Board (Asad's War Room, which runs on his own Mac) can hand a batch of leads to an
+ * admin's open Engine leads page instead of a downloaded file. It opens this page, waits for
+ * "ready", then sends the same CSV it would have downloaded; nothing is saved until the admin
+ * presses Hand out, under their own sign-in. Only these origins are listened to, and only from
+ * the window that opened this one.
+ */
+export const BOARD_ORIGINS = ["http://localhost:8777", "http://127.0.0.1:8777"] as const;
+export const BOARD_MAX_CSV = 2_000_000;
+
+export type BoardBatch = { batch: number; label: string; csv: string };
+
+/** A message from the Board, if it is a well-formed batch of leads. */
+export function boardBatch(data: unknown): BoardBatch | null {
+  if (!data || typeof data !== "object") return null;
+  const {
+    type,
+    batch,
+    csv,
+    label: rawLabel,
+  } = data as {
+    type?: unknown;
+    batch?: unknown;
+    csv?: unknown;
+    label?: unknown;
+  };
+  if (type !== "lamp-board:leads") return null;
+  if (typeof batch !== "number" || !Number.isInteger(batch) || batch <= 0) return null;
+  if (typeof csv !== "string" || !csv || csv.length > BOARD_MAX_CSV) return null;
+  const label = typeof rawLabel === "string" ? rawLabel.trim().slice(0, 120) : "";
+  return { batch, label: label || `Board batch #${batch}`, csv };
+}
