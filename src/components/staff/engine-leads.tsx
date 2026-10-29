@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Send } from "lucide-react";
+import { Download, Loader2, Search, Send } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { age } from "@/lib/staff";
@@ -8,10 +8,14 @@ import { SendApplications, type SendSeed } from "@/components/staff/send-applica
 import { MAX_RECIPIENTS } from "@/lib/application-links";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import {
+  BOARD_ORIGINS,
   ENGINE_STATUS_LABEL,
   ENGINE_STATUSES,
   TIERS,
+  boardBatch,
   leadsFromCsv,
+  leadsToCsv,
+  searchFilter,
   signalSummary,
   tel,
   type EngineStatus,
@@ -23,6 +27,8 @@ import {
  * each one goes to, and uploads the file here. A rep sees and works only their own leads and
  * records what happened on the call; the engine never dials or sends, a person does.
  * Ticking leads opens Send the application: one personal link each, by email or to copy.
+ * Search looks through name, phone, email, city and industry within the tier and status
+ * picked; admins can also download the ticked leads as a CSV.
  */
 
 type Row = {
@@ -60,6 +66,9 @@ export function EngineLeads({
 }) {
   const [tier, setTier] = useState<string>(isAdmin ? "A" : "");
   const [status, setStatus] = useState<string>("new");
+  const [search, setSearch] = useState("");
+  // what the list was last loaded for: the box waits for a pause in typing
+  const [query, setQuery] = useState("");
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState<number | null>(null);
@@ -67,6 +76,11 @@ export function EngineLeads({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // The send panel, keyed so picking again starts it fresh with the new picks.
   const [sending, setSending] = useState<{ key: number; seed: SendSeed[] } | null>(null);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setQuery(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     const sb = getSupabase();
@@ -79,6 +93,8 @@ export function EngineLeads({
       let q = sb.from("engine_leads").select(COLUMNS).not("phone", "is", null).neq("phone", "");
       if (tier) q = q.eq("tier", tier);
       if (status) q = q.eq("status", status);
+      const match = searchFilter(query);
+      if (match) q = q.or(match);
       const { data, error: err } = await q
         .order("need", { ascending: false, nullsFirst: false })
         .order("first_found", { ascending: false })
@@ -95,7 +111,7 @@ export function EngineLeads({
     return () => {
       live = false;
     };
-  }, [tier, status, reload]);
+  }, [tier, status, query, reload]);
 
   async function setLeadStatus(row: Row, next: EngineStatus) {
     const sb = getSupabase();
@@ -182,6 +198,22 @@ export function EngineLeads({
     if (seed.length) setSending((s) => ({ key: (s?.key ?? 0) + 1, seed }));
   }
 
+  /** Admins only: the ticked leads as a CSV file. */
+  function downloadCsv() {
+    const picked = (rows ?? []).filter((r) => selected.has(r.id));
+    if (!picked.length) return;
+    const url = URL.createObjectURL(
+      new Blob([leadsToCsv(picked, (slug) => repName(slug) ?? "")], {
+        type: "text/csv;charset=utf-8",
+      }),
+    );
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lamp-leads-${new Date().toISOString().slice(0, 10)}-${picked.length}.csv`;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   return (
     <div className="mt-8">
       <div className="flex flex-wrap items-end gap-3">
@@ -218,6 +250,22 @@ export function EngineLeads({
             ))}
             <option value="">Any status</option>
           </select>
+        </label>
+        <label className="min-w-[14rem] flex-1 text-sm sm:max-w-sm">
+          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-smoke">
+            Search
+          </span>
+          <span className="relative block">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-smoke" />
+            <input
+              type="search"
+              className="w-full rounded-full bg-white py-2 pl-10 pr-4 text-sm ring-1 ring-line"
+              placeholder="Business, phone, email, city, industry"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              data-lead-search
+            />
+          </span>
         </label>
         <button
           type="button"
@@ -264,9 +312,11 @@ export function EngineLeads({
           </div>
         ) : rows.length === 0 ? (
           <p className="px-6 py-12 text-center text-sm text-smoke">
-            {isAdmin
-              ? "No engine leads here. Upload a file from the Board to hand some out."
-              : "No leads assigned to you here yet."}
+            {query
+              ? `Nothing matches "${query}"${tier || status ? " in this tier and status. Try All tiers and Any status." : "."}`
+              : isAdmin
+                ? "No engine leads here. Send leads from the Board, or upload its file, to hand some out."
+                : "No leads assigned to you here yet."}
           </p>
         ) : (
           <table className="w-full min-w-[940px] text-left text-sm">
@@ -421,6 +471,16 @@ export function EngineLeads({
             >
               <Send className="size-4" /> Send application ({selected.size})
             </button>
+            {isAdmin && (
+              <button
+                type="button"
+                className={cn(btnOutline, "px-4 py-2")}
+                onClick={downloadCsv}
+                data-download-csv
+              >
+                <Download className="size-4" /> Download CSV ({selected.size})
+              </button>
+            )}
             <button
               type="button"
               className={cn(btnOutline, "px-4 py-2")}
@@ -439,6 +499,10 @@ export function EngineLeads({
  * Admin only: upload the CSV the Board downloads for Lamp. Each lead goes to the rep in the
  * file's rep_slug column, or to one rep picked here for the whole file. A lead already in Lamp
  * (same source and key) is only reassigned; what a rep has recorded on it stays.
+ *
+ * The Board's "send to Lamp" opens this page and hands it the same file instead (see
+ * BOARD_ORIGINS): it lands here as if chosen, the admin presses Upload, and the Board hears
+ * how it went so it marks the batch sent, or undoes it if nothing went in.
  */
 function UploadLeads({
   reps,
@@ -452,6 +516,8 @@ function UploadLeads({
   const [rep, setRep] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState("");
+  // the Board batch waiting here, and where to tell the Board how it went
+  const [board, setBoard] = useState<{ batch: number; origin: string } | null>(null);
   const parsed = text
     ? leadsFromCsv(
         text,
@@ -459,6 +525,40 @@ function UploadLeads({
         rep || null,
       )
     : null;
+
+  useEffect(() => {
+    const opener = window.opener as Window | null;
+    if (!opener) return;
+    const receive = (e: MessageEvent) => {
+      if (!(BOARD_ORIGINS as readonly string[]).includes(e.origin) || e.source !== opener) return;
+      const b = boardBatch(e.data);
+      if (!b) return;
+      setText(b.csv);
+      setFileName(b.label);
+      setResult("");
+      setBoard({ batch: b.batch, origin: e.origin });
+      document.querySelector("[data-upload-leads]")?.scrollIntoView({ block: "center" });
+    };
+    window.addEventListener("message", receive);
+    // only the origin that matches the opener receives this; the others are dropped
+    for (const origin of BOARD_ORIGINS) {
+      try {
+        opener.postMessage({ type: "lamp-board:ready" }, origin);
+      } catch {
+        // the opener closed
+      }
+    }
+    return () => window.removeEventListener("message", receive);
+  }, []);
+
+  function tellBoard(msg: Record<string, unknown>) {
+    if (!board) return;
+    try {
+      (window.opener as Window | null)?.postMessage({ ...msg, batch: board.batch }, board.origin);
+    } catch {
+      // the Board tab closed; its batch stays as recorded
+    }
+  }
 
   async function upload() {
     const sb = getSupabase();
@@ -474,13 +574,19 @@ function UploadLeads({
       if (error) {
         setBusy(false);
         setResult(`Stopped after ${done} of ${parsed.leads.length}: ${error.message}`);
+        tellBoard({ type: "lamp-board:failed", count: done, error: error.message });
         if (done) onDone();
         return;
       }
       done += chunk.length;
     }
     setBusy(false);
-    setResult(`Handed out ${done} lead${done === 1 ? "" : "s"}.`);
+    setResult(
+      `Handed out ${done} lead${done === 1 ? "" : "s"}.` +
+        (board ? " The Board has them marked sent; you can close this tab." : ""),
+    );
+    tellBoard({ type: "lamp-board:done", count: done });
+    setBoard(null);
     setText("");
     setFileName("");
     onDone();
@@ -501,8 +607,17 @@ function UploadLeads({
     <div className={cn(card, "mt-4 p-5")} data-upload-leads>
       <p className="text-sm font-semibold">Hand out leads</p>
       <p className="mt-1 text-xs text-smoke">
-        On the Board, tick the leads, pick a rep and download the file for Lamp. Upload it here.
+        On the Board, tick the leads, pick a rep and press send to Lamp: they arrive here. Or
+        download the file there and choose it here.
       </p>
+      {board && (
+        <p
+          className="mt-3 rounded-xl bg-leaf/15 px-4 py-2.5 text-sm"
+          data-board-batch={board.batch}
+        >
+          From the Board: batch #{board.batch}. Check the rep, then press Upload to hand them out.
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <label className="cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold ring-1 ring-line hover:ring-ink/40">
           {fileName || "Choose CSV file"}
@@ -517,6 +632,7 @@ function UploadLeads({
               if (!f) return;
               setFileName(f.name);
               setText(await f.text());
+              setBoard(null);
             }}
           />
         </label>
