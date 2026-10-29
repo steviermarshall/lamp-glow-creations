@@ -100,7 +100,7 @@ export function FileView({
   const [notes, setNotes] = useState("");
   const [notesSaved, setNotesSaved] = useState(false);
   const full = useFullApplication(fileId);
-  // Staff notes live in application_internal_notes (20261028130000), out of the merchant's row;
+  // Staff notes live in application_internal_notes (20261029120000), out of the merchant's row;
   // until that SQL runs they stay in applications.staff_notes. null: they couldn't be read.
   const [notesWhere, setNotesWhere] = useState<"table" | "column" | null>(null);
   const [savedNotes, setSavedNotes] = useState("");

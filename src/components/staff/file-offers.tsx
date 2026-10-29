@@ -114,7 +114,7 @@ export function FileOffers({
         .maybeSingle(),
     ]);
     const rows = (o.data as Offer[] | null) ?? [];
-    // Offer notes live in offer_internal_notes (20261028140000), out of the row merchants read;
+    // Offer notes live in offer_internal_notes (20261029120100), out of the row merchants read;
     // until that SQL runs they stay in offers.notes.
     const nt = rows.length
       ? await sb
@@ -270,7 +270,7 @@ export function FileOffers({
                   let n = await sb
                     .from("offer_internal_notes")
                     .insert({ offer_id: r.data.id, body: o.notes });
-                  // before 20261028140000 runs it goes on the offer, as it always did
+                  // before 20261029120100 runs it goes on the offer, as it always did
                   if (n.error && missingTable(n.error))
                     n = await sb.from("offers").update({ notes: o.notes }).eq("id", r.data.id);
                   if (n.error) noteError = n.error.message;
