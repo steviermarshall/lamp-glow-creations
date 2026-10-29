@@ -66,6 +66,8 @@ type Deal = {
 
 const SUB_STATUSES: SubmissionStatus[] = ["submitted", "offer", "declined", "withdrawn", "expired"];
 const today = () => new Date().toISOString().slice(0, 10);
+/** A table that isn't there until its SQL runs. */
+const missingTable = (e: { code?: string }) => e.code === "42P01" || e.code === "PGRST205";
 
 export function FileOffers({
   fileId,
@@ -111,16 +113,30 @@ export function FileOffers({
         .eq("application_id", fileId)
         .maybeSingle(),
     ]);
-    if (f.error || s.error || o.error)
+    const rows = (o.data as Offer[] | null) ?? [];
+    // Offer notes live in offer_internal_notes (20261029120100), out of the row merchants read;
+    // until that SQL runs they stay in offers.notes.
+    const nt = rows.length
+      ? await sb
+          .from("offer_internal_notes")
+          .select("offer_id,body")
+          .in(
+            "offer_id",
+            rows.map((x) => x.id),
+          )
+      : null;
+    const moved = nt && !nt.error ? new Map(nt.data.map((n) => [n.offer_id, n.body])) : null;
+    if (f.error || s.error || o.error || (nt?.error && !missingTable(nt.error)))
       setError("Couldn't load funders and offers. Refresh to try again.");
     setFunders((f.data as Funder[] | null) ?? []);
     setSubs((s.data as Submission[] | null) ?? []);
     setOffers(
-      ((o.data as Offer[] | null) ?? []).map((x) => ({
+      rows.map((x) => ({
         ...x,
         amount: +x.amount,
         payback: +x.payback,
         fees: +x.fees,
+        notes: moved?.get(x.id) ?? x.notes,
       })),
     );
     setDeal((d.data as Deal | null) ?? null);
@@ -219,33 +235,53 @@ export function FileOffers({
           onCancel={() => setPanel(null)}
           onSave={async (o) => {
             const sub = subs.find((s) => s.funder_id === o.funder_id) ?? null;
+            // the offer can be saved while its note isn't; the panel still closes, so a second
+            // click can't add the offer twice, and the note is shown to copy
+            let noteError = "";
             const ok = await run(
               "offer",
               async () => {
-                const r = await sb.from("offers").insert({
-                  application_id: fileId,
-                  funder_id: o.funder_id,
-                  submission_id: sub?.id ?? null,
-                  amount: o.amount,
-                  payback: o.payback,
-                  fees: o.fees,
-                  frequency: o.frequency,
-                  payments: o.payments,
-                  expires_at: o.expires ? `${o.expires}T23:59:59` : null,
-                  notes: o.notes || null,
-                  created_by: userId,
-                });
-                if (!r.error && sub && sub.status === "submitted") {
+                const r = await sb
+                  .from("offers")
+                  .insert({
+                    application_id: fileId,
+                    funder_id: o.funder_id,
+                    submission_id: sub?.id ?? null,
+                    amount: o.amount,
+                    payback: o.payback,
+                    fees: o.fees,
+                    frequency: o.frequency,
+                    payments: o.payments,
+                    expires_at: o.expires ? `${o.expires}T23:59:59` : null,
+                    created_by: userId,
+                  })
+                  .select("id")
+                  .single();
+                if (r.error || !r.data)
+                  return { error: r.error ?? { message: "no offer returned" } };
+                if (sub && sub.status === "submitted") {
                   await sb
                     .from("submissions")
                     .update({ status: "offer", decided_at: new Date().toISOString() })
                     .eq("id", sub.id);
                 }
-                return r;
+                if (o.notes) {
+                  // the note goes in the staff-only table; the database stamps who saved it
+                  let n = await sb
+                    .from("offer_internal_notes")
+                    .insert({ offer_id: r.data.id, body: o.notes });
+                  // before 20261029120100 runs it goes on the offer, as it always did
+                  if (n.error && missingTable(n.error))
+                    n = await sb.from("offers").update({ notes: o.notes }).eq("id", r.data.id);
+                  if (n.error) noteError = n.error.message;
+                }
+                return { error: null };
               },
               "Couldn't save the offer.",
             );
             if (ok) setPanel(null);
+            if (ok && noteError)
+              setError(`The offer is saved, but its note wasn't (${noteError}): "${o.notes}"`);
           }}
         />
       )}

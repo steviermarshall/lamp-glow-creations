@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Check, ExternalLink, Loader2, Paperclip, X } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
@@ -100,6 +100,12 @@ export function FileView({
   const [notes, setNotes] = useState("");
   const [notesSaved, setNotesSaved] = useState(false);
   const full = useFullApplication(fileId);
+  // Staff notes live in application_internal_notes (20261029120000), out of the merchant's row;
+  // until that SQL runs they stay in applications.staff_notes. null: they couldn't be read.
+  const [notesWhere, setNotesWhere] = useState<"table" | "column" | null>(null);
+  const [savedNotes, setSavedNotes] = useState("");
+  // what the box last loaded, so a reload after another change (or a refused save) keeps typing
+  const loadedNotes = useRef("");
   // Bumped after a send so the funders-and-offers panel reloads its "Sent to" list.
   const [sentTick, setSentTick] = useState(0);
 
@@ -116,7 +122,7 @@ export function FileView({
       setDocs([]);
       return;
     }
-    const [ev, dc] = await Promise.all([
+    const [ev, dc, nt] = await Promise.all([
       sb
         .from("events")
         .select("id,kind,from_stage,to_stage,body,payload,actor_user_id,occurred_at")
@@ -128,6 +134,11 @@ export function FileView({
         .select("id,bucket,storage_path,original_name,kind,status,created_at,reviewed_at")
         .eq("application_id", fileId)
         .order("created_at", { ascending: false }),
+      sb
+        .from("application_internal_notes")
+        .select("body")
+        .eq("application_id", fileId)
+        .maybeSingle(),
     ]);
     if (ev.error || dc.error) {
       setError("Couldn't load this file. Refresh to try again.");
@@ -136,7 +147,22 @@ export function FileView({
     }
     const row = app.data as FileRow;
     setFile(row);
-    setNotes(row.staff_notes ?? "");
+    // the notes table isn't there until its SQL runs; any other error leaves the box as it was,
+    // read-only, rather than risk writing over notes that couldn't be read
+    const where = !nt.error
+      ? "table"
+      : nt.error.code === "42P01" || nt.error.code === "PGRST205"
+        ? "column"
+        : null;
+    setNotesWhere(where);
+    if (where) {
+      const saved = where === "table" ? (nt.data?.body ?? "") : (row.staff_notes ?? "");
+      setSavedNotes(saved);
+      // compare with what was loaded before this read: React runs the updater later
+      const before = loadedNotes.current;
+      loadedNotes.current = saved;
+      setNotes((typed) => (typed === before ? saved : typed));
+    }
     setEvents(ev.data as EventRow[]);
     setDocs(dc.data as DocRow[]);
     const actors = [...new Set(ev.data.map((e) => e.actor_user_id).filter(Boolean))] as string[];
@@ -156,6 +182,11 @@ export function FileView({
   useEffect(() => {
     setFile(undefined);
     setError("");
+    setNotes("");
+    setNotesSaved(false);
+    setNotesWhere(null);
+    setSavedNotes("");
+    loadedNotes.current = "";
     load();
   }, [load]);
 
@@ -179,10 +210,48 @@ export function FileView({
     }
   };
 
-  const updateFile = (
-    key: string,
-    patch: Partial<Pick<FileRow, "status" | "rep_slug" | "staff_notes">>,
-  ) =>
+  /** Saves the box; true once the note is stored. */
+  const saveNotes = async () => {
+    let saved = false;
+    const sent = notes;
+    await run("notes", async () => {
+      const r = await writeNotes();
+      saved = r.ok;
+      // the reload then shows what was stored, which can differ from what was sent: a save from
+      // a page still on the old column is merged into the moved note, and a clear there is ignored
+      if (r.ok) loadedNotes.current = sent;
+      return r;
+    });
+    return saved;
+  };
+
+  const writeNotes = async (): Promise<{ ok: boolean }> => {
+    const sb = getSupabase();
+    if (!sb || !notesWhere) return { ok: false };
+    const body = notes.trim() ? notes : null;
+    if (notesWhere === "column") {
+      const { data, error: err } = await sb
+        .from("applications")
+        .update({ staff_notes: body })
+        .eq("id", fileId)
+        .select("id");
+      return { ok: !err && data.length === 1 };
+    }
+    // an empty box clears the note; the database stamps who saved it and when
+    const { data, error: err } = body
+      ? await sb
+          .from("application_internal_notes")
+          .upsert({ application_id: fileId, body }, { onConflict: "application_id" })
+          .select("application_id")
+      : await sb
+          .from("application_internal_notes")
+          .delete()
+          .eq("application_id", fileId)
+          .select("application_id");
+    return { ok: !err && (body ? data.length === 1 : true) };
+  };
+
+  const updateFile = (key: string, patch: Partial<Pick<FileRow, "status" | "rep_slug">>) =>
     run(key, async () => {
       const sb = getSupabase();
       if (!sb) return { ok: false };
@@ -423,6 +492,7 @@ export function FileView({
                 aria-label="Staff notes"
                 className="min-h-28 w-full rounded-xl bg-white px-4 py-3 ring-1 ring-line"
                 value={notes}
+                readOnly={!notesWhere}
                 onChange={(e) => {
                   setNotes(e.target.value);
                   setNotesSaved(false);
@@ -433,17 +503,19 @@ export function FileView({
               <button
                 type="button"
                 className={cn(btnOutline, "px-4 py-2")}
-                disabled={!!busy || notes === (file.staff_notes ?? "")}
-                onClick={async () => {
-                  await updateFile("notes", { staff_notes: notes.trim() ? notes : null });
-                  setNotesSaved(true);
-                }}
+                disabled={!!busy || !notesWhere || notes === savedNotes}
+                onClick={async () => setNotesSaved(await saveNotes())}
               >
                 {busy === "notes" ? <Loader2 className="size-4 animate-spin" /> : null}
                 Save notes
               </button>
-              {notesSaved && notes === (file.staff_notes ?? "") && (
+              {notesSaved && notes === savedNotes && (
                 <span className="text-xs text-smoke">Saved</span>
+              )}
+              {!notesWhere && (
+                <span className="text-xs text-smoke">
+                  Couldn't load the notes. Refresh to try again.
+                </span>
               )}
             </div>
           </section>
