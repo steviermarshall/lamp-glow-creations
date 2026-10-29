@@ -733,6 +733,44 @@ export type Database = {
           },
         ];
       };
+      file_notes: {
+        Row: {
+          application_id: string;
+          assigned_to: string | null;
+          author: string | null;
+          author_name: string | null;
+          body: string;
+          created_at: string;
+          done_at: string | null;
+          done_by: string | null;
+          done_by_name: string | null;
+          due_on: string | null;
+          id: number;
+          outcome: string | null;
+          status: string | null;
+          visibility: string;
+        };
+        Insert: {
+          application_id: string;
+          assigned_to?: string | null;
+          body: string;
+          due_on?: string | null;
+          visibility?: string;
+        };
+        Update: {
+          outcome?: string | null;
+          status?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "file_notes_application_id_fkey";
+            columns: ["application_id"];
+            isOneToOne: false;
+            referencedRelation: "applications";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       funders: {
         Row: {
           active: boolean;

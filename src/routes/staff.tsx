@@ -10,6 +10,7 @@ import { PageShell } from "@/components/site/layout";
 import { Board } from "@/components/staff/board";
 import { FileView } from "@/components/staff/file-view";
 import { EngineLeads } from "@/components/staff/engine-leads";
+import { MyCalls } from "@/components/staff/notes-calls";
 import { SentApplications } from "@/components/staff/sent-applications";
 import { Funders } from "@/components/staff/funders";
 import { Money } from "@/components/staff/money";
@@ -172,17 +173,20 @@ function Staff() {
             <p className="mt-8 text-sm text-smoke">Only admins manage the team.</p>
           )
         ) : (
-          <Board
-            isAdmin={access.isAdmin}
-            repSlug={access.repSlug}
-            stage={search.stage}
-            rep={access.isAdmin ? (search.rep ?? "all") : "all"}
-            reps={reps}
-            onStage={(stage) => navigate({ search: (s) => ({ ...s, stage }) })}
-            onRep={(rep) =>
-              navigate({ search: (s) => ({ ...s, rep: rep === "all" ? undefined : rep }) })
-            }
-          />
+          <>
+            <MyCalls isAdmin={access.isAdmin} repSlug={access.repSlug} reps={reps} />
+            <Board
+              isAdmin={access.isAdmin}
+              repSlug={access.repSlug}
+              stage={search.stage}
+              rep={access.isAdmin ? (search.rep ?? "all") : "all"}
+              reps={reps}
+              onStage={(stage) => navigate({ search: (s) => ({ ...s, stage }) })}
+              onRep={(rep) =>
+                navigate({ search: (s) => ({ ...s, rep: rep === "all" ? undefined : rep }) })
+              }
+            />
+          </>
         )}
       </div>
     </PageShell>
