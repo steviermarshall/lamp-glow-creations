@@ -17,7 +17,8 @@ import { input } from "@/components/staff/field-styles";
 
 export type FileNote = {
   id: number;
-  application_id: string;
+  application_id: string | null;
+  lead_id: string | null;
   visibility: "team" | "admins";
   body: string;
   author_name: string | null;
@@ -33,7 +34,7 @@ export type FileNote = {
 type Rep = { slug: string; name: string };
 
 const COLUMNS =
-  "id,application_id,visibility,body,author_name,assigned_to,due_on,status,done_at,done_by_name,outcome,created_at";
+  "id,application_id,lead_id,visibility,body,author_name,assigned_to,due_on,status,done_at,done_by_name,outcome,created_at";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const dueLabel = (d: string) =>
@@ -41,6 +42,7 @@ const dueLabel = (d: string) =>
 
 export function NotesCalls({
   fileId,
+  leadId,
   isAdmin,
   repSlug,
   reps,
@@ -48,7 +50,10 @@ export function NotesCalls({
   onUnavailable,
   onFileChanged,
 }: {
-  fileId: string;
+  /** the file's thread (it includes notes carried over from the lead it came from) */
+  fileId?: string;
+  /** or a lead's thread, before they sign (20261029150000_lead_profiles_notes.sql) */
+  leadId?: string;
   isAdmin: boolean;
   repSlug: string | null;
   reps: Rep[];
@@ -73,7 +78,7 @@ export function NotesCalls({
     const { data, error: err } = await sb
       .from("file_notes")
       .select(COLUMNS)
-      .eq("application_id", fileId)
+      .eq(leadId ? "lead_id" : "application_id", leadId ?? fileId ?? "")
       .order("created_at", { ascending: false });
     if (err) {
       if (err.code === "PGRST205" || err.code === "42P01") onUnavailable();
@@ -82,7 +87,7 @@ export function NotesCalls({
       return;
     }
     setNotes(data as FileNote[]);
-  }, [fileId, onUnavailable]);
+  }, [fileId, leadId, onUnavailable]);
 
   useEffect(() => {
     setNotes(null);
@@ -103,7 +108,7 @@ export function NotesCalls({
     setBusy("add");
     setError("");
     const row = {
-      application_id: fileId,
+      ...(leadId ? { lead_id: leadId } : { application_id: fileId }),
       body: text,
       visibility: callFor ? "team" : visibility,
       ...(callFor ? { assigned_to: callFor, due_on: due || null } : {}),
@@ -256,8 +261,8 @@ export function NotesCalls({
         {moving && (
           <p className="mt-2 text-xs text-smoke">
             {fileRep
-              ? `This file is ${repName(fileRep)}'s; assigning the call gives it to ${repName(callFor)}.`
-              : `This also gives the file to ${repName(callFor)}.`}{" "}
+              ? `This ${leadId ? "lead" : "file"} is ${repName(fileRep)}'s; assigning the call gives it to ${repName(callFor)}.`
+              : `This also gives the ${leadId ? "lead" : "file"} to ${repName(callFor)}.`}{" "}
             They get a notification right away.
           </p>
         )}
@@ -295,6 +300,14 @@ export function NotesCalls({
                 <div className="flex flex-wrap items-center gap-2 text-xs text-smoke">
                   <b className="text-ink">{n.author_name || "Lamp"}</b>
                   <span>{age(n.created_at)} ago</span>
+                  {!leadId && n.lead_id && (
+                    <span
+                      className="rounded-full bg-sand px-2 py-0.5"
+                      title="Written on their lead profile, before they signed"
+                    >
+                      before sign-up
+                    </span>
+                  )}
                   {n.visibility === "admins" && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 font-semibold text-amber-600">
                       <Lock className="size-3" /> Admins only
@@ -375,9 +388,17 @@ export function NotesCalls({
 
 type OpenCall = Pick<
   FileNote,
-  "id" | "application_id" | "body" | "author_name" | "assigned_to" | "due_on" | "created_at"
+  | "id"
+  | "application_id"
+  | "lead_id"
+  | "body"
+  | "author_name"
+  | "assigned_to"
+  | "due_on"
+  | "created_at"
 > & {
   applications: { business_name: string | null; first_name: string | null } | null;
+  leads: { first_name: string | null; answers: { lastName?: string } | null } | null;
 };
 
 /** Open calls at the top of Files: a rep's own, or (for an admin) everyone's, due soonest first. */
@@ -400,7 +421,7 @@ export function MyCalls({
       let q = sb
         .from("file_notes")
         .select(
-          "id,application_id,body,author_name,assigned_to,due_on,created_at,applications(business_name,first_name)",
+          "id,application_id,lead_id,body,author_name,assigned_to,due_on,created_at,applications(business_name,first_name),leads(first_name,answers)",
         )
         .eq("status", "open");
       if (!isAdmin && repSlug) q = q.eq("assigned_to", repSlug);
@@ -428,13 +449,25 @@ export function MyCalls({
           const overdue = c.due_on && c.due_on < today();
           return (
             <li key={c.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2 text-sm">
-              <Link
-                to="/staff"
-                search={{ file: c.application_id }}
-                className="font-semibold hover:underline"
-              >
-                {c.applications?.business_name || c.applications?.first_name || "A file"}
-              </Link>
+              {c.application_id ? (
+                <Link
+                  to="/staff"
+                  search={{ file: c.application_id }}
+                  className="font-semibold hover:underline"
+                >
+                  {c.applications?.business_name || c.applications?.first_name || "A file"}
+                </Link>
+              ) : (
+                <Link
+                  to="/staff"
+                  search={{ lead: c.lead_id ?? undefined }}
+                  className="font-semibold hover:underline"
+                >
+                  {[c.leads?.first_name, c.leads?.answers?.lastName].filter(Boolean).join(" ") ||
+                    "A lead"}
+                  <span className="ml-1 text-xs font-normal text-smoke">(lead)</span>
+                </Link>
+              )}
               {isAdmin && <span className="text-xs text-smoke">for {repName(c.assigned_to)}</span>}
               <span
                 className={cn("text-xs", overdue ? "font-semibold text-red-600" : "text-smoke")}

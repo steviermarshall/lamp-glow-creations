@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -94,9 +95,14 @@ export function StartedLeads({
             return (
               <li key={r.id} className="py-3" data-started-stage={stage}>
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <span className="font-semibold">
+                  <Link
+                    to="/staff"
+                    search={{ lead: r.id }}
+                    className="font-semibold underline-offset-4 hover:underline"
+                    title="Open their profile: what they gave, how far they got, notes & calls"
+                  >
                     {[r.first_name, last].filter(Boolean).join(" ") || "No name"}
-                  </span>
+                  </Link>
                   {r.phone && (
                     <a className="text-sm text-forest underline" href={`tel:${tel(r.phone)}`}>
                       {r.phone}

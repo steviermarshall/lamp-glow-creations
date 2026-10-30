@@ -735,7 +735,8 @@ export type Database = {
       };
       file_notes: {
         Row: {
-          application_id: string;
+          application_id: string | null;
+          lead_id: string | null;
           assigned_to: string | null;
           author: string | null;
           author_name: string | null;
@@ -751,7 +752,8 @@ export type Database = {
           visibility: string;
         };
         Insert: {
-          application_id: string;
+          application_id?: string | null;
+          lead_id?: string | null;
           assigned_to?: string | null;
           body: string;
           due_on?: string | null;
@@ -767,6 +769,13 @@ export type Database = {
             columns: ["application_id"];
             isOneToOne: false;
             referencedRelation: "applications";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "file_notes_lead_id_fkey";
+            columns: ["lead_id"];
+            isOneToOne: false;
+            referencedRelation: "leads";
             referencedColumns: ["id"];
           },
         ];
