@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { FollowUp } from "@/components/staff/follow-up";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Sparkles, Sun } from "lucide-react";
+import { ArrowRight, PenLine, Sparkles, Sun } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { card } from "@/components/site/layout";
@@ -11,7 +12,8 @@ import type { Signal } from "@/lib/brain";
  * Today (Lamp Brain, slice 1): the files and links that need the signed-in staff member most, best
  * first, each with its next step. Lamp's server works the list out by rules
  * (src/lib/brain.ts via /api/brain/brief); when the Anthropic key is set, Claude writes the
- * headline and the steps once a day, marked with a spark. Shows nothing when nothing needs doing.
+ * headline and the steps once a day, marked with a spark. Draft on a line opens a follow-up text,
+ * email and call notes for it (follow-up.tsx). Shows nothing when nothing needs doing.
  */
 
 type Item = {
@@ -66,6 +68,7 @@ export function Today({
   reps: { slug: string; name: string }[];
 }) {
   const [brief, setBrief] = useState<Brief | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -116,7 +119,9 @@ export function Today({
               <span
                 className={cn(
                   "rounded-full px-2 py-0.5 text-xs",
-                  URGENT.includes(i.signal) ? "bg-red-500/15 font-semibold text-red-500" : "bg-sand",
+                  URGENT.includes(i.signal)
+                    ? "bg-red-500/15 font-semibold text-red-500"
+                    : "bg-sand",
                 )}
               >
                 {i.label}
@@ -127,6 +132,12 @@ export function Today({
               {isAdmin && i.rep_slug && (
                 <span className="text-xs text-smoke">{repName(i.rep_slug)}</span>
               )}
+              <DraftToggle
+                open={open === `${i.kind}:${i.id}`}
+                onClick={() =>
+                  setOpen((o) => (o === `${i.kind}:${i.id}` ? null : `${i.kind}:${i.id}`))
+                }
+              />
             </div>
             <p className="mt-0.5 flex items-start gap-1.5 text-smoke">
               {i.written ? (
@@ -139,6 +150,7 @@ export function Today({
               )}
               {i.next}
             </p>
+            {open === `${i.kind}:${i.id}` && <FollowUp kind={i.kind} id={i.id} />}
           </li>
         ))}
       </ol>
@@ -156,10 +168,12 @@ export function Today({
 /** One file's next step, for the top of the file view. Nothing when the file needs nothing today. */
 export function NextStep({ fileId }: { fileId: string }) {
   const [item, setItem] = useState<Item | null>(null);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let live = true;
     setItem(null);
+    setOpen(false);
     get<{ next: Item | null }>(`?file=${encodeURIComponent(fileId)}`)
       .then((r) => live && setItem(r.next))
       .catch(() => live && setItem(null));
@@ -170,21 +184,39 @@ export function NextStep({ fileId }: { fileId: string }) {
 
   if (!item) return null;
   return (
-    <p
-      className={cn(
-        "mt-3 flex items-start gap-2 rounded-xl px-3 py-2 text-sm ring-1",
-        URGENT.includes(item.signal) ? "bg-red-500/10 ring-red-500/40" : "bg-sand/60 ring-line",
-      )}
-      data-next-step
+    <div className="mt-3">
+      <p
+        className={cn(
+          "flex flex-wrap items-start gap-2 rounded-xl px-3 py-2 text-sm ring-1",
+          URGENT.includes(item.signal) ? "bg-red-500/10 ring-red-500/40" : "bg-sand/60 ring-line",
+        )}
+        data-next-step
+      >
+        {item.written ? (
+          <Sparkles className="mt-0.5 size-4 shrink-0 text-forest" aria-label="Written by Claude" />
+        ) : (
+          <ArrowRight className="mt-0.5 size-4 shrink-0" aria-hidden />
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="font-semibold">Do this next · {item.label}.</span> {item.next}
+        </span>
+        <DraftToggle open={open} onClick={() => setOpen((o) => !o)} />
+      </p>
+      {open && <FollowUp kind="file" id={fileId} />}
+    </div>
+  );
+}
+
+function DraftToggle({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-forest hover:underline"
+      aria-expanded={open}
+      onClick={onClick}
+      data-draft
     >
-      {item.written ? (
-        <Sparkles className="mt-0.5 size-4 shrink-0 text-forest" aria-label="Written by Claude" />
-      ) : (
-        <ArrowRight className="mt-0.5 size-4 shrink-0" aria-hidden />
-      )}
-      <span>
-        <span className="font-semibold">Do this next · {item.label}.</span> {item.next}
-      </span>
-    </p>
+      <PenLine className="size-3.5" /> {open ? "Close draft" : "Draft"}
+    </button>
   );
 }
