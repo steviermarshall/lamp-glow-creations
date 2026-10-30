@@ -508,7 +508,10 @@ const paymentText = (x: Balance) =>
  * page 2 prints: drawn signatures, the real estate schedule, answers the paper form has no box
  * for (website, bankruptcy, a third balance) and the electronic signature record.
  */
-export function detailsToPdf(d: Details, signed: PdfSignature, repName: string | null): PdfFill {
+// The Lamp Rep box is left blank on every PDF (Stevie, 2026-10-29): the application goes to lenders,
+// and Lamp already tracks each file's rep itself (its link, "How it came in"). The on-screen
+// one-page form still shows the merchant who they're working with.
+export function detailsToPdf(d: Details, signed: PdfSignature): PdfFill {
   const b = d.business;
   const text: Record<string, string> = {
     legal_name: b.legal_name,
@@ -529,7 +532,7 @@ export function detailsToPdf(d: Details, signed: PdfSignature, repName: string |
     monthly_deposit_count: b.deposit_count,
     monthly_rent: b.premises === "rent" ? b.rent.replace(/\$/g, "") : "",
     amount_requested: d.request.amount,
-    lamp_rep: repName ?? "",
+    lamp_rep: "",
   };
   d.owners.slice(0, 2).forEach((o, i) => {
     const p = `owner${i + 1}_`;

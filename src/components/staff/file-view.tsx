@@ -361,9 +361,7 @@ export function FileView({
           amount_requested: file.amount_requested,
           repName: file.rep_slug ? repName(file.rep_slug) : null,
         },
-        pdfFull && signature
-          ? detailsToPdf(pdfFull.details, signature, file.rep_slug ? repName(file.rep_slug) : null)
-          : undefined,
+        pdfFull && signature ? detailsToPdf(pdfFull.details, signature) : undefined,
         pages,
         pages === "all" ? " (signing record)" : "",
       );

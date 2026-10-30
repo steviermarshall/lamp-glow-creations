@@ -297,7 +297,7 @@ export function PaperApplication({ repSlug }: { repSlug: string }) {
     // the signed PDF, with what the database stamped, goes with the file for funders; if this
     // fails staff build the same PDF from the saved answers
     const stamped = { ...signed, at: out.signed_at ?? signed.at, ip: out.signer_ip ?? null };
-    const values = detailsToPdf(clean, stamped, rep?.name ?? null);
+    const values = detailsToPdf(clean, stamped);
     lastSigned.current = { src, values };
     const upload = async (
       blob: Blob,

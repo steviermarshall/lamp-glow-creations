@@ -268,7 +268,7 @@ export function CompleteApplication({
    */
   async function storeSignedCopy(x: Details, s: Signed) {
     try {
-      const bytes = await applicationPdfBytes(pdfSource(x), detailsToPdf(x, s, repName), "lender");
+      const bytes = await applicationPdfBytes(pdfSource(x), detailsToPdf(x, s), "lender");
       const form = new FormData();
       form.set("application_id", applicationId);
       form.set("kind", "funder_application");
@@ -289,7 +289,7 @@ export function CompleteApplication({
   async function copy() {
     if (!d) return;
     try {
-      await downloadApplicationPdf(pdfSource(d), detailsToPdf(d, signed, repName));
+      await downloadApplicationPdf(pdfSource(d), detailsToPdf(d, signed));
     } catch {
       setError("Couldn't build your copy. Try again.");
     }
