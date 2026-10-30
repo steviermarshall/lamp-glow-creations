@@ -579,7 +579,7 @@ function PaperPage({
       <div
         ref={ref}
         className="relative mt-5 w-full overflow-hidden rounded-xl bg-white shadow-[0_20px_60px_-30px_rgba(0,0,0,0.5)] ring-1 ring-line [container-type:inline-size]"
-        style={{ aspectRatio: "612 / 792", fontSize: "1.3cqw" }}
+        style={{ aspectRatio: "612 / 792" }}
         data-paper-page
       >
         <img
@@ -588,34 +588,39 @@ function PaperPage({
           className="absolute inset-0 h-full w-full select-none"
           draggable={false}
         />
-        {PAPER_ITEMS.map((item, i) =>
-          tap ? (
-            <TapBox
-              key={item.id}
-              item={item}
-              d={d}
-              wrong={item.kind === "field" && wrong.has(item.id)}
-              onOpen={() => setEditing(i)}
-            />
-          ) : item.kind === "field" ? (
-            <InPlaceField
-              key={item.id}
-              item={item}
-              d={d}
-              update={update}
-              wrong={wrong.has(item.id)}
-            />
-          ) : (
-            <InPlaceGroup key={item.id} item={item} d={d} update={update} />
-          ),
-        )}
-        {printed(SIGN_BOXES.lamp_rep, repName)}
-        {printed(SIGN_BOXES.owner1_print_name, fullName(0))}
-        {printed(SIGN_BOXES.owner1_sign_date, sig.image ? today : "")}
-        {owner(1) && printed(SIGN_BOXES.owner2_print_name, fullName(1))}
-        {printed(SIGN_BOXES.owner2_sign_date, sig.second && sig.image2 ? today : "")}
-        {signLine(0)}
-        {owner(1) && signLine(1)}
+        {/* cqw is measured against the nearest container above the element that uses it, so the
+            text size is set here, inside the page (a size on the page itself measured the window
+            and came out ~70% too big on wide screens, overflowing the boxes) */}
+        <div className="absolute inset-0 leading-none" style={{ fontSize: "1.3cqw" }}>
+          {PAPER_ITEMS.map((item, i) =>
+            tap ? (
+              <TapBox
+                key={item.id}
+                item={item}
+                d={d}
+                wrong={item.kind === "field" && wrong.has(item.id)}
+                onOpen={() => setEditing(i)}
+              />
+            ) : item.kind === "field" ? (
+              <InPlaceField
+                key={item.id}
+                item={item}
+                d={d}
+                update={update}
+                wrong={wrong.has(item.id)}
+              />
+            ) : (
+              <InPlaceGroup key={item.id} item={item} d={d} update={update} />
+            ),
+          )}
+          {printed(SIGN_BOXES.lamp_rep, repName)}
+          {printed(SIGN_BOXES.owner1_print_name, fullName(0))}
+          {printed(SIGN_BOXES.owner1_sign_date, sig.image ? today : "")}
+          {owner(1) && printed(SIGN_BOXES.owner2_print_name, fullName(1))}
+          {printed(SIGN_BOXES.owner2_sign_date, sig.second && sig.image2 ? today : "")}
+          {signLine(0)}
+          {owner(1) && signLine(1)}
+        </div>
       </div>
       {tap && editing !== null && (
         <Editor
@@ -639,7 +644,7 @@ const pad = ([x0, y0, x1, y1]: Box, dx: number, dy: number): Box => [
 ];
 
 const boxCls =
-  "absolute rounded-[0.2cqw] bg-leaf/10 px-[0.4cqw] text-ink outline-none transition focus:bg-white focus:ring-2 focus:ring-leaf";
+  "absolute rounded-[0.2cqw] bg-leaf/10 px-[0.4cqw] leading-none text-ink outline-none transition focus:bg-white focus:ring-2 focus:ring-leaf [&::-webkit-calendar-picker-indicator]:m-0 [&::-webkit-calendar-picker-indicator]:size-[1.1cqw]";
 
 function InPlaceField({
   item,
