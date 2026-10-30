@@ -97,6 +97,7 @@ against a local Supabase stack.
 | documents | index of the storage bucket, with review state and what each file is (`kind`) | (application_id, created_at), (application_id, kind), user_id, pending-review partial |
 | application_internal_notes | the staff notes on a file, one per file; staff only | pk application_id |
 | file_notes | notes & calls on a file: team or admins-only notes, calls assigned to a rep with a due date and an outcome | (application_id, created_at), open calls by (assigned_to, due_on) |
+| brain_briefs | Today (Lamp Brain): the day's written brief per staff member, its token counts and cost; only Lamp's server reads or writes it | unique (user_id, day), created_at |
 | offer_internal_notes | the rep's note on an offer, one per offer; staff only | pk offer_id |
 | leads | email before sign-up, converted on application | lower(email), created_at, rep_slug, unconverted partial |
 | funders | the private lender table with criteria and commission points | active |

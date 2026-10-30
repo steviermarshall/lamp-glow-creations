@@ -11,6 +11,7 @@ import { Board } from "@/components/staff/board";
 import { FileView } from "@/components/staff/file-view";
 import { EngineLeads } from "@/components/staff/engine-leads";
 import { MyCalls } from "@/components/staff/notes-calls";
+import { Today } from "@/components/staff/today";
 import { LeadProfile } from "@/components/staff/lead-profile";
 import { SentApplications } from "@/components/staff/sent-applications";
 import { Funders } from "@/components/staff/funders";
@@ -184,6 +185,7 @@ function Staff() {
           )
         ) : (
           <>
+            <Today isAdmin={access.isAdmin} reps={reps} />
             <MyCalls isAdmin={access.isAdmin} repSlug={access.repSlug} reps={reps} />
             <Board
               isAdmin={access.isAdmin}

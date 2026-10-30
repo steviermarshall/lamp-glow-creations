@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ExternalLink, Loader2, Paperclip, X } from "lucide-re
 import { getSupabase } from "@/lib/supabase";
 import { NotesCalls } from "@/components/staff/notes-calls";
 import { DocRequests, type RequestLabel } from "@/components/staff/doc-requests";
+import { NextStep } from "@/components/staff/today";
 import { logActivity } from "@/lib/track";
 import { postAsMe } from "@/lib/server-api";
 import { cn } from "@/lib/utils";
@@ -416,6 +417,7 @@ export function FileView({
           )}
         </div>
       </div>
+      <NextStep fileId={file.id} />
 
       {file.user_id === null && (
         <p className="mt-4 rounded-xl bg-sand px-4 py-3 text-sm" data-unclaimed>
