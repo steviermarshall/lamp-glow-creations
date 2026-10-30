@@ -107,7 +107,8 @@ export function emailText(
     "Attached:",
     ...attachmentNames.map((n) => `- ${n}`),
     "",
-    `Lamp file ${shortId(s.fileId)}${s.repName ? ` · Rep: ${s.repName}` : ""}`,
+    // no rep name to lenders (Stevie, 2026-10-29); the file number is how they refer to it
+    `Lamp file ${shortId(s.fileId)}`,
     "Reply to this email with offers, stips or questions.",
     "",
     "Lamp",

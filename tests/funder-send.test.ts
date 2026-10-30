@@ -44,8 +44,15 @@ Deno.test("manual sends only the ticked, eligible, unsent funders", () => {
 });
 
 Deno.test("auto sends only to funders with auto_send on", () => {
-  const picks = pickFunders([m({ funder_id: "a", auto_send: true }), m({ funder_id: "b" })], "auto", null);
-  assertEquals(picks.map((p) => [p.match.funder_id, p.send]), [["a", true]]);
+  const picks = pickFunders(
+    [m({ funder_id: "a", auto_send: true }), m({ funder_id: "b" })],
+    "auto",
+    null,
+  );
+  assertEquals(
+    picks.map((p) => [p.match.funder_id, p.send]),
+    [["a", true]],
+  );
 });
 
 Deno.test("manual with nothing ticked sends nothing", () => {
@@ -67,18 +74,29 @@ const summary: FileSummary = {
 };
 
 Deno.test("email text carries the summary and never the word loan", () => {
-  const t = emailText(summary, "Dana", ["Lamp application - Truck Co LLC.pdf", "Bank statement 1 - jan.pdf"], "partners@getlamp.app");
+  const t = emailText(
+    summary,
+    "Dana",
+    ["Lamp application - Truck Co LLC.pdf", "Bank statement 1 - jan.pdf"],
+    "partners@getlamp.app",
+  );
   assertEquals(t.subject, "New submission: Truck Co LLC – $60,000 – Lamp");
   assert(t.body.startsWith("Hi Dana,"));
   assert(t.body.includes("Monthly deposits (stated): $80,000"));
-  assert(t.body.includes("Lamp file BBBBBBBB · Rep: Zeus"));
+  assert(t.body.includes("Lamp file BBBBBBBB"));
+  assert(!t.body.includes("Zeus"), "lenders never see the rep's name");
   assert(t.body.includes("- Bank statement 1 - jan.pdf"));
   assert(!/loan/i.test(t.subject + t.body));
   assert(!/\d{3}-\d{2}-\d{4}/.test(t.body), "no SSN-shaped text in the body");
 });
 
 Deno.test("missing figures read as not stated", () => {
-  const t = emailText({ ...summary, monthlyDeposits: null, requested: null, openPositions: null, state: "" }, null, [], "x@y.z");
+  const t = emailText(
+    { ...summary, monthlyDeposits: null, requested: null, openPositions: null, state: "" },
+    null,
+    [],
+    "x@y.z",
+  );
   assert(t.body.startsWith("Hi team,"));
   assert(t.body.includes("Amount requested: not stated"));
   assert(t.body.includes("Open positions: not stated"));
@@ -91,7 +109,7 @@ Deno.test("MIME message: headers, text part, attachment round-trips", () => {
     to: "subs@alpha.example",
     subject: "New submission: Café Ünïcode – $1",
     body: "Hello",
-    attachments: [{ name: "../evil\"name.pdf", mime: "application/pdf", bytes: pdf }],
+    attachments: [{ name: '../evil"name.pdf', mime: "application/pdf", bytes: pdf }],
     boundary: "B",
   });
   assert(raw.includes("To: subs@alpha.example\r\n"));
@@ -100,18 +118,32 @@ Deno.test("MIME message: headers, text part, attachment round-trips", () => {
   assert(raw.includes('filename="evilname.pdf"'), "path and quote stripped from the filename");
   assert(raw.trimEnd().endsWith("--B--"));
   const part = raw.split("--B")[2].split("\r\n\r\n")[1].replace(/\r\n/g, "");
-  assertEquals(new TextDecoder().decode(Uint8Array.from(atob(part), (c) => c.charCodeAt(0))), "%PDF-1.7 fake bytes ü");
+  assertEquals(
+    new TextDecoder().decode(Uint8Array.from(atob(part), (c) => c.charCodeAt(0))),
+    "%PDF-1.7 fake bytes ü",
+  );
 });
 
 Deno.test("MIME refuses header injection in the address", () => {
-  assertThrows(() => buildMime({ from: "a@b.c", to: "x@y.z\r\nBcc: z@q.r", subject: "s", body: "b", attachments: [] }));
+  assertThrows(() =>
+    buildMime({
+      from: "a@b.c",
+      to: "x@y.z\r\nBcc: z@q.r",
+      subject: "s",
+      body: "b",
+      attachments: [],
+    }),
+  );
 });
 
 Deno.test("base64 wraps at 76 and handles large input", () => {
   const big = new Uint8Array(200_000).map((_, i) => i % 251);
   const s = b64(big);
   assert(s.split("\r\n").every((l) => l.length <= 76));
-  assertEquals(Uint8Array.from(atob(s.replace(/\r\n/g, "")), (c) => c.charCodeAt(0)), big);
+  assertEquals(
+    Uint8Array.from(atob(s.replace(/\r\n/g, "")), (c) => c.charCodeAt(0)),
+    big,
+  );
 });
 
 Deno.test("shared secret compare", () => {

@@ -354,7 +354,7 @@ export function LinkApplication({ repSlug, token }: { repSlug: string; token: st
     // The signed PDF, built now with what the database stamped (time and IP), goes with the
     // file for funders. If building or sending it fails, staff build the same PDF later.
     const stamped = { ...signed, at: out.signed_at ?? signed.at, ip: out.signer_ip ?? null };
-    const values = detailsToPdf(clean, stamped, rep?.name ?? null);
+    const values = detailsToPdf(clean, stamped);
     lastSigned.current = { src, values };
     const upload = async (
       blob: Blob,

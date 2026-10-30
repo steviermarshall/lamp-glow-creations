@@ -207,7 +207,7 @@ export function applicationValues(src: ApplicationSource): ApplicationValues {
       src.amount_requested !== null && src.amount_requested !== undefined
         ? `$${src.amount_requested.toLocaleString("en-US")}`
         : label("amount"),
-    lamp_rep: src.repName ?? undefined,
+    lamp_rep: undefined, // never printed: the copy goes to lenders (see detailsToPdf)
   };
   const checked: ApplicationValues["checked"] = {};
   const box = a.purpose ? PURPOSE_BOX[a.purpose] : undefined;
