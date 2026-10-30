@@ -37,6 +37,7 @@ import { Route as ApiApplicationProgressRouteImport } from './routes/api.applica
 import { Route as ApiApplicationStartRouteImport } from './routes/api.application.start'
 import { Route as ApiApplicationSubmitRouteImport } from './routes/api.application.submit'
 import { Route as ApiApplicationUploadRouteImport } from './routes/api.application.upload'
+import { Route as ApiBrainBriefRouteImport } from './routes/api.brain.brief'
 import { Route as ApiDocumentsRequestRouteImport } from './routes/api.documents.request'
 import { Route as ApiDocumentsRequestUploadRouteImport } from './routes/api.documents.request-upload'
 import { Route as ApiDocumentsUploadRouteImport } from './routes/api.documents.upload'
@@ -185,6 +186,11 @@ const ApiApplicationUploadRoute = ApiApplicationUploadRouteImport.update({
   path: '/api/application/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiBrainBriefRoute = ApiBrainBriefRouteImport.update({
+  id: '/api/brain/brief',
+  path: '/api/brain/brief',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDocumentsRequestRoute = ApiDocumentsRequestRouteImport.update({
   id: '/request',
   path: '/request',
@@ -251,6 +257,7 @@ export interface FileRoutesByFullPath {
   '/api/application/start': typeof ApiApplicationStartRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
+  '/api/brain/brief': typeof ApiBrainBriefRoute
   '/api/documents/request': typeof ApiDocumentsRequestRoute
   '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
@@ -288,6 +295,7 @@ export interface FileRoutesByTo {
   '/api/application/start': typeof ApiApplicationStartRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
+  '/api/brain/brief': typeof ApiBrainBriefRoute
   '/api/documents/request': typeof ApiDocumentsRequestRoute
   '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
@@ -326,6 +334,7 @@ export interface FileRoutesById {
   '/api/application/start': typeof ApiApplicationStartRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
+  '/api/brain/brief': typeof ApiBrainBriefRoute
   '/api/documents/request': typeof ApiDocumentsRequestRoute
   '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
@@ -365,6 +374,7 @@ export interface FileRouteTypes {
     | '/api/application/start'
     | '/api/application/submit'
     | '/api/application/upload'
+    | '/api/brain/brief'
     | '/api/documents/request'
     | '/api/documents/request-upload'
     | '/api/documents/upload'
@@ -402,6 +412,7 @@ export interface FileRouteTypes {
     | '/api/application/start'
     | '/api/application/submit'
     | '/api/application/upload'
+    | '/api/brain/brief'
     | '/api/documents/request'
     | '/api/documents/request-upload'
     | '/api/documents/upload'
@@ -439,6 +450,7 @@ export interface FileRouteTypes {
     | '/api/application/start'
     | '/api/application/submit'
     | '/api/application/upload'
+    | '/api/brain/brief'
     | '/api/documents/request'
     | '/api/documents/request-upload'
     | '/api/documents/upload'
@@ -477,6 +489,7 @@ export interface RootRouteChildren {
   ApiApplicationStartRoute: typeof ApiApplicationStartRoute
   ApiApplicationSubmitRoute: typeof ApiApplicationSubmitRoute
   ApiApplicationUploadRoute: typeof ApiApplicationUploadRoute
+  ApiBrainBriefRoute: typeof ApiBrainBriefRoute
   ApiFundersSendRoute: typeof ApiFundersSendRoute
   ApiGmailCallbackRoute: typeof ApiGmailCallbackRoute
   ApiGmailConnectRoute: typeof ApiGmailConnectRoute
@@ -681,6 +694,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiApplicationUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/brain/brief': {
+      id: '/api/brain/brief'
+      path: '/api/brain/brief'
+      fullPath: '/api/brain/brief'
+      preLoaderRoute: typeof ApiBrainBriefRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/documents/request': {
       id: '/api/documents/request'
       path: '/request'
@@ -778,6 +798,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiApplicationStartRoute: ApiApplicationStartRoute,
   ApiApplicationSubmitRoute: ApiApplicationSubmitRoute,
   ApiApplicationUploadRoute: ApiApplicationUploadRoute,
+  ApiBrainBriefRoute: ApiBrainBriefRoute,
   ApiFundersSendRoute: ApiFundersSendRoute,
   ApiGmailCallbackRoute: ApiGmailCallbackRoute,
   ApiGmailConnectRoute: ApiGmailConnectRoute,
