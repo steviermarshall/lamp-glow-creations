@@ -45,6 +45,7 @@ import { Route as ApiDocumentsUploadRouteImport } from './routes/api.documents.u
 import { Route as ApiFundersSendRouteImport } from './routes/api.funders.send'
 import { Route as ApiGmailCallbackRouteImport } from './routes/api.gmail.callback'
 import { Route as ApiGmailConnectRouteImport } from './routes/api.gmail.connect'
+import { Route as ApiStaffSignedRouteImport } from './routes/api.staff.signed'
 import { Route as ApplicationRepPdfRouteImport } from './routes/application.$rep_.pdf'
 
 const IndexRoute = IndexRouteImport.update({
@@ -228,6 +229,11 @@ const ApiGmailConnectRoute = ApiGmailConnectRouteImport.update({
   path: '/api/gmail/connect',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiStaffSignedRoute = ApiStaffSignedRouteImport.update({
+  id: '/api/staff/signed',
+  path: '/api/staff/signed',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApplicationRepPdfRoute = ApplicationRepPdfRouteImport.update({
   id: '/application/$rep_/pdf',
   path: '/application/$rep/pdf',
@@ -271,6 +277,7 @@ export interface FileRoutesByFullPath {
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
+  '/api/staff/signed': typeof ApiStaffSignedRoute
   '/application/$rep/pdf': typeof ApplicationRepPdfRoute
 }
 export interface FileRoutesByTo {
@@ -310,6 +317,7 @@ export interface FileRoutesByTo {
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
+  '/api/staff/signed': typeof ApiStaffSignedRoute
   '/application/$rep/pdf': typeof ApplicationRepPdfRoute
 }
 export interface FileRoutesById {
@@ -350,6 +358,7 @@ export interface FileRoutesById {
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
   '/api/gmail/connect': typeof ApiGmailConnectRoute
+  '/api/staff/signed': typeof ApiStaffSignedRoute
   '/application/$rep_/pdf': typeof ApplicationRepPdfRoute
 }
 export interface FileRouteTypes {
@@ -391,6 +400,7 @@ export interface FileRouteTypes {
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
+    | '/api/staff/signed'
     | '/application/$rep/pdf'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -430,6 +440,7 @@ export interface FileRouteTypes {
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
+    | '/api/staff/signed'
     | '/application/$rep/pdf'
   id:
     | '__root__'
@@ -469,6 +480,7 @@ export interface FileRouteTypes {
     | '/api/funders/send'
     | '/api/gmail/callback'
     | '/api/gmail/connect'
+    | '/api/staff/signed'
     | '/application/$rep_/pdf'
   fileRoutesById: FileRoutesById
 }
@@ -506,6 +518,7 @@ export interface RootRouteChildren {
   ApiFundersSendRoute: typeof ApiFundersSendRoute
   ApiGmailCallbackRoute: typeof ApiGmailCallbackRoute
   ApiGmailConnectRoute: typeof ApiGmailConnectRoute
+  ApiStaffSignedRoute: typeof ApiStaffSignedRoute
   ApplicationRepPdfRoute: typeof ApplicationRepPdfRoute
 }
 
@@ -763,6 +776,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGmailConnectRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/staff/signed': {
+      id: '/api/staff/signed'
+      path: '/api/staff/signed'
+      fullPath: '/api/staff/signed'
+      preLoaderRoute: typeof ApiStaffSignedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/application/$rep_/pdf': {
       id: '/application/$rep_/pdf'
       path: '/application/$rep/pdf'
@@ -823,6 +843,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiFundersSendRoute: ApiFundersSendRoute,
   ApiGmailCallbackRoute: ApiGmailCallbackRoute,
   ApiGmailConnectRoute: ApiGmailConnectRoute,
+  ApiStaffSignedRoute: ApiStaffSignedRoute,
   ApplicationRepPdfRoute: ApplicationRepPdfRoute,
 }
 export const routeTree = rootRouteImport

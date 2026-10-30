@@ -50,6 +50,23 @@ async function readAll<T>(
   return out;
 }
 
+/**
+ * When each file was signed. Staff can't read application_details from the browser (it holds
+ * SSNs), so Lamp's server reads just the signing times for the files this person can see.
+ */
+async function signedTimes(
+  sb: NonNullable<ReturnType<typeof getSupabase>>,
+): Promise<Record<string, unknown>[] | null> {
+  const session = (await sb.auth.getSession()).data.session;
+  if (!session) return null;
+  const r = await fetch("/api/staff/signed", {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  }).catch(() => null);
+  if (!r?.ok) return null;
+  const j = (await r.json().catch(() => null)) as { signed?: Record<string, unknown>[] } | null;
+  return j?.signed ?? null;
+}
+
 const n = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
 const nOrNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
@@ -88,14 +105,7 @@ async function load(isAdmin: boolean): Promise<Loaded> {
     readAll<Record<string, unknown>>((a, b) =>
       sb.from("leads").select("created_at,rep_slug").order("created_at").range(a, b),
     ),
-    readAll<Record<string, unknown>>((a, b) =>
-      sb
-        .from("application_details")
-        .select("application_id,signed_at")
-        .not("signed_at", "is", null)
-        .order("application_id")
-        .range(a, b),
-    ),
+    signedTimes(sb),
     readAll<Record<string, unknown>>((a, b) =>
       sb
         .from("application_invites")
