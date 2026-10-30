@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Check, ExternalLink, Loader2, Paperclip, X } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { NotesCalls } from "@/components/staff/notes-calls";
+import { DocRequests, type RequestLabel } from "@/components/staff/doc-requests";
 import { logActivity } from "@/lib/track";
 import { postAsMe } from "@/lib/server-api";
 import { cn } from "@/lib/utils";
@@ -109,6 +110,8 @@ export function FileView({
   const loadedNotes = useRef("");
   // the notes & calls thread (20261029140000); until its SQL runs, the old single notes box shows
   const [notesFallback, setNotesFallback] = useState(false);
+  // document id → the documents request it answered (20261030090000)
+  const [reqLabels, setReqLabels] = useState<Map<string, RequestLabel>>(new Map());
   const useOldNotes = useCallback(() => setNotesFallback(true), []);
   // Bumped after a send so the funders-and-offers panel reloads its "Sent to" list.
   const [sentTick, setSentTick] = useState(0);
@@ -541,6 +544,14 @@ export function FileView({
 
           <section className={cn(card, "p-6")}>
             <h3 className="font-display text-lg font-semibold">Documents</h3>
+            <DocRequests
+              fileId={fileId}
+              firstName={file.first_name}
+              phone={file.phone}
+              email={file.email}
+              docsTick={docs.length}
+              onLabels={setReqLabels}
+            />
             {docs.length === 0 ? (
               <p className="mt-2 text-sm text-smoke">Nothing uploaded yet.</p>
             ) : (
@@ -561,6 +572,11 @@ export function FileView({
                       <span className="truncate">{docName(d)}</span>
                       <ExternalLink className="size-3.5 shrink-0" />
                     </button>
+                    <span className="w-full basis-full pl-7 text-xs text-smoke sm:order-last">
+                      came in {stamp(d.created_at)}
+                      {reqLabels.get(d.id) &&
+                        ` · for ${reqLabels.get(d.id)!.title} (asked ${stamp(reqLabels.get(d.id)!.at)}${reqLabels.get(d.id)!.by ? ` by ${reqLabels.get(d.id)!.by}` : ""})`}
+                    </span>
                     <span className="ml-auto shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-smoke ring-1 ring-line">
                       {DOC_TAG[d.status]}
                     </span>
