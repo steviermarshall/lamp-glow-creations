@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Check, ExternalLink, Loader2, Paperclip, X } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
+import { NotesCalls } from "@/components/staff/notes-calls";
 import { logActivity } from "@/lib/track";
 import { postAsMe } from "@/lib/server-api";
 import { cn } from "@/lib/utils";
@@ -106,6 +107,9 @@ export function FileView({
   const [savedNotes, setSavedNotes] = useState("");
   // what the box last loaded, so a reload after another change (or a refused save) keeps typing
   const loadedNotes = useRef("");
+  // the notes & calls thread (20261029140000); until its SQL runs, the old single notes box shows
+  const [notesFallback, setNotesFallback] = useState(false);
+  const useOldNotes = useCallback(() => setNotesFallback(true), []);
   // Bumped after a send so the funders-and-offers panel reloads its "Sent to" list.
   const [sentTick, setSentTick] = useState(0);
 
@@ -484,40 +488,55 @@ export function FileView({
                 )}
               </div>
             </div>
-            <label className="mt-5 block text-sm">
-              <span className="mb-1.5 block text-xs text-smoke">
-                Staff notes (never shown to the merchant)
-              </span>
-              <textarea
-                aria-label="Staff notes"
-                className="min-h-28 w-full rounded-xl bg-white px-4 py-3 ring-1 ring-line"
-                value={notes}
-                readOnly={!notesWhere}
-                onChange={(e) => {
-                  setNotes(e.target.value);
-                  setNotesSaved(false);
-                }}
+            {!notesFallback && (
+              <NotesCalls
+                fileId={fileId}
+                isAdmin={isAdmin}
+                repSlug={repSlug}
+                reps={reps}
+                fileRep={file.rep_slug}
+                onUnavailable={useOldNotes}
+                onFileChanged={() => void load()}
               />
-            </label>
-            <div className="mt-3 flex items-center gap-3">
-              <button
-                type="button"
-                className={cn(btnOutline, "px-4 py-2")}
-                disabled={!!busy || !notesWhere || notes === savedNotes}
-                onClick={async () => setNotesSaved(await saveNotes())}
-              >
-                {busy === "notes" ? <Loader2 className="size-4 animate-spin" /> : null}
-                Save notes
-              </button>
-              {notesSaved && notes === savedNotes && (
-                <span className="text-xs text-smoke">Saved</span>
-              )}
-              {!notesWhere && (
-                <span className="text-xs text-smoke">
-                  Couldn't load the notes. Refresh to try again.
-                </span>
-              )}
-            </div>
+            )}
+            {notesFallback && (
+              <>
+                <label className="mt-5 block text-sm">
+                  <span className="mb-1.5 block text-xs text-smoke">
+                    Staff notes (never shown to the merchant)
+                  </span>
+                  <textarea
+                    aria-label="Staff notes"
+                    className="min-h-28 w-full rounded-xl bg-white px-4 py-3 ring-1 ring-line"
+                    value={notes}
+                    readOnly={!notesWhere}
+                    onChange={(e) => {
+                      setNotes(e.target.value);
+                      setNotesSaved(false);
+                    }}
+                  />
+                </label>
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    className={cn(btnOutline, "px-4 py-2")}
+                    disabled={!!busy || !notesWhere || notes === savedNotes}
+                    onClick={async () => setNotesSaved(await saveNotes())}
+                  >
+                    {busy === "notes" ? <Loader2 className="size-4 animate-spin" /> : null}
+                    Save notes
+                  </button>
+                  {notesSaved && notes === savedNotes && (
+                    <span className="text-xs text-smoke">Saved</span>
+                  )}
+                  {!notesWhere && (
+                    <span className="text-xs text-smoke">
+                      Couldn't load the notes. Refresh to try again.
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
           </section>
 
           <section className={cn(card, "p-6")}>
