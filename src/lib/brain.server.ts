@@ -24,7 +24,7 @@ import {
   type TodayItem,
 } from "@/lib/brain";
 
-const MODEL = "claude-opus-5-5";
+export const MODEL = "claude-opus-5-5";
 // $ per million tokens on claude-opus-5-5. A refusal rescued by the fallback model bills at that
 // model's rates; this log uses Opus 5.5's, which is close enough for a monthly cap.
 const PRICE = { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 };
@@ -41,8 +41,8 @@ const OPEN = [
 const PENDING_MS = 2 * 60_000;
 const RETRY_FAILED_MS = 60 * 60_000;
 
-const on = () => !!env("ANTHROPIC_API_KEY") && env("LAMP_BRAIN").toLowerCase() !== "off";
-const cap = () => {
+export const on = () => !!env("ANTHROPIC_API_KEY") && env("LAMP_BRAIN").toLowerCase() !== "off";
+export const cap = () => {
   const v = Number(env("BRAIN_MONTHLY_CAP_USD"));
   return Number.isFinite(v) && v >= 0 && env("BRAIN_MONTHLY_CAP_USD") !== "" ? v : 50;
 };
@@ -97,7 +97,7 @@ const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
 const str = (v: unknown) => (v === null || v === undefined ? null : String(v));
 
 /** Who's asking, as staff: admin or a rep seat, else null. */
-async function staff(userId: string) {
+export async function staff(userId: string) {
   const svc = service();
   const [roles, seat] = await Promise.all([
     svc.from("user_roles").select("role").eq("user_id", userId).in("role", ["admin", "rep"]),
@@ -106,18 +106,49 @@ async function staff(userId: string) {
   const r = (roles.data ?? []) as { role: string }[];
   if (!r.length) return null;
   const s = seat.data as { slug: string; name: string } | null;
+  // an admin without a rep seat signs messages with their profile name
+  const prof = s
+    ? null
+    : ((await svc.from("profiles").select("full_name").eq("id", userId).maybeSingle()).data as {
+        full_name: string | null;
+      } | null);
   return {
     isAdmin: r.some((x) => x.role === "admin"),
     repSlug: s?.slug ?? null,
-    name: s?.name ?? null,
+    name: s?.name ?? prof?.full_name ?? null,
   };
 }
 
+/**
+ * When each file was signed. Staff can't read the signed application itself from their own client
+ * (it holds SSNs; /api/application-details logs every look), so Lamp's server reads only the
+ * signing time, and only for files the caller's own rules already showed them.
+ */
+export async function signedAt(fileIds: string[]) {
+  const out: { application_id: string; signed_at: string | null }[] = [];
+  for (let i = 0; i < fileIds.length; i += 200) {
+    const r = await service()
+      .from("application_details")
+      .select("application_id,signed_at")
+      .in("application_id", fileIds.slice(i, i + 200))
+      .not("signed_at", "is", null);
+    out.push(
+      ...((r.data ?? []) as { application_id: string; signed_at: string | null }[]).map((x) => ({
+        application_id: String(x.application_id),
+        signed_at: str(x.signed_at),
+      })),
+    );
+  }
+  return out;
+}
+
 /** The rules' input, read with the caller's own client so their access rules apply. */
-async function readInput(client: Awaited<ReturnType<typeof caller>> & object): Promise<BrainInput> {
+export async function readInput(
+  client: Awaited<ReturnType<typeof caller>> & object,
+): Promise<BrainInput> {
   const db = client.client;
   const since = new Date(Date.now() - 35 * 60_000).toISOString();
-  const [files, offers, events, signed, invites] = await Promise.all([
+  const [files, offers, events, invites] = await Promise.all([
     db
       .from("pipeline_board")
       .select(
@@ -136,11 +167,6 @@ async function readInput(client: Awaited<ReturnType<typeof caller>> & object): P
       .gte("occurred_at", since)
       .limit(2000),
     db
-      .from("application_details")
-      .select("application_id,signed_at")
-      .not("signed_at", "is", null)
-      .limit(5000),
-    db
       .from("application_invites")
       .select("id,rep_slug,business_name,sent_at,opened_at,cancelled_at,expires_at,application_id")
       .is("opened_at", null)
@@ -149,6 +175,7 @@ async function readInput(client: Awaited<ReturnType<typeof caller>> & object): P
       .limit(2000),
   ]);
   const rows = (r: { data: unknown }) => (r.data ?? []) as Record<string, unknown>[];
+  const signed = await signedAt(rows(files).map((r) => String(r["id"])));
   return {
     files: rows(files).map((r) => ({
       id: String(r["id"]),
@@ -177,10 +204,7 @@ async function readInput(client: Awaited<ReturnType<typeof caller>> & object): P
       actor_user_id: str(r["actor_user_id"]),
       occurred_at: String(r["occurred_at"]),
     })),
-    signed: rows(signed).map((r) => ({
-      application_id: String(r["application_id"]),
-      signed_at: str(r["signed_at"]),
-    })),
+    signed,
     invites: rows(invites).map((r) => ({
       id: String(r["id"]),
       rep_slug: String(r["rep_slug"]),
@@ -206,14 +230,43 @@ const view = (i: TodayItem, written?: string) => ({
   written: !!written,
 });
 
-async function monthSpend(): Promise<number> {
+/** This month's Claude spend across everything Lamp Brain writes (briefs and drafts). */
+export async function monthSpend(): Promise<number> {
   const now = new Date();
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-  const r = await service()
-    .from("brain_briefs" as never)
-    .select("cost_usd")
-    .gte("created_at", start);
-  return ((r.data ?? []) as { cost_usd: unknown }[]).reduce((s, x) => s + num(x.cost_usd), 0);
+  const rows = await Promise.all(
+    ["brain_briefs", "brain_drafts"].map((t) =>
+      service()
+        .from(t as never)
+        .select("cost_usd")
+        .gte("created_at", start),
+    ),
+  );
+  return rows
+    .flatMap((r) => (r.data ?? []) as { cost_usd: unknown }[])
+    .reduce((s, x) => s + num(x.cost_usd), 0);
+}
+
+/** Token counts and dollars for one response, for the spend log. */
+export function usageOf(u: {
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+}) {
+  const usage = {
+    input_tokens: u.input_tokens ?? 0,
+    output_tokens: u.output_tokens ?? 0,
+    cache_read_tokens: u.cache_read_input_tokens ?? 0,
+    cache_write_tokens: u.cache_creation_input_tokens ?? 0,
+  };
+  const cost =
+    (usage.input_tokens * PRICE.input +
+      usage.output_tokens * PRICE.output +
+      usage.cache_read_tokens * PRICE.cacheRead +
+      usage.cache_write_tokens * PRICE.cacheWrite) /
+    1_000_000;
+  return { usage, cost };
 }
 
 /** One call to Claude for today's brief. Returns the checked brief and what it cost. */
@@ -237,19 +290,7 @@ async function write(
     system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: JSON.stringify({ reader, items: facts }) }],
   });
-  const u = res.usage;
-  const usage = {
-    input_tokens: u.input_tokens ?? 0,
-    output_tokens: u.output_tokens ?? 0,
-    cache_read_tokens: u.cache_read_input_tokens ?? 0,
-    cache_write_tokens: u.cache_creation_input_tokens ?? 0,
-  };
-  const cost =
-    (usage.input_tokens * PRICE.input +
-      usage.output_tokens * PRICE.output +
-      usage.cache_read_tokens * PRICE.cacheRead +
-      usage.cache_write_tokens * PRICE.cacheWrite) /
-    1_000_000;
+  const { usage, cost } = usageOf(res.usage);
   if (res.stop_reason === "refusal")
     return { brief: null, usage, cost, model: res.model, error: "The model declined." };
   if (res.stop_reason === "max_tokens")
@@ -274,7 +315,7 @@ async function write(
   return { brief: stored, usage, cost, model: res.model, error: null };
 }
 
-const why = (e: unknown) => {
+export const why = (e: unknown) => {
   if (e instanceof Anthropic.AuthenticationError) return "The Anthropic key was refused.";
   if (e instanceof Anthropic.RateLimitError) return "Anthropic is busy; try again later.";
   if (e instanceof Anthropic.APIError) return `Anthropic error ${e.status ?? ""}`.trim();
