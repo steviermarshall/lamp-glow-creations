@@ -30,12 +30,15 @@ import { Route as ApiTeamRouteImport } from './routes/api.team'
 import { Route as ApiTrackRouteImport } from './routes/api.track'
 import { Route as ApplicationRepRouteImport } from './routes/application.$rep'
 import { Route as ApplyRepRouteImport } from './routes/apply_.$rep'
+import { Route as UploadTokenRouteImport } from './routes/upload.$token'
 import { Route as ApiApplicationNotifyRouteImport } from './routes/api.application.notify'
 import { Route as ApiApplicationOpenRouteImport } from './routes/api.application.open'
 import { Route as ApiApplicationProgressRouteImport } from './routes/api.application.progress'
 import { Route as ApiApplicationStartRouteImport } from './routes/api.application.start'
 import { Route as ApiApplicationSubmitRouteImport } from './routes/api.application.submit'
 import { Route as ApiApplicationUploadRouteImport } from './routes/api.application.upload'
+import { Route as ApiDocumentsRequestRouteImport } from './routes/api.documents.request'
+import { Route as ApiDocumentsRequestUploadRouteImport } from './routes/api.documents.request-upload'
 import { Route as ApiDocumentsUploadRouteImport } from './routes/api.documents.upload'
 import { Route as ApiFundersSendRouteImport } from './routes/api.funders.send'
 import { Route as ApiGmailCallbackRouteImport } from './routes/api.gmail.callback'
@@ -147,6 +150,11 @@ const ApplyRepRoute = ApplyRepRouteImport.update({
   path: '/apply/$rep',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UploadTokenRoute = UploadTokenRouteImport.update({
+  id: '/upload/$token',
+  path: '/upload/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiApplicationNotifyRoute = ApiApplicationNotifyRouteImport.update({
   id: '/api/application/notify',
   path: '/api/application/notify',
@@ -177,6 +185,17 @@ const ApiApplicationUploadRoute = ApiApplicationUploadRouteImport.update({
   path: '/api/application/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDocumentsRequestRoute = ApiDocumentsRequestRouteImport.update({
+  id: '/request',
+  path: '/request',
+  getParentRoute: () => ApiDocumentsRoute,
+} as any)
+const ApiDocumentsRequestUploadRoute =
+  ApiDocumentsRequestUploadRouteImport.update({
+    id: '/request-upload',
+    path: '/request-upload',
+    getParentRoute: () => ApiDocumentsRoute,
+  } as any)
 const ApiDocumentsUploadRoute = ApiDocumentsUploadRouteImport.update({
   id: '/upload',
   path: '/upload',
@@ -225,12 +244,15 @@ export interface FileRoutesByFullPath {
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
+  '/upload/$token': typeof UploadTokenRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/progress': typeof ApiApplicationProgressRoute
   '/api/application/start': typeof ApiApplicationStartRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
+  '/api/documents/request': typeof ApiDocumentsRequestRoute
+  '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
@@ -259,12 +281,15 @@ export interface FileRoutesByTo {
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply/$rep': typeof ApplyRepRoute
+  '/upload/$token': typeof UploadTokenRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/progress': typeof ApiApplicationProgressRoute
   '/api/application/start': typeof ApiApplicationStartRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
+  '/api/documents/request': typeof ApiDocumentsRequestRoute
+  '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
@@ -294,12 +319,15 @@ export interface FileRoutesById {
   '/api/track': typeof ApiTrackRoute
   '/application/$rep': typeof ApplicationRepRoute
   '/apply_/$rep': typeof ApplyRepRoute
+  '/upload/$token': typeof UploadTokenRoute
   '/api/application/notify': typeof ApiApplicationNotifyRoute
   '/api/application/open': typeof ApiApplicationOpenRoute
   '/api/application/progress': typeof ApiApplicationProgressRoute
   '/api/application/start': typeof ApiApplicationStartRoute
   '/api/application/submit': typeof ApiApplicationSubmitRoute
   '/api/application/upload': typeof ApiApplicationUploadRoute
+  '/api/documents/request': typeof ApiDocumentsRequestRoute
+  '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
@@ -330,12 +358,15 @@ export interface FileRouteTypes {
     | '/api/track'
     | '/application/$rep'
     | '/apply/$rep'
+    | '/upload/$token'
     | '/api/application/notify'
     | '/api/application/open'
     | '/api/application/progress'
     | '/api/application/start'
     | '/api/application/submit'
     | '/api/application/upload'
+    | '/api/documents/request'
+    | '/api/documents/request-upload'
     | '/api/documents/upload'
     | '/api/funders/send'
     | '/api/gmail/callback'
@@ -364,12 +395,15 @@ export interface FileRouteTypes {
     | '/api/track'
     | '/application/$rep'
     | '/apply/$rep'
+    | '/upload/$token'
     | '/api/application/notify'
     | '/api/application/open'
     | '/api/application/progress'
     | '/api/application/start'
     | '/api/application/submit'
     | '/api/application/upload'
+    | '/api/documents/request'
+    | '/api/documents/request-upload'
     | '/api/documents/upload'
     | '/api/funders/send'
     | '/api/gmail/callback'
@@ -398,12 +432,15 @@ export interface FileRouteTypes {
     | '/api/track'
     | '/application/$rep'
     | '/apply_/$rep'
+    | '/upload/$token'
     | '/api/application/notify'
     | '/api/application/open'
     | '/api/application/progress'
     | '/api/application/start'
     | '/api/application/submit'
     | '/api/application/upload'
+    | '/api/documents/request'
+    | '/api/documents/request-upload'
     | '/api/documents/upload'
     | '/api/funders/send'
     | '/api/gmail/callback'
@@ -433,6 +470,7 @@ export interface RootRouteChildren {
   ApiTrackRoute: typeof ApiTrackRoute
   ApplicationRepRoute: typeof ApplicationRepRoute
   ApplyRepRoute: typeof ApplyRepRoute
+  UploadTokenRoute: typeof UploadTokenRoute
   ApiApplicationNotifyRoute: typeof ApiApplicationNotifyRoute
   ApiApplicationOpenRoute: typeof ApiApplicationOpenRoute
   ApiApplicationProgressRoute: typeof ApiApplicationProgressRoute
@@ -594,6 +632,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApplyRepRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/upload/$token': {
+      id: '/upload/$token'
+      path: '/upload/$token'
+      fullPath: '/upload/$token'
+      preLoaderRoute: typeof UploadTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/application/notify': {
       id: '/api/application/notify'
       path: '/api/application/notify'
@@ -636,6 +681,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiApplicationUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/documents/request': {
+      id: '/api/documents/request'
+      path: '/request'
+      fullPath: '/api/documents/request'
+      preLoaderRoute: typeof ApiDocumentsRequestRouteImport
+      parentRoute: typeof ApiDocumentsRoute
+    }
+    '/api/documents/request-upload': {
+      id: '/api/documents/request-upload'
+      path: '/request-upload'
+      fullPath: '/api/documents/request-upload'
+      preLoaderRoute: typeof ApiDocumentsRequestUploadRouteImport
+      parentRoute: typeof ApiDocumentsRoute
+    }
     '/api/documents/upload': {
       id: '/api/documents/upload'
       path: '/upload'
@@ -675,10 +734,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface ApiDocumentsRouteChildren {
+  ApiDocumentsRequestRoute: typeof ApiDocumentsRequestRoute
+  ApiDocumentsRequestUploadRoute: typeof ApiDocumentsRequestUploadRoute
   ApiDocumentsUploadRoute: typeof ApiDocumentsUploadRoute
 }
 
 const ApiDocumentsRouteChildren: ApiDocumentsRouteChildren = {
+  ApiDocumentsRequestRoute: ApiDocumentsRequestRoute,
+  ApiDocumentsRequestUploadRoute: ApiDocumentsRequestUploadRoute,
   ApiDocumentsUploadRoute: ApiDocumentsUploadRoute,
 }
 
@@ -708,6 +771,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiTrackRoute: ApiTrackRoute,
   ApplicationRepRoute: ApplicationRepRoute,
   ApplyRepRoute: ApplyRepRoute,
+  UploadTokenRoute: UploadTokenRoute,
   ApiApplicationNotifyRoute: ApiApplicationNotifyRoute,
   ApiApplicationOpenRoute: ApiApplicationOpenRoute,
   ApiApplicationProgressRoute: ApiApplicationProgressRoute,
