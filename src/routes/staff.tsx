@@ -11,6 +11,7 @@ import { Board } from "@/components/staff/board";
 import { FileView } from "@/components/staff/file-view";
 import { EngineLeads } from "@/components/staff/engine-leads";
 import { MyCalls } from "@/components/staff/notes-calls";
+import { LeadProfile } from "@/components/staff/lead-profile";
 import { SentApplications } from "@/components/staff/sent-applications";
 import { Funders } from "@/components/staff/funders";
 import { Money } from "@/components/staff/money";
@@ -24,6 +25,7 @@ type StaffSearch = {
   stage?: Stage | undefined;
   rep?: string | undefined;
   file?: string | undefined;
+  lead?: string | undefined;
 };
 
 type View = "dashboard" | "engine" | "sent" | "funders" | "money" | "team";
@@ -51,6 +53,7 @@ export const Route = createFileRoute("/staff")({
         ? s["rep"]
         : undefined,
     file: typeof s["file"] === "string" && UUID.test(s["file"]) ? s["file"] : undefined,
+    lead: typeof s["lead"] === "string" && UUID.test(s["lead"]) ? s["lead"] : undefined,
   }),
   head: () =>
     seo({
@@ -122,12 +125,12 @@ function Staff() {
               {access.repSlug && ` · /${access.repSlug}`}
             </p>
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              {search.view ? VIEW_TITLE[search.view] : "Files"}
+              {search.lead ? "Lead" : search.view ? VIEW_TITLE[search.view] : "Files"}
             </h1>
           </div>
           <NotificationsBell />
         </div>
-        {!search.file && (
+        {!search.file && !search.lead && (
           <nav className="mt-4 flex flex-wrap gap-2 text-sm" aria-label="Staff views">
             <Link to="/staff" search={{}} className={viewTab(!search.view)} data-staff-view="files">
               Files
@@ -145,10 +148,17 @@ function Staff() {
             ))}
           </nav>
         )}
-        {!search.file && !search.view && (
+        {!search.file && !search.lead && !search.view && (
           <AppLinks isAdmin={access.isAdmin} repSlug={access.repSlug} reps={reps} />
         )}
-        {search.file ? (
+        {search.lead ? (
+          <LeadProfile
+            leadId={search.lead}
+            isAdmin={access.isAdmin}
+            repSlug={access.repSlug}
+            reps={reps}
+          />
+        ) : search.file ? (
           <FileView
             fileId={search.file}
             userId={access.userId}
