@@ -1499,6 +1499,15 @@ export type Database = {
         Returns: boolean;
       };
       rep_can_see_user: { Args: { _user_id: string }; Returns: boolean };
+      rep_card: {
+        Args: { _slug: string };
+        Returns: {
+          name: string;
+          photo_url: string | null;
+          slug: string;
+          title: string | null;
+        }[];
+      };
       reveal_application_details: {
         Args: { _application_id: string; _purpose?: string };
         Returns: Json;

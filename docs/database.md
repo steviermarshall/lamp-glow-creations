@@ -30,8 +30,8 @@ answer never depends on what the caller can read.
 
 | Role | Reads | Writes |
 |---|---|---|
-| anonymous | active reps | leads (insert only, through the site's server) |
-| merchant | own profile, businesses, applications, documents in own folder, visible events, presented offers (`my_offers`, with the funder's name only) | own profile and businesses; own application answers and contact fields; own documents until reviewed; `accept_offer()` |
+| anonymous | active reps' public fields (`slug`, `name`, `title`, `photo_url`, `active`), or `rep_card()` | leads (insert only, through the site's server) |
+| merchant | own profile, businesses, applications, documents in own folder, visible events, presented offers (`my_offers`, with the funder's name only), a rep's public fields through `rep_card()` (no `reps` rows) | own profile and businesses; own application answers and contact fields; own documents until reviewed; `accept_offer()` |
 | rep | own files plus the unassigned pool (`pipeline_board`), and only on those files: events, documents, stored files, submissions, offers, and the owner's profile and businesses; own profile; own and untagged leads (and their events); funders; own deals and ledger entries | on own or unassigned files only: stage and staff notes (`application_internal_notes`), take an unassigned file for themselves (never assign, hand over or release, never change `source_rep_slug`); events as themselves; submissions; offers and their notes (`offer_internal_notes`); document review; own and untagged leads. No business edits, no `accept_offer()` |
 | admin | everything | everything, plus reps, roles, funders, deals, the ledger |
 | service role (server functions, cron) | bypasses RLS | bypasses RLS |
@@ -41,6 +41,7 @@ Guardrails the database enforces whatever the app sends:
 - a merchant cannot change `status`, `rep_slug`, `staff_notes`, `user_id`, `assigned_at`, the phone-consent stamps or the `submitted_at`, `funded_at` and `closed_at` stamps (`applications_before_update` raises);
 - `submitted_at` means the file has gone to funders: it is stamped on the first move to any stage from `submitted` on, and when a `submissions` row is recorded;
 - an offer with status `received` is invisible to the merchant;
+- only staff read `reps` rows, so a rep's sign-in id (`user_id`) and who they report to (`admin_slug`) never reach a visitor or a merchant (2026-11-03). Visitors may read the public columns of active reps; anyone may call `rep_card(slug)`, which returns an active rep's slug, name, title and photo only. The link triggers (`applications_before_insert`, `leads_before_insert`) check a `ref` through `rep_card()`, so a sign-up from a rep's link lands with that rep whoever inserts it;
 - a merchant reads no `funders` rows: `my_offers` takes the funder's name from `offer_funder_name()`, which gives only the name, and only for an offer the caller may see (the merchant once it is presented, or staff; the service role and the SQL editor always);
 - offer notes live in `offer_internal_notes`, which only admins and staff on their own or unassigned files can read or write. `offers.notes` is retired and always empty, because merchants read their presented offers' rows: a page still open from before the move that saves an offer with a note has it moved into the table (`offers_notes_moved`). `accept_offer()` returns only the offer's id, file, status and `accepted_at`;
 - at most one accepted offer per application (partial unique index), and `accept_offer()` refuses anything not `presented` or past `expires_at`, and any caller other than the merchant who owns the file or an admin;
