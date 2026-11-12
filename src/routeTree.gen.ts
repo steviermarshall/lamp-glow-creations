@@ -51,6 +51,7 @@ import { Route as ApiDiscordSetupRouteImport } from './routes/api.discord.setup'
 import { Route as ApiDocumentsRequestRouteImport } from './routes/api.documents.request'
 import { Route as ApiDocumentsRequestUploadRouteImport } from './routes/api.documents.request-upload'
 import { Route as ApiDocumentsUploadRouteImport } from './routes/api.documents.upload'
+import { Route as ApiEngineOutcomesRouteImport } from './routes/api.engine.outcomes'
 import { Route as ApiEnginePushRouteImport } from './routes/api.engine.push'
 import { Route as ApiEngineReplyRouteImport } from './routes/api.engine.reply'
 import { Route as ApiEngineStatusRouteImport } from './routes/api.engine.status'
@@ -272,6 +273,11 @@ const ApiDocumentsUploadRoute = ApiDocumentsUploadRouteImport.update({
   path: '/upload',
   getParentRoute: () => ApiDocumentsRoute,
 } as any)
+const ApiEngineOutcomesRoute = ApiEngineOutcomesRouteImport.update({
+  id: '/api/engine/outcomes',
+  path: '/api/engine/outcomes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiEnginePushRoute = ApiEnginePushRouteImport.update({
   id: '/api/engine/push',
   path: '/api/engine/push',
@@ -361,6 +367,7 @@ export interface FileRoutesByFullPath {
   '/api/documents/request': typeof ApiDocumentsRequestRoute
   '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
+  '/api/engine/outcomes': typeof ApiEngineOutcomesRoute
   '/api/engine/push': typeof ApiEnginePushRoute
   '/api/engine/reply': typeof ApiEngineReplyRoute
   '/api/engine/status': typeof ApiEngineStatusRoute
@@ -414,6 +421,7 @@ export interface FileRoutesByTo {
   '/api/documents/request': typeof ApiDocumentsRequestRoute
   '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
+  '/api/engine/outcomes': typeof ApiEngineOutcomesRoute
   '/api/engine/push': typeof ApiEnginePushRoute
   '/api/engine/reply': typeof ApiEngineReplyRoute
   '/api/engine/status': typeof ApiEngineStatusRoute
@@ -468,6 +476,7 @@ export interface FileRoutesById {
   '/api/documents/request': typeof ApiDocumentsRequestRoute
   '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
+  '/api/engine/outcomes': typeof ApiEngineOutcomesRoute
   '/api/engine/push': typeof ApiEnginePushRoute
   '/api/engine/reply': typeof ApiEngineReplyRoute
   '/api/engine/status': typeof ApiEngineStatusRoute
@@ -523,6 +532,7 @@ export interface FileRouteTypes {
     | '/api/documents/request'
     | '/api/documents/request-upload'
     | '/api/documents/upload'
+    | '/api/engine/outcomes'
     | '/api/engine/push'
     | '/api/engine/reply'
     | '/api/engine/status'
@@ -576,6 +586,7 @@ export interface FileRouteTypes {
     | '/api/documents/request'
     | '/api/documents/request-upload'
     | '/api/documents/upload'
+    | '/api/engine/outcomes'
     | '/api/engine/push'
     | '/api/engine/reply'
     | '/api/engine/status'
@@ -629,6 +640,7 @@ export interface FileRouteTypes {
     | '/api/documents/request'
     | '/api/documents/request-upload'
     | '/api/documents/upload'
+    | '/api/engine/outcomes'
     | '/api/engine/push'
     | '/api/engine/reply'
     | '/api/engine/status'
@@ -680,6 +692,7 @@ export interface RootRouteChildren {
   ApiDiscordInteractionsRoute: typeof ApiDiscordInteractionsRoute
   ApiDiscordLinkRoute: typeof ApiDiscordLinkRoute
   ApiDiscordSetupRoute: typeof ApiDiscordSetupRoute
+  ApiEngineOutcomesRoute: typeof ApiEngineOutcomesRoute
   ApiEnginePushRoute: typeof ApiEnginePushRoute
   ApiEngineReplyRoute: typeof ApiEngineReplyRoute
   ApiEngineStatusRoute: typeof ApiEngineStatusRoute
@@ -986,6 +999,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDocumentsUploadRouteImport
       parentRoute: typeof ApiDocumentsRoute
     }
+    '/api/engine/outcomes': {
+      id: '/api/engine/outcomes'
+      path: '/api/engine/outcomes'
+      fullPath: '/api/engine/outcomes'
+      preLoaderRoute: typeof ApiEngineOutcomesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/engine/push': {
       id: '/api/engine/push'
       path: '/api/engine/push'
@@ -1119,6 +1139,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDiscordInteractionsRoute: ApiDiscordInteractionsRoute,
   ApiDiscordLinkRoute: ApiDiscordLinkRoute,
   ApiDiscordSetupRoute: ApiDiscordSetupRoute,
+  ApiEngineOutcomesRoute: ApiEngineOutcomesRoute,
   ApiEnginePushRoute: ApiEnginePushRoute,
   ApiEngineReplyRoute: ApiEngineReplyRoute,
   ApiEngineStatusRoute: ApiEngineStatusRoute,
