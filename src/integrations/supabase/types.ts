@@ -2274,6 +2274,7 @@ export type Database = {
       }
       claim_applications: { Args: { _tokens?: string[] }; Returns: number }
       current_rep_slug: { Args: { _user_id?: string }; Returns: string }
+      file_contact: { Args: { _application_id: string }; Returns: string }
       funder_matches: {
         Args: { _application_id: string }
         Returns: {
@@ -2364,6 +2365,15 @@ export type Database = {
       }
       rep_can_see_lead: { Args: { _lead_id: string }; Returns: boolean }
       rep_can_see_user: { Args: { _user_id: string }; Returns: boolean }
+      rep_card: {
+        Args: { _slug: string }
+        Returns: {
+          name: string
+          photo_url: string | null
+          slug: string
+          title: string | null
+        }[]
+      }
       reveal_application_details: {
         Args: { _application_id: string; _purpose?: string }
         Returns: Json

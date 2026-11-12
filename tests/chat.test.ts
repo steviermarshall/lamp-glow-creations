@@ -111,16 +111,13 @@ Deno.test(
 );
 
 Deno.test("the merchant sees the same contact the application emails name", () => {
-  const reps = [
-    { slug: "darrell", name: "Darrell Jones", admin_slug: "zeus" },
-    { slug: "zeus", name: "Zeus Smith", admin_slug: null },
-    { slug: "solo", name: "Sam Solo", admin_slug: null },
-  ];
-  assertEquals(contactName("darrell", reps), "Zeus");
-  assertEquals(contactName("solo", reps), "Sam");
-  assertEquals(contactName(null, reps), "the Lamp team");
-  assertEquals(contactName("gone", reps), "the Lamp team");
-  assertEquals(contactName("darrell", [reps[0]!]), "Darrell");
+  // file_contact() picks the person (the rep's active team lead, else the rep) and answers only
+  // for the merchant's own file; the page keeps the first name
+  assertEquals(contactName("Zeus Smith"), "Zeus");
+  assertEquals(contactName("  Sam   Solo "), "Sam");
+  assertEquals(contactName(null), "the Lamp team");
+  assertEquals(contactName(undefined), "the Lamp team");
+  assertEquals(contactName("   "), "the Lamp team");
 });
 
 Deno.test("merchant conversations name people as each side knows them", () => {

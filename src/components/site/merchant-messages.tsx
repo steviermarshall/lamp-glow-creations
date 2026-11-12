@@ -26,31 +26,9 @@ export function MerchantMessages({
     if (!sb) return;
     let live = true;
     (async () => {
-      const a = await sb
-        .from("applications")
-        .select("rep_slug")
-        .eq("id", applicationId)
-        .maybeSingle();
-      const slug = (a.data as { rep_slug: string | null } | null)?.rep_slug ?? null;
-      if (!slug) {
-        if (live) setContact(contactName(null, []));
-        return;
-      }
-      const rep = await sb
-        .from("reps")
-        .select("slug,name,admin_slug")
-        .eq("slug", slug)
-        .maybeSingle();
-      const r = rep.data as { slug: string; name: string; admin_slug: string | null } | null;
-      const lead = r?.admin_slug
-        ? await sb
-            .from("reps")
-            .select("slug,name,admin_slug")
-            .eq("slug", r.admin_slug)
-            .maybeSingle()
-        : null;
-      const rows = [r, lead?.data as typeof r].filter(Boolean) as NonNullable<typeof r>[];
-      if (live) setContact(contactName(slug, rows));
+      // merchants can't read reps itself; file_contact() names the contact on their own file
+      const c = await sb.rpc("file_contact", { _application_id: applicationId });
+      if (live) setContact(contactName(typeof c.data === "string" ? c.data : null));
     })();
     return () => {
       live = false;
