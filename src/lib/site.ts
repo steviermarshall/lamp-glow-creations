@@ -9,8 +9,11 @@ export const SITE = {
   partnersEmail: "partners@getlamp.app",
   /** Display format, e.g. "(908) 555-0123". Empty = hidden. */
   phone: "",
-  /** Mailing address for the footer, e.g. "123 Main St, Roselle, NJ 07203". Empty = hidden. */
-  address: "",
+  /**
+   * Mailing address. The site footer shows it under the legal name, and the application emails
+   * put it in their last line. Empty = hidden.
+   */
+  address: "206 E Broad St, Westfield, NJ 07090",
   areaServed: ["United States"],
 } as const;
 
