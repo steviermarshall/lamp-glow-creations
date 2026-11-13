@@ -483,8 +483,8 @@ function Results({
             </p>
             <p className="mt-2 text-sm leading-relaxed text-mist">
               Advances are priced with a factor rate, not an interest rate. This estimate shows what
-              the same money would cost if it were quoted like a loan, which makes offers easy to
-              compare. New York requires funders to show an estimated rate like this on their
+              the same money would cost if it were quoted as a yearly rate, which makes offers easy
+              to compare. New York requires funders to show an estimated rate like this on their
               offers.
             </p>
           </div>
