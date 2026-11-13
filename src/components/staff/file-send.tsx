@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Send } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/track";
 import { cn } from "@/lib/utils";
 import { stamp } from "@/lib/staff";
 import { btnPrimary, card } from "@/components/site/layout";
-import { chip } from "@/components/staff/field-styles";
+import { chip, chipButton } from "@/components/staff/field-styles";
 import { applicationPdfBytes } from "@/lib/application-pdf";
 import { detailsToPdf } from "@/lib/application-details";
 import { revealFullApplication } from "@/lib/full-application";
@@ -85,6 +85,9 @@ export function FileSend({
   const [busy, setBusy] = useState<"" | "preview" | "send">("");
   const [error, setError] = useState("");
   const [results, setResults] = useState<Result[] | null>(null);
+  // One send at a time, even if the button is pressed again before the screen has redrawn.
+  const working = useRef(false);
+  const resultsList = useRef<HTMLUListElement>(null);
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -131,7 +134,7 @@ export function FileSend({
 
   async function run(dryRun: boolean) {
     const sb = getSupabase();
-    if (!sb || chosen.length === 0) return;
+    if (!sb || chosen.length === 0 || working.current) return;
     if (!dryRun) {
       const list = chosen.map((m) => `${m.funder_name} (${m.submission_email})`).join("\n");
       const ok = window.confirm(
@@ -139,6 +142,7 @@ export function FileSend({
       );
       if (!ok) return;
     }
+    working.current = true;
     setBusy(dryRun ? "preview" : "send");
     setError("");
     setResults(null);
@@ -191,10 +195,14 @@ export function FileSend({
       if (!dryRun) {
         await load();
         onSent();
+        // The funders just sent to leave the list, so the Send button switches off and a browser
+        // would drop keyboard focus on the page. Put it on the result instead.
+        requestAnimationFrame(() => resultsList.current?.focus({ preventScroll: true }));
       }
     } catch (e) {
       setError(await errorText(e));
     } finally {
+      working.current = false;
       setBusy("");
     }
   }
@@ -264,7 +272,13 @@ export function FileSend({
             return (
               <li
                 key={m.funder_id}
-                className={cn("rounded-xl bg-sand px-4 py-3 text-sm", !can && "opacity-70")}
+                // A funder that can't be picked sits on the card's own ground with a hairline, not
+                // on sand. The red "Not a match" reason measured 4.36:1 on sand, under the 4.5:1
+                // that small text needs; on the card's ground it clears it in light and in dark.
+                className={cn(
+                  "rounded-xl px-4 py-3 text-sm",
+                  can ? "bg-sand" : "bg-white ring-1 ring-line",
+                )}
                 data-match={m.funder_name}
                 data-eligible={can ? "yes" : "no"}
               >
@@ -282,7 +296,9 @@ export function FileSend({
                       })
                     }
                   />
-                  <span className="font-semibold">{m.funder_name}</span>
+                  {/* Only the name is faded on a funder that can't be picked. Fading the whole
+                      row took the reason below it under readable contrast. */}
+                  <span className={cn("font-semibold", !can && "opacity-70")}>{m.funder_name}</span>
                   {m.submission_email && <span className="text-smoke">{m.submission_email}</span>}
                   {m.auto_send && <span className={chip}>sends automatically</span>}
                 </label>
@@ -308,7 +324,7 @@ export function FileSend({
       {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
       {results && (
-        <ul className="mt-3 space-y-1 text-sm" data-send-results>
+        <ul ref={resultsList} tabIndex={-1} className="mt-3 space-y-1 text-sm" data-send-results>
           {results.map((r) => (
             <li key={r.funder_id} data-result={r.status}>
               <span className="font-semibold">{r.funder}</span>:{" "}
@@ -328,16 +344,25 @@ export function FileSend({
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className={chip}
-            disabled={!!busy || chosen.length === 0 || !packageReady}
+            className={chipButton}
+            // While it works the button says so (aria-busy) and stays in place; switching it off
+            // would throw a keyboard user's focus back to the top of the page.
+            disabled={busy === "send" || chosen.length === 0 || !packageReady}
+            aria-disabled={busy === "preview" || undefined}
+            aria-busy={busy === "preview" || undefined}
             onClick={() => void run(true)}
           >
             {busy === "preview" ? "Checking…" : "Preview"}
           </button>
           <button
             type="button"
-            className={cn(btnPrimary, "px-4 py-2.5")}
-            disabled={!!busy || chosen.length === 0 || !packageReady || !mailbox}
+            className={cn(
+              btnPrimary,
+              "px-4 py-2.5 max-sm:min-h-11 aria-disabled:pointer-events-none aria-disabled:opacity-50",
+            )}
+            disabled={busy === "preview" || chosen.length === 0 || !packageReady || !mailbox}
+            aria-disabled={busy === "send" || undefined}
+            aria-busy={busy === "send" || undefined}
             onClick={() => void run(false)}
           >
             {busy === "send" ? (

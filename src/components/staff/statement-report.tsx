@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Loader2, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { stamp } from "@/lib/staff";
 import { card } from "@/components/site/layout";
-import { chip, input } from "@/components/staff/field-styles";
+import { chipButton, input } from "@/components/staff/field-styles";
 import { postAsMe } from "@/lib/server-api";
 import { ordinal, type Figures } from "@/lib/statement-read";
 
@@ -57,6 +57,17 @@ export function StatementReport({ fileId }: { fileId: string }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  // One read run or one confirm at a time, even if the button is pressed again before the redraw.
+  const working = useRef(false);
+  const root = useRef<HTMLElement>(null);
+
+  // When the button a person pressed goes away (every statement read, or the report confirmed), a
+  // browser drops keyboard focus on the page. Bring it back to this card so they keep their place.
+  const keepFocus = () =>
+    requestAnimationFrame(() => {
+      const at = document.activeElement;
+      if (!at || at === document.body) root.current?.focus({ preventScroll: true });
+    });
 
   const call = useCallback(
     async (body: object) => {
@@ -89,19 +100,28 @@ export function StatementReport({ fileId }: { fileId: string }) {
   const f = s.report?.confirmed ?? s.report?.figures ?? null;
 
   async function readAll() {
+    if (working.current) return;
+    working.current = true;
     setError("");
-    for (const st of todo) {
-      setReading(st.document_id);
-      const r = await call({ action: "read", document_id: st.document_id });
-      if (!r.ok && r.status !== 502) {
-        setError(r.data.error ?? "Couldn't read that statement.");
-        break;
+    try {
+      for (const st of todo) {
+        setReading(st.document_id);
+        const r = await call({ action: "read", document_id: st.document_id });
+        if (!r.ok && r.status !== 502) {
+          setError(r.data.error ?? "Couldn't read that statement.");
+          break;
+        }
       }
+    } finally {
+      working.current = false;
+      setReading(null);
+      keepFocus();
     }
-    setReading(null);
   }
 
   async function confirm() {
+    if (working.current) return;
+    working.current = true;
     setSaving(true);
     setError("");
     const numbers: Record<string, number> = {};
@@ -110,15 +130,23 @@ export function StatementReport({ fileId }: { fileId: string }) {
       if (raw === undefined || raw.trim() === "") continue;
       numbers[fl.key] = Number(raw.replace(/[$,\s]/g, ""));
     }
-    const r = await call({ action: "confirm", numbers });
-    setSaving(false);
+    let r: Awaited<ReturnType<typeof call>>;
+    try {
+      r = await call({ action: "confirm", numbers });
+    } finally {
+      working.current = false;
+      setSaving(false);
+    }
     if (!r.ok) return setError(r.data.error ?? "Couldn't confirm the report.");
     setEditing(false);
     setDraft({});
+    keepFocus();
   }
 
   return (
     <section
+      ref={root}
+      tabIndex={-1}
       className={cn(card, "p-6")}
       data-statement-report={s.report?.confirmed ? "confirmed" : f ? "read" : "none"}
     >
@@ -145,8 +173,12 @@ export function StatementReport({ fileId }: { fileId: string }) {
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              className={chip}
-              disabled={!!reading || s.paused}
+              className={chipButton}
+              // While it reads the button says so (aria-busy) and stays in place; switching it off
+              // would throw a keyboard user's focus back to the top of the page.
+              disabled={s.paused}
+              aria-disabled={!!reading || undefined}
+              aria-busy={!!reading || undefined}
               onClick={() => void readAll()}
             >
               {reading ? <Loader2 className="size-3.5 animate-spin" /> : null}
@@ -283,8 +315,9 @@ export function StatementReport({ fileId }: { fileId: string }) {
               <>
                 <button
                   type="button"
-                  className={chip}
-                  disabled={saving}
+                  className={chipButton}
+                  aria-disabled={saving || undefined}
+                  aria-busy={saving || undefined}
                   onClick={() => void confirm()}
                 >
                   {saving ? (
@@ -296,7 +329,7 @@ export function StatementReport({ fileId }: { fileId: string }) {
                 </button>
                 <button
                   type="button"
-                  className={chip}
+                  className={chipButton}
                   onClick={() => (setEditing(false), setDraft({}))}
                 >
                   Cancel
@@ -307,8 +340,10 @@ export function StatementReport({ fileId }: { fileId: string }) {
                 {!s.report?.confirmed && (
                   <button
                     type="button"
-                    className={chip}
-                    disabled={saving || !!reading}
+                    className={chipButton}
+                    disabled={!!reading}
+                    aria-disabled={saving || undefined}
+                    aria-busy={saving || undefined}
                     onClick={() => void confirm()}
                   >
                     {saving ? (
@@ -321,7 +356,7 @@ export function StatementReport({ fileId }: { fileId: string }) {
                 )}
                 <button
                   type="button"
-                  className={chip}
+                  className={chipButton}
                   disabled={!!reading}
                   onClick={() => setEditing(true)}
                 >

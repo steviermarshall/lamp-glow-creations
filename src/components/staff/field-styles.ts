@@ -3,6 +3,12 @@ export const input = "w-full rounded-full bg-white px-4 py-2 text-sm ring-1 ring
 export const textarea = "min-h-20 w-full rounded-xl bg-white px-4 py-3 text-sm ring-1 ring-line";
 export const chip =
   "inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold ring-1 ring-line transition hover:ring-ink/30 disabled:opacity-40";
+/**
+ * A chip used as a button. Same look as `chip`, plus two things a button needs: on a phone it is
+ * tall enough for a thumb (44px), and it can show "working" with aria-disabled instead of being
+ * switched off, so keyboard focus stays on the button the person pressed.
+ */
+export const chipButton = `${chip} max-sm:min-h-11 max-sm:px-4 aria-disabled:pointer-events-none aria-disabled:opacity-40`;
 export const chipDark =
   "inline-flex items-center gap-1 rounded-full bg-ink px-3 py-1 text-xs font-semibold text-white transition hover:brightness-110 disabled:opacity-40";
 
