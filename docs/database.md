@@ -108,6 +108,7 @@ against a local Supabase stack.
 | file_notes | notes & calls on a file: team or admins-only notes, calls assigned to a rep with a due date and an outcome | (application_id, created_at), open calls by (assigned_to, due_on) |
 | brain_briefs | Today (Lamp Brain): the day's written brief per staff member, its token counts and cost; only Lamp's server reads or writes it | unique (user_id, day), created_at |
 | brain_drafts | follow-up drafts (Lamp Brain): each Claude-written text/email/call notes for a Today item, with placeholders for names, and what it cost; only Lamp's server reads or writes it | unique (user_id, kind, item_id, signal, day, docs), (user_id, day), created_at |
+| engine_outbox | Email review: each email the War Room engine wants to send, waiting for an admin on Staff > Email engine (the business, its address, the words, a fingerprint of the words), then what happened to it; only Lamp's server reads or writes it, an approval is a server write for a signed-in admin, and a sent email can never change again | unique (engine_id), status + batch_date |
 | offer_internal_notes | the rep's note on an offer, one per offer; staff only | pk offer_id |
 | leads | email before sign-up, converted on application | lower(email), created_at, rep_slug, unconverted partial |
 | funders | the private lender table with criteria and commission points | active |

@@ -12,6 +12,7 @@ import { FileView } from "@/components/staff/file-view";
 import { EngineLeads } from "@/components/staff/engine-leads";
 import { MyLists } from "@/components/staff/my-lists";
 import { EmailReplies } from "@/components/staff/email-replies";
+import { EmailReview } from "@/components/staff/email-review";
 import { EngineStatus } from "@/components/staff/engine-status";
 import { MyCalls } from "@/components/staff/notes-calls";
 import { Today } from "@/components/staff/today";
@@ -272,7 +273,10 @@ function Staff() {
           <EmailReplies isAdmin={access.isAdmin} reps={reps} />
         ) : view === "autopilot" ? (
           access.isAdmin ? (
-            <EngineStatus />
+            <>
+              <EmailReview />
+              <EngineStatus />
+            </>
           ) : (
             <p className="mt-8 text-sm text-smoke">The email engine is for admins.</p>
           )

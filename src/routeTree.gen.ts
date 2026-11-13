@@ -51,8 +51,10 @@ import { Route as ApiDiscordSetupRouteImport } from './routes/api.discord.setup'
 import { Route as ApiDocumentsRequestRouteImport } from './routes/api.documents.request'
 import { Route as ApiDocumentsRequestUploadRouteImport } from './routes/api.documents.request-upload'
 import { Route as ApiDocumentsUploadRouteImport } from './routes/api.documents.upload'
+import { Route as ApiEngineOutboxRouteImport } from './routes/api.engine.outbox'
 import { Route as ApiEnginePushRouteImport } from './routes/api.engine.push'
 import { Route as ApiEngineReplyRouteImport } from './routes/api.engine.reply'
+import { Route as ApiEngineReviewRouteImport } from './routes/api.engine.review'
 import { Route as ApiEngineStatusRouteImport } from './routes/api.engine.status'
 import { Route as ApiFundersSendRouteImport } from './routes/api.funders.send'
 import { Route as ApiGmailCallbackRouteImport } from './routes/api.gmail.callback'
@@ -272,6 +274,11 @@ const ApiDocumentsUploadRoute = ApiDocumentsUploadRouteImport.update({
   path: '/upload',
   getParentRoute: () => ApiDocumentsRoute,
 } as any)
+const ApiEngineOutboxRoute = ApiEngineOutboxRouteImport.update({
+  id: '/api/engine/outbox',
+  path: '/api/engine/outbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiEnginePushRoute = ApiEnginePushRouteImport.update({
   id: '/api/engine/push',
   path: '/api/engine/push',
@@ -280,6 +287,11 @@ const ApiEnginePushRoute = ApiEnginePushRouteImport.update({
 const ApiEngineReplyRoute = ApiEngineReplyRouteImport.update({
   id: '/api/engine/reply',
   path: '/api/engine/reply',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiEngineReviewRoute = ApiEngineReviewRouteImport.update({
+  id: '/api/engine/review',
+  path: '/api/engine/review',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiEngineStatusRoute = ApiEngineStatusRouteImport.update({
@@ -361,8 +373,10 @@ export interface FileRoutesByFullPath {
   '/api/documents/request': typeof ApiDocumentsRequestRoute
   '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
+  '/api/engine/outbox': typeof ApiEngineOutboxRoute
   '/api/engine/push': typeof ApiEnginePushRoute
   '/api/engine/reply': typeof ApiEngineReplyRoute
+  '/api/engine/review': typeof ApiEngineReviewRoute
   '/api/engine/status': typeof ApiEngineStatusRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
@@ -414,8 +428,10 @@ export interface FileRoutesByTo {
   '/api/documents/request': typeof ApiDocumentsRequestRoute
   '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
+  '/api/engine/outbox': typeof ApiEngineOutboxRoute
   '/api/engine/push': typeof ApiEnginePushRoute
   '/api/engine/reply': typeof ApiEngineReplyRoute
+  '/api/engine/review': typeof ApiEngineReviewRoute
   '/api/engine/status': typeof ApiEngineStatusRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
@@ -468,8 +484,10 @@ export interface FileRoutesById {
   '/api/documents/request': typeof ApiDocumentsRequestRoute
   '/api/documents/request-upload': typeof ApiDocumentsRequestUploadRoute
   '/api/documents/upload': typeof ApiDocumentsUploadRoute
+  '/api/engine/outbox': typeof ApiEngineOutboxRoute
   '/api/engine/push': typeof ApiEnginePushRoute
   '/api/engine/reply': typeof ApiEngineReplyRoute
+  '/api/engine/review': typeof ApiEngineReviewRoute
   '/api/engine/status': typeof ApiEngineStatusRoute
   '/api/funders/send': typeof ApiFundersSendRoute
   '/api/gmail/callback': typeof ApiGmailCallbackRoute
@@ -523,8 +541,10 @@ export interface FileRouteTypes {
     | '/api/documents/request'
     | '/api/documents/request-upload'
     | '/api/documents/upload'
+    | '/api/engine/outbox'
     | '/api/engine/push'
     | '/api/engine/reply'
+    | '/api/engine/review'
     | '/api/engine/status'
     | '/api/funders/send'
     | '/api/gmail/callback'
@@ -576,8 +596,10 @@ export interface FileRouteTypes {
     | '/api/documents/request'
     | '/api/documents/request-upload'
     | '/api/documents/upload'
+    | '/api/engine/outbox'
     | '/api/engine/push'
     | '/api/engine/reply'
+    | '/api/engine/review'
     | '/api/engine/status'
     | '/api/funders/send'
     | '/api/gmail/callback'
@@ -629,8 +651,10 @@ export interface FileRouteTypes {
     | '/api/documents/request'
     | '/api/documents/request-upload'
     | '/api/documents/upload'
+    | '/api/engine/outbox'
     | '/api/engine/push'
     | '/api/engine/reply'
+    | '/api/engine/review'
     | '/api/engine/status'
     | '/api/funders/send'
     | '/api/gmail/callback'
@@ -680,8 +704,10 @@ export interface RootRouteChildren {
   ApiDiscordInteractionsRoute: typeof ApiDiscordInteractionsRoute
   ApiDiscordLinkRoute: typeof ApiDiscordLinkRoute
   ApiDiscordSetupRoute: typeof ApiDiscordSetupRoute
+  ApiEngineOutboxRoute: typeof ApiEngineOutboxRoute
   ApiEnginePushRoute: typeof ApiEnginePushRoute
   ApiEngineReplyRoute: typeof ApiEngineReplyRoute
+  ApiEngineReviewRoute: typeof ApiEngineReviewRoute
   ApiEngineStatusRoute: typeof ApiEngineStatusRoute
   ApiFundersSendRoute: typeof ApiFundersSendRoute
   ApiGmailCallbackRoute: typeof ApiGmailCallbackRoute
@@ -986,6 +1012,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDocumentsUploadRouteImport
       parentRoute: typeof ApiDocumentsRoute
     }
+    '/api/engine/outbox': {
+      id: '/api/engine/outbox'
+      path: '/api/engine/outbox'
+      fullPath: '/api/engine/outbox'
+      preLoaderRoute: typeof ApiEngineOutboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/engine/push': {
       id: '/api/engine/push'
       path: '/api/engine/push'
@@ -998,6 +1031,13 @@ declare module '@tanstack/react-router' {
       path: '/api/engine/reply'
       fullPath: '/api/engine/reply'
       preLoaderRoute: typeof ApiEngineReplyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/engine/review': {
+      id: '/api/engine/review'
+      path: '/api/engine/review'
+      fullPath: '/api/engine/review'
+      preLoaderRoute: typeof ApiEngineReviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/engine/status': {
@@ -1119,8 +1159,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDiscordInteractionsRoute: ApiDiscordInteractionsRoute,
   ApiDiscordLinkRoute: ApiDiscordLinkRoute,
   ApiDiscordSetupRoute: ApiDiscordSetupRoute,
+  ApiEngineOutboxRoute: ApiEngineOutboxRoute,
   ApiEnginePushRoute: ApiEnginePushRoute,
   ApiEngineReplyRoute: ApiEngineReplyRoute,
+  ApiEngineReviewRoute: ApiEngineReviewRoute,
   ApiEngineStatusRoute: ApiEngineStatusRoute,
   ApiFundersSendRoute: ApiFundersSendRoute,
   ApiGmailCallbackRoute: ApiGmailCallbackRoute,
