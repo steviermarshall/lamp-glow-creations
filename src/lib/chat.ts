@@ -110,18 +110,14 @@ export function lendingWords(body: string): string[] {
   return [...seen.values()];
 }
 
-type RepRow = { slug: string; name: string; admin_slug?: string | null };
-
 /**
  * Who the merchant is talking to, as the application emails and the signed PDF already name them:
  * the rep's team lead when the rep has one, otherwise the rep. An unassigned file: the Lamp team.
+ * The database picks the person (file_contact(), for the merchant's own file only: merchants read
+ * no reps rows); this keeps their first name.
  */
-export function contactName(repSlug: string | null | undefined, reps: RepRow[]): string {
-  if (!repSlug) return "the Lamp team";
-  const rep = reps.find((r) => r.slug === repSlug);
-  if (!rep) return "the Lamp team";
-  const lead = rep.admin_slug ? reps.find((r) => r.slug === rep.admin_slug) : undefined;
-  return firstName(lead?.name ?? rep.name) || "the Lamp team";
+export function contactName(name: string | null | undefined): string {
+  return firstName(name) || "the Lamp team";
 }
 
 /**

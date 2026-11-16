@@ -147,7 +147,8 @@ export function CompleteApplication({
         );
       }
       if (a?.rep_slug) {
-        const rep = await sb.from("reps").select("name").eq("slug", a.rep_slug).maybeSingle();
+        // merchants can't read reps itself; rep_card() gives an active rep's public fields
+        const rep = await sb.rpc("rep_card", { _slug: a.rep_slug }).maybeSingle();
         if (live) setRepName((rep.data as { name: string } | null)?.name ?? null);
       }
     })();
