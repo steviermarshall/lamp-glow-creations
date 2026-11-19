@@ -24,6 +24,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApiActivityRouteImport } from './routes/api.activity'
 import { Route as ApiApplicationDetailsRouteImport } from './routes/api.application-details'
 import { Route as ApiApplicationInvitesRouteImport } from './routes/api.application-invites'
+import { Route as ApiCalendarRouteImport } from './routes/api.calendar'
 import { Route as ApiDocumentsRouteImport } from './routes/api.documents'
 import { Route as ApiLeadsRouteImport } from './routes/api.leads'
 import { Route as ApiServerCheckRouteImport } from './routes/api.server-check'
@@ -136,6 +137,11 @@ const ApiApplicationDetailsRoute = ApiApplicationDetailsRouteImport.update({
 const ApiApplicationInvitesRoute = ApiApplicationInvitesRouteImport.update({
   id: '/api/application-invites',
   path: '/api/application-invites',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCalendarRoute = ApiCalendarRouteImport.update({
+  id: '/api/calendar',
+  path: '/api/calendar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDocumentsRoute = ApiDocumentsRouteImport.update({
@@ -346,6 +352,7 @@ export interface FileRoutesByFullPath {
   '/api/activity': typeof ApiActivityRoute
   '/api/application-details': typeof ApiApplicationDetailsRoute
   '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/api/calendar': typeof ApiCalendarRoute
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/leads': typeof ApiLeadsRoute
   '/api/server-check': typeof ApiServerCheckRoute
@@ -401,6 +408,7 @@ export interface FileRoutesByTo {
   '/api/activity': typeof ApiActivityRoute
   '/api/application-details': typeof ApiApplicationDetailsRoute
   '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/api/calendar': typeof ApiCalendarRoute
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/leads': typeof ApiLeadsRoute
   '/api/server-check': typeof ApiServerCheckRoute
@@ -457,6 +465,7 @@ export interface FileRoutesById {
   '/api/activity': typeof ApiActivityRoute
   '/api/application-details': typeof ApiApplicationDetailsRoute
   '/api/application-invites': typeof ApiApplicationInvitesRoute
+  '/api/calendar': typeof ApiCalendarRoute
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/leads': typeof ApiLeadsRoute
   '/api/server-check': typeof ApiServerCheckRoute
@@ -514,6 +523,7 @@ export interface FileRouteTypes {
     | '/api/activity'
     | '/api/application-details'
     | '/api/application-invites'
+    | '/api/calendar'
     | '/api/documents'
     | '/api/leads'
     | '/api/server-check'
@@ -569,6 +579,7 @@ export interface FileRouteTypes {
     | '/api/activity'
     | '/api/application-details'
     | '/api/application-invites'
+    | '/api/calendar'
     | '/api/documents'
     | '/api/leads'
     | '/api/server-check'
@@ -624,6 +635,7 @@ export interface FileRouteTypes {
     | '/api/activity'
     | '/api/application-details'
     | '/api/application-invites'
+    | '/api/calendar'
     | '/api/documents'
     | '/api/leads'
     | '/api/server-check'
@@ -680,6 +692,7 @@ export interface RootRouteChildren {
   ApiActivityRoute: typeof ApiActivityRoute
   ApiApplicationDetailsRoute: typeof ApiApplicationDetailsRoute
   ApiApplicationInvitesRoute: typeof ApiApplicationInvitesRoute
+  ApiCalendarRoute: typeof ApiCalendarRoute
   ApiDocumentsRoute: typeof ApiDocumentsRouteWithChildren
   ApiLeadsRoute: typeof ApiLeadsRoute
   ApiServerCheckRoute: typeof ApiServerCheckRoute
@@ -821,6 +834,13 @@ declare module '@tanstack/react-router' {
       path: '/api/application-invites'
       fullPath: '/api/application-invites'
       preLoaderRoute: typeof ApiApplicationInvitesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/calendar': {
+      id: '/api/calendar'
+      path: '/api/calendar'
+      fullPath: '/api/calendar'
+      preLoaderRoute: typeof ApiCalendarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/documents': {
@@ -1135,6 +1155,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiActivityRoute: ApiActivityRoute,
   ApiApplicationDetailsRoute: ApiApplicationDetailsRoute,
   ApiApplicationInvitesRoute: ApiApplicationInvitesRoute,
+  ApiCalendarRoute: ApiCalendarRoute,
   ApiDocumentsRoute: ApiDocumentsRouteWithChildren,
   ApiLeadsRoute: ApiLeadsRoute,
   ApiServerCheckRoute: ApiServerCheckRoute,
