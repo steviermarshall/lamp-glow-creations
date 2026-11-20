@@ -263,7 +263,15 @@ export function SiteFooter() {
                 </a>
               </li>
             )}
-            {SITE.address && <li>{SITE.address}</li>}
+            {SITE.address && (
+              <li className="pt-2">
+                <address className="not-italic leading-relaxed" data-site-address>
+                  {SITE.legalName}
+                  <br />
+                  {SITE.address}
+                </address>
+              </li>
+            )}
           </ul>
         </div>
         <FooterCol
