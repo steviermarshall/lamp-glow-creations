@@ -469,7 +469,7 @@ const OPTIONS: { icon: LucideIcon; title: string; body: string }[] = [
   },
   {
     icon: Banknote,
-    title: "Short-term loans",
+    title: "Term financing",
     body: "A fixed amount paid back over months, with a set payment schedule.",
   },
   {
@@ -489,7 +489,7 @@ const OPTIONS: { icon: LucideIcon; title: string; body: string }[] = [
   },
   {
     icon: Landmark,
-    title: "SBA loans",
+    title: "SBA financing",
     body: "Longer terms and lower costs for established businesses that can wait.",
   },
 ];
