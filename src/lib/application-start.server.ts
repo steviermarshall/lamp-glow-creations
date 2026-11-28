@@ -3,7 +3,8 @@
 // phone and email before the long form. That's saved at once
 // as a lead with the rep (utm.ref, through leads_before_insert), and the rep is emailed, with Asad
 // and Stevie copied, so they can call while the person is still on the page. Once per email and
-// rep a day, and within the lead form's per-network limit. Never import this from browser code.
+// rep a day, and within the lead form's per-network limit. If the save fails twice the email still
+// goes, marked "Not saved in Lamp" (see application-start.ts). Never import this from browser code.
 import {
   gmailAccessToken,
   GMAIL_SEND_URL,
@@ -18,8 +19,16 @@ import { clientIp, readJson } from "@/lib/application-links.server";
 import { EMAIL_RE, fromName, hashToken, isToken, newToken } from "@/lib/application-links";
 import { isStage, rank, type Stage } from "@/lib/application-progress";
 import { NEW_APPLICATION_COPY } from "@/lib/site";
-import { recipients, startedEmail } from "@/lib/new-application-email";
-import { cleanChoices, quickLines } from "@/lib/apply";
+import { cleanChoices } from "@/lib/apply";
+import {
+  gmailSend,
+  runStart,
+  startFailureLine,
+  type Mail,
+  type SendResult,
+  type StartFailure,
+  type StartRep,
+} from "@/lib/application-start";
 
 const SLUG = /^[a-z0-9][a-z0-9-]{1,31}$/;
 const DAY_MS = 86_400_000;
@@ -66,106 +75,125 @@ export async function startApplication(request: Request): Promise<Response> {
     return json(400, { error: "Enter a 10-digit phone number." });
 
   const svc = service();
-  type RepRow = { name: string; user_id: string | null; active: boolean };
-  let r: RepRow | null = null;
-  if (!website) {
-    const repRow = await svc
-      .from("reps")
-      .select("slug,name,user_id,active")
-      .eq("slug", rep)
-      .maybeSingle();
-    const found = repRow.data as RepRow | null;
-    if (!found?.active) return json(404, { error: "That link isn't active." });
-    r = found;
-  }
-
-  // the same person on the same link today: one lead, one heads-up
-  // (on the website, "the same link" is the website: leads with no rep)
-  const recent = svc
-    .from("leads")
-    .select("id", { count: "exact", head: true })
-    .eq("email", email)
-    .gte("created_at", new Date(Date.now() - DAY_MS).toISOString());
-  const again = await (website ? recent.is("rep_slug", null) : recent.eq("rep_slug", rep));
   const form = body.form === "pdf" ? "pdf" : "online";
-  if ((again.count ?? 0) > 0) {
-    // the same person again today: keep the lead, hand this browser a way to report progress
-    return json(200, { ok: true, progress: await linkProgress(svc, email, rep, form) });
-  }
-
-  const allowed = await svc.rpc(
-    "lead_intake_allowed" as never,
-    { _ip: clientIp(request) } as never,
-  );
-  if (!allowed.error && allowed.data === false)
-    return json(429, { error: "Too many tries from this network. Try again in an hour." });
-
   // a rep's link carries ref (leads_before_insert gives the lead that rep); the website none
   const utm: Record<string, string> = website ? { utm_source: "website" } : { ref: rep };
   if (body.utm && typeof body.utm === "object" && !Array.isArray(body.utm)) {
     for (const [k, v] of Object.entries(body.utm as Record<string, unknown>).slice(0, 10))
       if (/^utm_[a-z]{1,20}$/.test(k) && typeof v === "string") utm[k] = v.slice(0, 200);
   }
-  const saved = await visitor()
-    .from("leads")
-    .insert({
-      email,
-      first_name: first,
-      phone,
-      answers: {
-        ...quick,
-        source: "application_link",
-        ...(website ? { website: true } : {}),
-        form,
-        lastName: last,
-        ...(businessName ? { businessName } : {}),
-        ...(consent ? { phoneConsent: `${new Date().toISOString()} | ${consent}` } : {}),
-      } as never,
-      utm: utm as never,
-    });
-  if (saved.error) return json(500, { error: "Couldn't save that. Try again." });
+  const lead = {
+    email,
+    first_name: first,
+    phone,
+    answers: {
+      ...quick,
+      source: "application_link",
+      ...(website ? { website: true } : {}),
+      form,
+      lastName: last,
+      ...(businessName ? { businessName } : {}),
+      ...(consent ? { phoneConsent: `${new Date().toISOString()} | ${consent}` } : {}),
+    } as never,
+    utm: utm as never,
+  };
 
-  // the heads-up: best effort, the lead is saved either way
-  try {
-    // a rep's lead goes to the rep with the copy list on cc; a website lead to the copy list
-    const profile = r?.user_id
-      ? await svc.from("profiles").select("email").eq("id", r.user_id).maybeSingle()
-      : null;
-    const repEmail = (profile?.data as { email?: string } | null)?.email ?? null;
-    const to = recipients(repEmail, NEW_APPLICATION_COPY);
-    const access = to ? await gmailAccessToken(svc) : null;
-    if (to && access && !("error" in access)) {
-      const m = startedEmail({
-        repName: r ? r.name : null,
-        first,
-        last,
-        business: businessName,
-        phone,
-        email,
-        textsOk: !!consent,
-        answered: quickLines(quick),
-      });
-      await fetch(GMAIL_SEND_URL(), {
+  // the order (rep, same person today, network cap, save twice, heads-up) is in runStart,
+  // application-start.ts, where it's unit-tested; this hands it the database and Gmail
+  const reply = await runStart(
+    { rep, first, last, email, phone, businessName, textsOk: !!consent, quick },
+    {
+      copy: NEW_APPLICATION_COPY,
+      findRep: async (slug) => {
+        try {
+          const got = await svc
+            .from("reps")
+            .select("slug,name,user_id,active")
+            .eq("slug", slug)
+            .maybeSingle();
+          return { rep: got.data as StartRep | null, error: !!got.error };
+        } catch {
+          return { rep: null, error: true };
+        }
+      },
+      seenToday: async () => {
+        // on the website, "the same link" is the website: leads with no rep
+        try {
+          const recent = svc
+            .from("leads")
+            .select("id", { count: "exact", head: true })
+            .eq("email", email)
+            .gte("created_at", new Date(Date.now() - DAY_MS).toISOString());
+          const again = await (website ? recent.is("rep_slug", null) : recent.eq("rep_slug", rep));
+          return (again.count ?? 0) > 0;
+        } catch {
+          return false;
+        }
+      },
+      intakeAllowed: async () => {
+        try {
+          const allowed = await svc.rpc(
+            "lead_intake_allowed" as never,
+            { _ip: clientIp(request) } as never,
+          );
+          return !(!allowed.error && allowed.data === false);
+        } catch {
+          return true;
+        }
+      },
+      insertLead: async () => {
+        try {
+          const saved = await visitor().from("leads").insert(lead);
+          return !saved.error;
+        } catch {
+          return false;
+        }
+      },
+      repEmail: async (userId) => {
+        const profile = await svc.from("profiles").select("email").eq("id", userId).maybeSingle();
+        return (profile.data as { email?: string } | null)?.email ?? null;
+      },
+      send: (m) => sendHeadsUp(svc, m),
+      progress: () => linkProgress(svc, email, rep, form),
+      fail: countFailure,
+      pause: (ms) => new Promise((r) => setTimeout(r, ms)),
+    },
+  );
+  return json(reply.status, reply.body);
+}
+
+// How many starts went wrong, by reason, since this server started: logged with no name, email
+// or phone, so a run of failures shows in the logs. (A dashboard count waits for the site_events
+// 'action' kind.)
+const failures = new Map<StartFailure, number>();
+function countFailure(reason: StartFailure, detail?: string) {
+  const n = (failures.get(reason) ?? 0) + 1;
+  failures.set(reason, n);
+  console.warn(startFailureLine(reason, n, detail));
+}
+
+/** The heads-up through the company mailbox (gmailSend says why when it didn't go). */
+function sendHeadsUp(svc: ReturnType<typeof service>, m: Mail): Promise<SendResult> {
+  return gmailSend(m, {
+    token: () => gmailAccessToken(svc),
+    post: (access, mail) =>
+      fetch(GMAIL_SEND_URL(), {
         method: "POST",
-        headers: { Authorization: `Bearer ${access.access}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           raw: b64url(
             buildMime({
               from: `${fromName("Lamp")} <${MAILBOX()}>`,
-              to: to.to,
-              cc: to.cc,
-              subject: m.subject,
-              body: m.text,
+              to: mail.to,
+              cc: mail.cc,
+              subject: mail.subject,
+              body: mail.text,
               attachments: [],
             }),
           ),
         }),
-      });
-    }
-  } catch {
-    /* the lead is on file; the rep sees it on the dashboard */
-  }
-  return json(200, { ok: true, progress: await linkProgress(svc, email, rep, form) });
+      }),
+  });
 }
 
 /**

@@ -52,6 +52,7 @@ import {
   type Stage,
 } from "@/lib/application-progress";
 import { fixTarget, gapHeadline, gapList, isQuestionGap, nextGap } from "@/lib/paper-gaps";
+import { postStart, startOutcome } from "@/lib/application-start";
 import { PageShell } from "@/components/site/layout";
 import { SignBlock } from "@/components/application/sign-block";
 import { emptySigning, YES_NO, type Signing } from "@/components/application/form-kit";
@@ -273,6 +274,7 @@ export function PaperApplication({
   const contactKey = contact ? JSON.stringify(contact) : "";
   const captured = useRef(false);
   const [tokenReady, setTokenReady] = useState(false);
+  const [startProblem, setStartProblem] = useState("");
   useEffect(() => {
     // a personal link already knows who it's for, and its opens and starts are counted on it
     if (token || !contactKey || captured.current || open === null || open === "error") return;
@@ -291,30 +293,32 @@ export function PaperApplication({
       };
       const params = new URL(window.location.href).searchParams;
       const utm = Object.fromEntries([...params].filter(([k]) => k.startsWith("utm_")));
-      void fetch("/api/application/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rep: repSlug,
-          first_name: c.first,
-          last_name: c.last,
-          phone: c.phone,
-          email: c.email,
-          phone_consent: null,
-          utm,
-          form: "pdf",
+      // tried again once on a 5xx or no answer (postStart); a 400 is shown to the person; a change
+      // to the contact boxes tries again after anything that didn't save
+      void postStart(() =>
+        fetch("/api/application/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rep: repSlug,
+            first_name: c.first,
+            last_name: c.last,
+            phone: c.phone,
+            email: c.email,
+            phone_consent: null,
+            utm,
+            form: "pdf",
+          }),
         }),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((j: { progress?: unknown } | null) => {
-          if (typeof j?.progress === "string") {
-            saveProgressToken(repSlug, j.progress);
-            setTokenReady(true);
-          } else captured.current = false;
-        })
-        .catch(() => {
-          captured.current = false;
-        });
+      ).then((a) => {
+        const o = startOutcome(a);
+        setStartProblem(o.problem);
+        if (o.token) {
+          saveProgressToken(repSlug, o.token);
+          setTokenReady(true);
+        }
+        if (o.retryOnChange) captured.current = false;
+      });
     }, SETTLE_MS);
     return () => window.clearTimeout(t);
   }, [contactKey, open, repSlug, token]);
@@ -543,6 +547,12 @@ export function PaperApplication({
                 </a>
                 .
               </p>
+              {startProblem && (
+                <p className="mt-2 text-sm font-semibold text-destructive" role="alert">
+                  Your details didn&apos;t reach {repFirst}: {startProblem} Fix it in the
+                  owner&apos;s boxes on the form.
+                </p>
+              )}
             </div>
 
             {phoneMode && token && (

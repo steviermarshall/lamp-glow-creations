@@ -149,8 +149,16 @@ export function newApplicationEmail(a: NewApplication): { subject: string; text:
 }
 
 /**
+ * Why a heads-up isn't the usual one. "not_saved": Lamp couldn't save the start, so the team adds
+ * the person by hand. "inactive_link": they used a rep link that has been switched off, so the
+ * copy list gets it and gives them to a rep.
+ */
+export type StartedNote = "not_saved" | "inactive_link";
+
+/**
  * The heads-up a rep gets the moment someone starts the application on their link (the first
- * screen: name, phone, email), with Asad and Stevie copied. The best time to call is now.
+ * screen: name, phone, email), with Asad and Stevie copied. The best time to call is now. Only
+ * what they typed on that screen and the quick questions: never an SSN or the long form.
  */
 export function startedEmail(a: {
   repName: string | null;
@@ -162,16 +170,48 @@ export function startedEmail(a: {
   textsOk: boolean;
   /** The quick questions they answered first, a line each ("Looking for: $50k – $100k"). */
   answered?: string[];
+  note?: StartedNote;
+  /**
+   * The link's slug when Lamp couldn't look its rep up (the database failed, not "no such rep"):
+   * the copy list gets it instead of the rep, so it names the link and asks them to pass it on.
+   */
+  unknownRep?: string;
 }): { subject: string; text: string } {
   const answered = a.answered ?? [];
   const name = `${a.first} ${a.last}`.trim();
-  const subject = `Started: ${name} opened the application${a.repName ? ` on ${a.repName}'s link` : " on the website"}`;
+  const inactive = a.note === "inactive_link";
+  const unknown = !inactive && a.unknownRep ? a.unknownRep : "";
+  const repName = unknown ? null : a.repName;
+  const where = unknown
+    ? ` on the "${unknown}" link`
+    : repName
+      ? ` on ${repName}'s link`
+      : " on the website";
+  const subject = inactive
+    ? `Inactive link: ${name} tried to start the application${where}`
+    : `${a.note === "not_saved" ? "NOT SAVED IN LAMP · " : ""}${unknown ? "REP NOT LOOKED UP · " : ""}Started: ${name} opened the application${where}`;
+  const intro = inactive
+    ? [
+        `${name} tried to start the application on ${a.repName ?? "a rep"}'s link, but that link is inactive, so Lamp didn't save them.`,
+        "Not saved in Lamp, add this person by hand and give them to a rep. Now is the time to call.",
+      ]
+    : [
+        unknown
+          ? `${name} just started the application on the rep link "${unknown}". Lamp couldn't look up that rep just now, so this came to you instead of them. Pass them to that rep: they haven't signed yet, so now is the time to call.`
+          : repName
+            ? `${name} just started the application on your link. They haven't signed yet, so now is the time to call.`
+            : `${name} just started the application on the website (getlamp.app). No rep has them yet. They haven't signed, so now is the time to call.`,
+        ...(a.note === "not_saved"
+          ? [
+              "",
+              "Not saved in Lamp, add this person by hand. Lamp couldn't save this start, so they aren't on the dashboard and won't get finish reminders.",
+            ]
+          : []),
+      ];
   const text = [
-    `${a.repName?.split(" ")[0] || "Hi"},`,
+    `${(!inactive && repName?.split(" ")[0]) || "Hi"},`,
     "",
-    a.repName
-      ? `${name} just started the application on your link. They haven't signed yet, so now is the time to call.`
-      : `${name} just started the application on the website (getlamp.app). No rep has them yet. They haven't signed, so now is the time to call.`,
+    ...intro,
     "",
     `Name: ${name}`,
     ...(a.business ? [`Business: ${a.business}`] : []),
@@ -179,8 +219,12 @@ export function startedEmail(a: {
     `Email: ${a.email}`,
     `Texts OK: ${a.textsOk ? "Yes" : "No, calls only"}`,
     ...(answered.length ? ["", "What they told us:", ...answered] : []),
-    "",
-    "When they sign, you'll get the signed application and their statements in a second email.",
+    ...(inactive
+      ? []
+      : [
+          "",
+          "When they sign, you'll get the signed application and their statements in a second email.",
+        ]),
     "",
     "Lamp",
   ].join("\r\n");
