@@ -2,7 +2,7 @@
 // id this browser keeps (nothing personal); a signed-in person's sign-in and staff actions go to
 // /api/activity. Staff browsers are left out of site visits. Everything here is best effort.
 import { getSupabase } from "@/lib/supabase";
-import type { ActivityAction, SiteEventKind } from "@/lib/tracking";
+import type { ActivityAction, SiteAction, SiteEventKind } from "@/lib/tracking";
 
 const VISITOR_KEY = "lamp.visitor";
 const STAFF_KEY = "lamp.staff";
@@ -59,6 +59,14 @@ export function track(kind: SiteEventKind, extra: { step?: number; question?: st
     body,
     keepalive: true,
   }).catch(() => {});
+}
+
+/**
+ * Something a visitor did on a page, by name only (Offer Check's "calculated", "saved"…). It takes
+ * no other field, so no amount or anything typed in can ride along, and only the pathname is sent.
+ */
+export function trackAction(action: SiteAction) {
+  track("action", { question: action });
 }
 
 const signedInFor = new Set<string>();

@@ -1,18 +1,17 @@
-// Server side of Lamp's own tracking: POST /api/track (a page view or an /apply step, from any
-// visitor, no login) and POST /api/activity (a signed-in person's sign-in or staff action). Both
-// write with the service role into tables only admins can read (migration
-// 20261027180000_site_and_activity_tracking.sql). Never import this file from browser code.
+// Server side of Lamp's own tracking: POST /api/track (a page view, an /apply step or an Offer
+// Check action, from any visitor, no login) and POST /api/activity (a signed-in person's sign-in
+// or staff action). Both write with the service role into tables only admins can read
+// (migration 20261027180000_site_and_activity_tracking.sql). Never import this file from browser code.
 import { caller, json, service, SERVICE_KEY, SUPABASE_URL } from "@/lib/funder-send.server";
 import {
   ACTIVITY_ACTIONS,
   browserOf,
   deviceOf,
   isBot,
-  SITE_EVENT_KINDS,
+  signedPath,
+  siteEventFields,
   text,
-  VISITOR_RE,
   type ActivityAction,
-  type SiteEventKind,
 } from "@/lib/tracking";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -63,7 +62,10 @@ async function body(request: Request): Promise<Record<string, unknown> | null> {
   }
 }
 
-/** POST /api/track: { visitor, kind, path, step?, question?, referrer?, utm_* }. Always 204. */
+/**
+ * POST /api/track: { visitor, kind, path, step?, question?, referrer?, utm_* }. Always 204. An
+ * "action" names one of SITE_ACTIONS in question and nothing else (see siteEventFields).
+ */
 export async function recordSiteEvent(request: Request): Promise<Response> {
   const done = new Response(null, { status: 204 });
   const nr = notReady();
@@ -71,43 +73,11 @@ export async function recordSiteEvent(request: Request): Promise<Response> {
   const ua = request.headers.get("user-agent") ?? "";
   if (!ua || isBot(ua)) return done;
   const b = await body(request);
-  if (!b) return done;
-  const visitor = text(b["visitor"], 40);
-  const kind = b["kind"] as SiteEventKind;
-  const path = text(b["path"], 200);
-  if (
-    !visitor ||
-    !VISITOR_RE.test(visitor) ||
-    !SITE_EVENT_KINDS.includes(kind) ||
-    !path?.startsWith("/")
-  )
-    return done;
-  if (path.startsWith("/staff") || path.startsWith("/api")) return done;
-  let referrerHost: string | null = null;
-  const ref = text(b["referrer"], 300);
-  if (ref) {
-    try {
-      referrerHost = text(new URL(ref).hostname, 120);
-    } catch {
-      /* not a URL */
-    }
-  }
-  const step = Number(b["step"]);
+  const fields = b ? siteEventFields(b) : null;
+  if (!fields) return done;
   await service()
     .from("site_events" as never)
-    .insert({
-      visitor,
-      kind,
-      path,
-      step: Number.isInteger(step) && step >= 0 && step <= 50 ? step : null,
-      question: text(b["question"], 40),
-      referrer_host: referrerHost,
-      utm_source: text(b["utm_source"], 80),
-      utm_medium: text(b["utm_medium"], 80),
-      utm_campaign: text(b["utm_campaign"], 120),
-      device: deviceOf(ua),
-      ...placeOf(request),
-    } as never);
+    .insert({ ...fields, device: deviceOf(ua), ...placeOf(request) } as never);
   return done;
 }
 
@@ -151,12 +121,18 @@ export async function recordActivity(request: Request): Promise<Response> {
 }
 
 /**
- * A signed application, counted as a page view of /application/<rep>/signed (online) or
- * /application/<rep>/pdf/signed (the paper form), so Dashboard > Website > Page sets each
- * link's opens next to its signed files. Best effort: never throws.
+ * A signed application, counted as a page view of /application/signed (the website's own link),
+ * /application/<rep>/signed (a rep's link, online) or /application/<rep>/pdf/signed (a rep's
+ * paper form), so Dashboard > Website > Application links sets each link's openers next to its
+ * signed files. The website has no rep, so its slug arrives null. Best effort: never throws.
  */
-export async function recordSigned(request: Request, slug: string, paper: boolean): Promise<void> {
-  if (notReady() || !/^[a-z0-9][a-z0-9-]{1,31}$/.test(slug)) return;
+export async function recordSigned(
+  request: Request,
+  slug: string | null | undefined,
+  paper: boolean,
+): Promise<void> {
+  const path = signedPath(slug, paper);
+  if (notReady() || !path) return;
   const ua = request.headers.get("user-agent") ?? "";
   try {
     await service()
@@ -164,7 +140,7 @@ export async function recordSigned(request: Request, slug: string, paper: boolea
       .insert({
         visitor: crypto.randomUUID(),
         kind: "page_view",
-        path: `/application/${slug}${paper ? "/pdf" : ""}/signed`,
+        path,
         step: null,
         question: null,
         referrer_host: null,

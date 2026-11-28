@@ -10,6 +10,7 @@ import { EMAIL_RE, cleanEmail } from "@/lib/application-links";
 import { SITE } from "@/lib/site";
 import { discordMembers, setDiscordId } from "@/lib/discord.server";
 import { isDiscordId } from "@/lib/team-alerts";
+import { RESERVED_SLUGS } from "@/lib/tracking";
 
 type Svc = ReturnType<typeof service>;
 
@@ -108,6 +109,8 @@ async function freeSlug(svc: Svc, name: string): Promise<string> {
   const stem = base.length < 2 ? `${base}rep` : base;
   for (let n = 1; n < 50; n++) {
     const slug = n === 1 ? stem : `${stem}-${n}`;
+    // /application/signed, /application/pdf… are pages, not reps (the database refuses them too)
+    if (RESERVED_SLUGS.includes(slug)) continue;
     const r = await svc.from("reps").select("slug").eq("slug", slug).maybeSingle();
     if (!r.data) return slug;
   }

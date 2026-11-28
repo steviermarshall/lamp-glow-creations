@@ -102,8 +102,8 @@ export function AppLinks({
       {slug && <PhoneStartBox repSlug={isAdmin ? slug : null} />}
       {isAdmin && links.length > 0 && (
         <p className="mt-2 text-xs text-smoke">
-          Under Dashboard → Website → Page: /application/&lt;rep&gt; and …/pdf are opens, …/signed
-          are signed files.
+          Dashboard → Website → Application links shows, for each link, how many people opened it,
+          how many signed, and signed per opener.
         </p>
       )}
     </section>

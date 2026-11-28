@@ -11,6 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   ACTIVITY_LABEL,
   buildActivity,
+  buildOfferCheck,
   buildWebsite,
   placeText,
   type ActivityAction,
@@ -22,6 +23,7 @@ import {
   delta,
   PERIODS,
   periodRange,
+  SPEED_WINDOW_DAYS,
   STUCK_DAYS,
   CLAWBACK_DAYS,
   type Cmp,
@@ -97,13 +99,13 @@ async function load(isAdmin: boolean): Promise<Loaded> {
       sb
         .from("pipeline_board")
         .select(
-          "id,status,rep_slug,business_name,created_at,updated_at,submitted_at,last_activity_at,documents_pending_review",
+          "id,status,rep_slug,business_name,created_at,updated_at,submitted_at,last_activity_at,documents_pending_review,funded_at",
         )
         .order("created_at")
         .range(a, b),
     ),
     readAll<Record<string, unknown>>((a, b) =>
-      sb.from("leads").select("created_at,rep_slug").order("created_at").range(a, b),
+      sb.from("leads").select("created_at,rep_slug,utm").order("created_at").range(a, b),
     ),
     signedTimes(sb),
     readAll<Record<string, unknown>>((a, b) =>
@@ -190,10 +192,15 @@ async function load(isAdmin: boolean): Promise<Loaded> {
       submitted_at: s(r["submitted_at"]),
       last_activity_at: s(r["last_activity_at"]),
       documents_pending_review: n(r["documents_pending_review"]),
+      funded_at: s(r["funded_at"]),
     })),
     leads: got("leads", leads).map((r) => ({
       created_at: String(r["created_at"]),
       rep_slug: s(r["rep_slug"]),
+      utm:
+        r["utm"] && typeof r["utm"] === "object" && !Array.isArray(r["utm"])
+          ? (r["utm"] as Record<string, unknown>)
+          : null,
     })),
     signed: got("signatures", signed).map((r) => ({
       application_id: String(r["application_id"]),
@@ -355,6 +362,17 @@ export function Dashboard({ isAdmin, repSlug }: { isAdmin: boolean; repSlug: str
     () => (raw && isAdmin ? buildActivity(raw.activity, period) : null),
     [raw, period, isAdmin],
   );
+  const oc = useMemo(
+    () =>
+      raw && isAdmin
+        ? buildOfferCheck(
+            raw.site,
+            raw.data.leads.map((l) => ({ created_at: l.created_at, utm: l.utm ?? null })),
+            period,
+          )
+        : null,
+    [raw, period, isAdmin],
+  );
   const repName = useMemo(
     () => new Map((raw?.data.reps ?? []).map((r) => [r.slug, r.name])),
     [raw],
@@ -447,20 +465,27 @@ export function Dashboard({ isAdmin, repSlug }: { isAdmin: boolean; repSlug: str
               </div>
               <div className={cn(card, "p-5")}>
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-smoke">
-                  How long it takes (median, all files)
+                  How long it takes, as logged by Lamp (median)
+                </p>
+                <p className="mt-1 text-xs text-smoke">
+                  Business days skip weekends. Offer and funded times are when staff logged them in
+                  Lamp, not when the funder replied or the money landed.
                 </p>
                 <ul className="mt-3 divide-y divide-line">
                   {d.speed.map((s) => (
-                    <li key={s.label} className="flex items-baseline justify-between gap-4 py-2.5">
-                      <span className="text-sm">{s.label}</span>
-                      <span className="text-right">
-                        <span className="font-semibold tabular-nums">
-                          {s.medianDays === null
-                            ? "—"
-                            : `${s.medianDays} ${s.medianDays === 1 ? "day" : "days"}`}
+                    <li key={s.label} className="grid gap-1 py-2.5">
+                      <span className="flex items-baseline justify-between gap-4">
+                        <span className="text-sm">{s.label}</span>
+                        <span className="text-right font-semibold tabular-nums">
+                          {businessText(s.medianBusinessDays)}
                         </span>
-                        <span className="block text-xs text-smoke">
-                          {s.n} {s.n === 1 ? "file" : "files"}
+                      </span>
+                      <span className="flex flex-wrap justify-between gap-x-4 text-xs text-smoke">
+                        <span>
+                          All time: {daysText(s.medianDays)} calendar, {filesText(s.n)}
+                        </span>
+                        <span>
+                          {`Last ${SPEED_WINDOW_DAYS} days: ${businessText(s.recent.medianBusinessDays)}, ${filesText(s.recent.n)}`}
                         </span>
                       </span>
                     </li>
@@ -802,20 +827,91 @@ export function Dashboard({ isAdmin, repSlug }: { isAdmin: boolean; repSlug: str
                   ))}
                 </div>
               )}
-              {web.apply.length > 0 && (
+              <div className={cn(card, "mt-3 overflow-x-auto")}>
+                <p className="px-5 pt-4 text-xs font-semibold uppercase tracking-[0.12em] text-smoke">
+                  Application links
+                </p>
+                <p className="px-5 pt-1 text-xs text-smoke">
+                  People who opened each link, and the files signed through it. A rep&apos;s line
+                  holds their personal links and their public link together; the website&apos;s is
+                  its public link only.
+                </p>
+                {web.links.length === 0 ? (
+                  <p className="px-5 pb-5 pt-2 text-sm text-smoke">
+                    No application opened or signed in this period.
+                  </p>
+                ) : (
+                  <Table
+                    head={["Link", "Opened by", "Signed", "Signed per opener"]}
+                    numeric
+                    rows={web.links.map((l) => [
+                      <span key="l">
+                        <span className="font-semibold">
+                          {l.rep === null
+                            ? "Website"
+                            : `${repName.get(l.rep) ?? l.rep}${l.paper ? ", paper form" : ""}`}
+                        </span>
+                        <span className="block font-mono text-xs text-smoke">{l.link}</span>
+                      </span>,
+                      l.opened,
+                      l.signed,
+                      rateText(l.rate),
+                    ])}
+                  />
+                )}
+              </div>
+              {(web.funnels.website.length > 0 || web.funnels.reps.length > 0) && (
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                  {(
+                    [
+                      ["The website's application (/application)", web.funnels.website],
+                      ["Reps' public links (/application/<rep>)", web.funnels.reps],
+                    ] as const
+                  ).map(([title, steps]) => (
+                    <div key={title} className={cn(card, "p-5")}>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-smoke">
+                        {title}: how many visitors reached each step
+                      </p>
+                      <div className="mt-3">
+                        {steps.length === 0 ? (
+                          <p className="text-sm text-smoke">Nobody started it in this period.</p>
+                        ) : (
+                          <Funnel
+                            steps={steps.map((s) => ({
+                              key: String(s.step),
+                              label: funnelLabel(s.question),
+                              count: s.visitors,
+                            }))}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {oc && (
                 <div className={cn(card, "mt-3 p-5")}>
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-smoke">
-                    The application: how many visitors reached each step
+                    Offer Check
                   </p>
-                  <div className="mt-3">
-                    <Funnel
-                      steps={web.apply.map((s) => ({
-                        key: String(s.step),
-                        label: funnelLabel(s.question),
-                        count: s.visitors,
-                      }))}
-                    />
-                  </div>
+                  <p className="mt-1 text-xs text-smoke">
+                    People, not clicks. Only that something was done is counted, never the numbers
+                    anyone typed in.
+                  </p>
+                  <Funnel
+                    steps={[
+                      { key: "v", label: "Visited Offer Check", count: oc.visitors },
+                      { key: "c", label: "Worked out their own offer", count: oc.calculated },
+                      { key: "o", label: "Pressed Get a second offer", count: oc.secondOffer },
+                      { key: "l", label: "Gave their details", count: oc.leads },
+                    ]}
+                  />
+                  <p className="mt-3 text-sm text-smoke">
+                    Saved an offer to compare:{" "}
+                    <span className="font-semibold tabular-nums text-ink">{oc.saved}</span>. Copied
+                    the share link:{" "}
+                    <span className="font-semibold tabular-nums text-ink">{oc.shared}</span>.
+                  </p>
                 </div>
               )}
             </Section>
@@ -916,6 +1012,12 @@ export function Dashboard({ isAdmin, repSlug }: { isAdmin: boolean; repSlug: str
     </div>
   );
 }
+
+const daysText = (v: number | null) => (v === null ? "—" : `${v} ${v === 1 ? "day" : "days"}`);
+const businessText = (v: number | null) =>
+  v === null ? "—" : `${v} business ${v === 1 ? "day" : "days"}`;
+const filesText = (k: number) => `${k} ${k === 1 ? "file" : "files"}`;
+const rateText = (r: number | null) => (r === null ? "—" : `${Math.round(r * 100)}%`);
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-US", {

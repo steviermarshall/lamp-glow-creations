@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, Check, Info, Link as LinkIcon, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,8 @@ import {
   type TermUnit,
 } from "@/lib/offer-check";
 import { btnOutline, btnPrimary, card, Eyebrow, PageShell } from "@/components/site/layout";
+import { trackAction } from "@/lib/track";
+import { countsAsCalculated } from "@/lib/tracking";
 
 // Campaign links and shared links stay simple:
 // /offer-check?amount=50000&factor=1.35&term=9&unit=months&freq=daily
@@ -171,23 +173,39 @@ function OfferCheckPage() {
   const [inputs, setInputs] = useState<Inputs>(start.inputs);
   const [saved, setSaved] = useState<Saved[]>([]);
   const [nextId, setNextId] = useState(1);
+  // Set on the visitor's first change to a figure. The example (or a shared link's figures) the
+  // page opens on is not a calculation, so it is not counted.
+  const [edited, setEdited] = useState(false);
   const set =
     <K extends keyof Inputs>(k: K) =>
-    (v: Inputs[K]) =>
+    (v: Inputs[K]) => {
+      setEdited(true);
       setInputs((p) => ({ ...p, [k]: v }));
+    };
 
   const result = useMemo(() => compute(inputs), [inputs]);
+  // Lamp counts that someone worked out their own offer, once per visit however much they type
+  // afterwards. The count is the only thing sent: no amount, rate or anything typed in.
+  const counted = useRef(false);
+  useEffect(() => {
+    if (!countsAsCalculated({ edited, hasResult: !!result, counted: counted.current })) return;
+    counted.current = true;
+    trackAction("oc_calculated");
+  }, [edited, result]);
   const freq = FREQUENCIES.find((f) => f.value === inputs.frequency) ?? FREQUENCIES[0]!;
 
-  // Campaign attribution rides through to the application.
+  // Campaign attribution rides through to the application. utm_content says the click came from
+  // Offer Check even when a campaign set its own utm_source, unless the campaign set utm_content.
   const utm = {
     utm_source: str(search["utm_source"]) ?? "offer-check",
     ...(search["utm_medium"] ? { utm_medium: String(search["utm_medium"]) } : {}),
     ...(search["utm_campaign"] ? { utm_campaign: String(search["utm_campaign"]) } : {}),
+    utm_content: str(search["utm_content"]) || "offer-check",
   };
 
   const save = () => {
     if (!result || saved.length >= MAX_SAVED) return;
+    trackAction("oc_saved");
     setSaved((p) => [...p, { id: nextId, name: `Offer ${nextId}`, inputs, result }]);
     setNextId((n) => n + 1);
   };
@@ -404,6 +422,8 @@ function Results({
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
+      // Counted only once the link is really on the clipboard.
+      trackAction("oc_shared");
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -545,8 +565,9 @@ function Results({
           you.
         </p>
         <Link
-          to="/apply"
+          to="/application"
           search={{ amount: amountBand(amount), ...utm }}
+          onClick={() => trackAction("oc_second_offer")}
           className={cn(btnPrimary, "mt-5")}
         >
           Get a second offer <ArrowRight className="size-4" />
@@ -732,8 +753,9 @@ function Compare({
               : "Want to see if our funders can beat this offer?"}
           </p>
           <Link
-            to="/apply"
+            to="/application"
             search={{ amount: amountBand(lowestCost.result.received), ...utm }}
+            onClick={() => trackAction("oc_second_offer")}
             className={cn(btnOutline)}
           >
             Get a second offer <ArrowRight className="size-4" />

@@ -2,6 +2,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   buildDashboard,
+  businessDays,
   type DashboardData,
   delta,
   median,
@@ -44,6 +45,7 @@ const file = (id: string, over: Partial<DashboardData["files"][number]> = {}) =>
   submitted_at: null,
   last_activity_at: null,
   documents_pending_review: 0,
+  funded_at: null,
   ...over,
 });
 const deal = (id: string, funded_on: string, amount: number, over = {}) => ({
@@ -178,8 +180,87 @@ Deno.test("speed: median days between steps, from files that made both", () => {
     { id: "s2", application_id: "b", funder_id: "f1", submitted_at: "2026-10-05T00:00:00" },
   ];
   const b = buildDashboard(d, periodRange("all", NOW), { repSlug: null, now: NOW });
-  assertEquals(b.speed[0], { label: "File started to sent to funders", medianDays: 3, n: 2 });
+  // 1 Oct 2026 is a Thursday: a to Saturday the 3rd is 2 working days, b to Monday the 5th is 2
+  assertEquals(b.speed[0], {
+    label: "File started to sent to funders",
+    medianDays: 3,
+    medianBusinessDays: 2,
+    n: 2,
+    recent: { medianDays: 3, medianBusinessDays: 2, n: 2 },
+  });
   assertEquals(b.speed[1]!.n, 0);
+});
+
+const offer = (application_id: string, created_at: string, accepted_at: string | null = null) => ({
+  application_id,
+  funder_id: "f1",
+  submission_id: null,
+  amount: 50_000,
+  factor_rate: 1.3,
+  created_at,
+  accepted_at,
+});
+const row = (b: ReturnType<typeof buildDashboard>, label: string) =>
+  b.speed.find((s) => s.label === label)!;
+
+Deno.test("speed: a deal funded the same day as its first offer is counted", () => {
+  const d = empty();
+  d.files = [
+    file("a", {
+      status: "funded",
+      created_at: "2026-10-19T09:00:00",
+      funded_at: "2026-10-20T16:00:00",
+    }),
+  ];
+  d.offers = [offer("a", "2026-10-20T10:00:00", "2026-10-20T13:00:00")];
+  // the deal's funded_on is a bare date, midnight before the offer: it used to drop the file out
+  d.deals = [deal("x", "2026-10-20", 50_000, { application_id: "a" })];
+  const b = buildDashboard(d, periodRange("all", NOW), { repSlug: null, now: NOW });
+  assertEquals(row(b, "First offer to funded").n, 1);
+  assertEquals(row(b, "First offer to funded").medianDays, 0.3);
+  assertEquals(row(b, "File started to funded").medianDays, 1.3);
+});
+
+Deno.test("speed: offer accepted to funded is a median over the first acceptance per file", () => {
+  const d = empty();
+  d.files = [
+    file("a", { funded_at: "2026-10-21T12:00:00" }),
+    file("b", { funded_at: "2026-10-23T12:00:00" }),
+    file("c", { funded_at: "2026-10-26T12:00:00" }),
+    file("open"), // accepted, not funded yet: not counted
+  ];
+  d.offers = [
+    offer("a", "2026-10-19T10:00:00", "2026-10-20T12:00:00"), // 1 day
+    offer("b", "2026-10-19T10:00:00", "2026-10-21T12:00:00"), // 2 days
+    offer("b", "2026-10-19T11:00:00", "2026-10-22T12:00:00"), // a later acceptance: ignored
+    offer("c", "2026-10-19T10:00:00", "2026-10-22T12:00:00"), // Thu to Mon: 4 days, 2 working
+    offer("open", "2026-10-19T10:00:00", "2026-10-20T12:00:00"),
+  ];
+  const b = buildDashboard(d, periodRange("all", NOW), { repSlug: null, now: NOW });
+  const r = row(b, "Offer accepted to funded");
+  assertEquals([r.medianDays, r.medianBusinessDays, r.n], [2, 2, 3]);
+});
+
+Deno.test("business days skip the weekend, to a tenth of a day", () => {
+  // 23 Oct 2026 is a Friday
+  const t = (d: number, h: number) => new Date(2026, 9, d, h).getTime();
+  assertEquals(businessDays(t(23, 15), t(26, 9)), 0.8); // Fri 3 PM to Mon 9 AM: 9 h + 9 h
+  assertEquals(businessDays(t(24, 10), t(25, 18)), 0); // all weekend
+  assertEquals(businessDays(t(19, 9), t(26, 9)), 5); // a full week
+  assertEquals(businessDays(t(26, 9), t(26, 9)), 0);
+  assertEquals(businessDays(t(26, 9), t(23, 9)), 0); // backwards is nothing
+});
+
+Deno.test("speed: the 90-day figures leave out files whose later step is older", () => {
+  const d = empty();
+  d.files = [
+    file("old", { created_at: "2026-06-01T09:00:00", funded_at: "2026-06-11T09:00:00" }), // 10 days
+    file("new", { created_at: "2026-10-12T09:00:00", funded_at: "2026-10-14T09:00:00" }), // 2 days
+  ];
+  const b = buildDashboard(d, periodRange("all", NOW), { repSlug: null, now: NOW });
+  const r = row(b, "File started to funded");
+  assertEquals([r.n, r.medianDays], [2, 6]);
+  assertEquals(r.recent, { medianDays: 2, medianBusinessDays: 2, n: 1 });
 });
 
 Deno.test(

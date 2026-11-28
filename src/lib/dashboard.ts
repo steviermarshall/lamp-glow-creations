@@ -130,8 +130,15 @@ export type FileRow = {
   submitted_at: string | null;
   last_activity_at: string | null;
   documents_pending_review: number;
+  /** When the file turned funded: stamped by the database as staff log the deal. */
+  funded_at: string | null;
 };
-export type LeadRow = { created_at: string; rep_slug: string | null };
+export type LeadRow = {
+  created_at: string;
+  rep_slug: string | null;
+  /** The utm_ tags the lead came with (Offer Check's second-offer link sets utm_content). */
+  utm?: Record<string, unknown> | null;
+};
 export type SignedRow = { application_id: string; signed_at: string | null };
 export type InviteRow = {
   rep_slug: string;
@@ -235,6 +242,29 @@ export const dueOf = (d: {
 
 const sum = (xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0) * 100) / 100;
 const days = (from: number, to: number) => Math.round(((to - from) / DAY) * 10) / 10;
+
+/** How far back the "last 90 days" speed figures look. */
+export const SPEED_WINDOW_DAYS = 90;
+
+/**
+ * Days between two moments counting Monday to Friday only, to a tenth, in this browser's time
+ * zone, whole 24-hour weekdays: Friday 3 PM to Monday 9 AM is 0.8 (9 hours each side of the
+ * weekend). Public holidays count as working days.
+ */
+export function businessDays(from: number, to: number): number {
+  if (to <= from) return 0;
+  let worked = 0;
+  let t = from;
+  while (t < to) {
+    const d = new Date(t);
+    const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime();
+    const end = Math.min(next, to);
+    const wd = d.getDay();
+    if (wd !== 0 && wd !== 6) worked += end - t;
+    t = end;
+  }
+  return Math.round((worked / DAY) * 10) / 10;
+}
 
 function firstBy<T>(rows: T[], key: (r: T) => string, time: (r: T) => number | null) {
   const out = new Map<string, number>();
@@ -360,6 +390,10 @@ export function buildDashboard(
   ];
 
   // ---- speed: median days between steps, from every file that made both steps ----
+  // Offer and funded times are when staff logged them in Lamp (add_offer, the deal), not when the
+  // funder replied or the money landed. Funded is applications.funded_at, a timestamp, so a deal
+  // logged the same day as its first offer counts (deals.funded_on is a bare date, local midnight,
+  // which came before the offer and dropped those files out).
   const fileStart = new Map(files.map((f) => [f.id, toTime(f.created_at)]));
   const firstSent = firstBy(
     submissions,
@@ -371,25 +405,42 @@ export function buildDashboard(
     (o) => o.application_id,
     (o) => toTime(o.created_at),
   );
-  const funded = firstBy(
-    deals,
-    (d) => d.application_id,
-    (d) => toTime(d.funded_on),
+  const firstAccepted = firstBy(
+    offers,
+    (o) => o.application_id,
+    (o) => toTime(o.accepted_at),
   );
+  const funded = firstBy(
+    files,
+    (f) => f.id,
+    (f) => toTime(f.funded_at),
+  );
+  const windowFrom = now.getTime() - SPEED_WINDOW_DAYS * DAY;
   const gap = (a: Map<string, number | null>, b: Map<string, number>) => {
-    const out: number[] = [];
+    const out: { start: number; end: number }[] = [];
     for (const [id, end] of b) {
       const start = a.get(id);
-      if (start !== null && start !== undefined && end >= start) out.push(days(start, end));
+      if (start !== null && start !== undefined && end >= start) out.push({ start, end });
     }
     return out;
   };
+  const speedRow = (label: string, pairs: { start: number; end: number }[]) => {
+    // the window keeps files whose later step happened in the last 90 days
+    const recent = pairs.filter((p) => p.end >= windowFrom && p.end <= now.getTime());
+    const of = (ps: typeof pairs) => ({
+      medianDays: median(ps.map((p) => days(p.start, p.end))),
+      medianBusinessDays: median(ps.map((p) => businessDays(p.start, p.end))),
+      n: ps.length,
+    });
+    return { label, ...of(pairs), recent: of(recent) };
+  };
   const speed = [
-    { label: "File started to sent to funders", xs: gap(fileStart, firstSent) },
-    { label: "Sent to first offer", xs: gap(firstSent, firstOffer) },
-    { label: "First offer to funded", xs: gap(firstOffer, funded) },
-    { label: "File started to funded", xs: gap(fileStart, funded) },
-  ].map((s) => ({ label: s.label, medianDays: median(s.xs), n: s.xs.length }));
+    speedRow("File started to sent to funders", gap(fileStart, firstSent)),
+    speedRow("Sent to first offer", gap(firstSent, firstOffer)),
+    speedRow("Offer accepted to funded", gap(firstAccepted, funded)),
+    speedRow("First offer to funded", gap(firstOffer, funded)),
+    speedRow("File started to funded", gap(fileStart, funded)),
+  ];
 
   // ---- pipeline right now ----
   const open = files.filter((f) => (OPEN_STAGES as readonly string[]).includes(f.status));

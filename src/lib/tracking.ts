@@ -2,8 +2,30 @@
 // a browser and a traffic source out of what the request says. No network and no database here,
 // so it's unit-tested in tests/tracking.test.ts. The routes use it through tracking.server.ts.
 
-export const SITE_EVENT_KINDS = ["page_view", "apply_step"] as const;
+export const SITE_EVENT_KINDS = ["page_view", "apply_step", "action"] as const;
 export type SiteEventKind = (typeof SITE_EVENT_KINDS)[number];
+
+/**
+ * The only things an "action" row may say, in its question column. Offer Check's page promises
+ * "nothing saved", so these are bare counts: never an amount, a rate or anything typed in. The
+ * database holds the same list (migration 20261127120000_site_event_actions.sql).
+ */
+export const SITE_ACTIONS = ["oc_calculated", "oc_saved", "oc_shared", "oc_second_offer"] as const;
+export type SiteAction = (typeof SITE_ACTIONS)[number];
+
+/**
+ * Whether Offer Check should send oc_calculated now. The page opens on a worked example (or on a
+ * shared link's figures), so a result is on screen before anyone types: that view is not a
+ * calculation. It counts once the visitor has changed a figure and the page shows a result, and
+ * only once per visit however much they type afterwards.
+ */
+export function countsAsCalculated(s: {
+  edited: boolean;
+  hasResult: boolean;
+  counted: boolean;
+}): boolean {
+  return s.edited && s.hasResult && !s.counted;
+}
 
 export const ACTIVITY_ACTIONS = [
   "sign_in",
@@ -100,6 +122,76 @@ export function sourceOf(row: { utm_source: string | null; referrer_host: string
 /** A browser's random id, kept in its local storage: 16 to 40 hex digits and dashes. */
 export const VISITOR_RE = /^[0-9a-f-]{16,40}$/;
 
+/** What POST /api/track may write, before the server adds device and place. */
+export type SiteEventFields = {
+  visitor: string;
+  kind: SiteEventKind;
+  path: string;
+  step: number | null;
+  question: string | null;
+  referrer_host: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+};
+
+/**
+ * The body of POST /api/track, checked: the fields a site_events row may hold, or null when the
+ * event is dropped (no visitor id, an unknown kind, a staff or API path, an action off the list).
+ * Anything else the browser sends is ignored. An action never carries a step number.
+ */
+export function siteEventFields(b: Record<string, unknown>): SiteEventFields | null {
+  const visitor = text(b["visitor"], 40);
+  const kind = b["kind"] as SiteEventKind;
+  const path = text(b["path"], 200);
+  if (!visitor || !VISITOR_RE.test(visitor) || !SITE_EVENT_KINDS.includes(kind)) return null;
+  if (!path?.startsWith("/") || path.startsWith("/staff") || path.startsWith("/api")) return null;
+  let question = text(b["question"], 40);
+  let step: number | null = null;
+  if (kind === "action") {
+    if (!question || !(SITE_ACTIONS as readonly string[]).includes(question)) return null;
+  } else {
+    const n = Number(b["step"]);
+    step = Number.isInteger(n) && n >= 0 && n <= 50 ? n : null;
+    if (kind === "page_view") question = null;
+  }
+  let referrerHost: string | null = null;
+  const ref = text(b["referrer"], 300);
+  if (ref) {
+    try {
+      referrerHost = text(new URL(ref).hostname, 120);
+    } catch {
+      /* not a URL */
+    }
+  }
+  return {
+    visitor,
+    kind,
+    path,
+    step,
+    question,
+    referrer_host: referrerHost,
+    utm_source: text(b["utm_source"], 80),
+    utm_medium: text(b["utm_medium"], 80),
+    utm_campaign: text(b["utm_campaign"], 120),
+  };
+}
+
+/** Words that sit in /application/... paths, so no rep may have them as a slug. */
+export const RESERVED_SLUGS: readonly string[] = ["signed", "pdf", "null"];
+
+/**
+ * Where a signed application is counted: /application/signed for the website (no rep, and the
+ * website has no paper form), /application/<rep>/signed or /application/<rep>/pdf/signed for a
+ * rep's link. Null when the slug isn't a rep slug, so nothing is written.
+ */
+export function signedPath(slug: string | null | undefined, paper: boolean): string | null {
+  if (slug === null || slug === undefined || slug === "") return "/application/signed";
+  if (typeof slug !== "string" || !/^[a-z0-9][a-z0-9-]{1,31}$/.test(slug)) return null;
+  if (RESERVED_SLUGS.includes(slug)) return null;
+  return `/application/${slug}${paper ? "/pdf" : ""}/signed`;
+}
+
 // ---------- the dashboard's website and activity numbers ----------
 
 export type SiteEventRow = {
@@ -179,22 +271,16 @@ export function buildWebsite(rows: SiteEventRow[], span: Span) {
   const pages = new Map<string, number>();
   for (const r of now) pages.set(r.path, (pages.get(r.path) ?? 0) + 1);
 
-  // /apply: the furthest step each visitor reached, then how many reached each step
+  // the application: the furthest step each visitor reached, then how many reached each step,
+  // for everyone, and apart for the website's own /application and the reps' public links
   const steps = rows.filter(
     (r) => r.kind === "apply_step" && r.step !== null && inSpan(r.occurred_at, span.from, span.to),
   );
-  const furthest = new Map<string, number>();
-  const label = new Map<number, string>();
-  for (const r of steps) {
-    furthest.set(r.visitor, Math.max(furthest.get(r.visitor) ?? -1, r.step!));
-    if (r.question && !label.has(r.step!)) label.set(r.step!, r.question);
-  }
-  const maxStep = Math.max(-1, ...furthest.values());
-  const apply = Array.from({ length: maxStep + 1 }, (_, step) => ({
-    step,
-    question: label.get(step) ?? `step ${step + 1}`,
-    visitors: [...furthest.values()].filter((s) => s >= step).length,
-  }));
+  const apply = dropOff(steps);
+  const funnels = {
+    website: dropOff(steps.filter((r) => flowOf(r.path) === "website")),
+    reps: dropOff(steps.filter((r) => flowOf(r.path) === "reps")),
+  };
 
   return {
     views: { now: now.length, prev: before ? before.length : null },
@@ -204,6 +290,132 @@ export function buildWebsite(rows: SiteEventRow[], span: Span) {
     devices: top(devices, 3),
     places: top(places, 6),
     apply,
+    funnels,
+    links: applicationLinks(
+      rows.filter((r) => r.kind === "page_view" && inSpan(r.occurred_at, span.from, span.to)),
+    ),
+  };
+}
+
+/** How many visitors got at least as far as each step, counting each at their furthest step. */
+function dropOff(steps: SiteEventRow[]) {
+  const furthest = new Map<string, number>();
+  const label = new Map<number, string>();
+  for (const r of steps) {
+    furthest.set(r.visitor, Math.max(furthest.get(r.visitor) ?? -1, r.step!));
+    if (r.question && !label.has(r.step!)) label.set(r.step!, r.question);
+  }
+  const maxStep = Math.max(-1, ...furthest.values());
+  return Array.from({ length: maxStep + 1 }, (_, step) => ({
+    step,
+    question: label.get(step) ?? `step ${step + 1}`,
+    visitors: [...furthest.values()].filter((s) => s >= step).length,
+  }));
+}
+
+/**
+ * Which application an /apply step came from: the website's own (/application, and /apply before
+ * 2026-11-19) or a rep's public link (/application/<rep>, /apply/<rep>).
+ */
+export function flowOf(path: string): "website" | "reps" {
+  const p = path.replace(/\/+$/, "");
+  return /^\/(application|apply)\/[^/]+/.test(p) ? "reps" : "website";
+}
+
+/**
+ * What an /application page view is: an open of the website's link or a rep's (online or the
+ * paper form), or a signed file counted against it. Null for any other page. Old website rows
+ * written as /application/null/signed count as the website's.
+ */
+export function applicationLinkOf(
+  path: string,
+): { link: string; rep: string | null; paper: boolean; signed: boolean } | null {
+  const p = path.replace(/\/+$/, "") || "/";
+  const m = /^\/application(?:\/([a-z0-9][a-z0-9-]{0,31}))?(\/pdf)?(\/signed)?$/.exec(p);
+  if (!m) return null;
+  const [, slug, pdf, signed] = m;
+  const website = { link: "/application", rep: null, paper: false };
+  if (!slug) return { ...website, signed: false };
+  if (!pdf && ((slug === "signed" && !signed) || (slug === "null" && signed)))
+    return { ...website, signed: true };
+  if (RESERVED_SLUGS.includes(slug)) return null;
+  return {
+    link: `/application/${slug}${pdf ? "/pdf" : ""}`,
+    rep: slug,
+    paper: Boolean(pdf),
+    signed: Boolean(signed),
+  };
+}
+
+/**
+ * The application links: for the website's /application and each rep's link (online and paper),
+ * the visitors who opened it, the signed files counted against it, and signed per opener. A rep's
+ * line holds their personal links and their public link together (both open /application/<rep>);
+ * the website's is public only. Signed rows each carry a fresh id, so they count as rows.
+ */
+export function applicationLinks(pageViews: SiteEventRow[]) {
+  const byLink = new Map<
+    string,
+    { link: string; rep: string | null; paper: boolean; openers: Set<string>; signed: number }
+  >();
+  for (const r of pageViews) {
+    if (r.kind !== "page_view") continue;
+    const a = applicationLinkOf(r.path);
+    if (!a) continue;
+    const row = byLink.get(a.link) ?? {
+      link: a.link,
+      rep: a.rep,
+      paper: a.paper,
+      openers: new Set<string>(),
+      signed: 0,
+    };
+    if (a.signed) row.signed++;
+    else row.openers.add(r.visitor);
+    byLink.set(a.link, row);
+  }
+  return [...byLink.values()]
+    .map((r) => ({
+      link: r.link,
+      rep: r.rep,
+      paper: r.paper,
+      opened: r.openers.size,
+      signed: r.signed,
+      rate: r.openers.size ? r.signed / r.openers.size : null,
+    }))
+    .sort(
+      (a, b) =>
+        Number(b.rep === null) - Number(a.rep === null) ||
+        b.opened - a.opened ||
+        b.signed - a.signed ||
+        a.link.localeCompare(b.link),
+    );
+}
+
+/** A lead the dashboard reads, with the utm_ tags it arrived with. */
+export type LeadUtmRow = { created_at: string; utm: Record<string, unknown> | null };
+
+/** A lead that came through Offer Check's "Get a second offer". */
+export const fromOfferCheck = (utm: Record<string, unknown> | null) =>
+  utm?.["utm_content"] === "offer-check" || utm?.["utm_source"] === "offer-check";
+
+/**
+ * Offer Check in the period: visitors to the page, then how many of them worked out an offer,
+ * saved one to compare, copied the share link and pressed "Get a second offer", and the leads
+ * that came through it. Counts of people only: no row holds a figure from the page.
+ */
+export function buildOfferCheck(rows: SiteEventRow[], leads: LeadUtmRow[], span: Span) {
+  const inside = rows.filter((r) => inSpan(r.occurred_at, span.from, span.to));
+  const who = (keep: (r: SiteEventRow) => boolean) =>
+    new Set(inside.filter(keep).map((r) => r.visitor)).size;
+  const did = (a: SiteAction) => who((r) => r.kind === "action" && r.question === a);
+  return {
+    visitors: who((r) => r.kind === "page_view" && r.path.replace(/\/+$/, "") === "/offer-check"),
+    calculated: did("oc_calculated"),
+    saved: did("oc_saved"),
+    shared: did("oc_shared"),
+    secondOffer: did("oc_second_offer"),
+    leads: leads.filter((l) => inSpan(l.created_at, span.from, span.to) && fromOfferCheck(l.utm))
+      .length,
   };
 }
 

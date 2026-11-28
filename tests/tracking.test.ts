@@ -1,11 +1,20 @@
 // deno test --node-modules-dir=none tests/tracking.test.ts
-import { assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals } from "jsr:@std/assert@1";
+import actionsSql from "../supabase/migrations/20261127120000_site_event_actions.sql" with { type: "text" };
 import {
+  applicationLinkOf,
   browserOf,
   buildActivity,
+  buildOfferCheck,
   buildWebsite,
+  countsAsCalculated,
   deviceOf,
+  flowOf,
   isBot,
+  RESERVED_SLUGS,
+  SITE_ACTIONS,
+  signedPath,
+  siteEventFields,
   sourceOf,
   text,
   type ActivityRow,
@@ -151,3 +160,215 @@ Deno.test("sign-ins: newest first, a new place or browser flagged, never the fir
     open_file: 1,
   });
 });
+
+// ---------- signed files, application links, split drop-off, Offer Check actions ----------
+
+const VISITOR = "0f0e0d0c-0b0a-4908-8706-050403020100";
+
+Deno.test("recordSigned's path: the website's file (no rep) is /application/signed", () => {
+  assertEquals(signedPath(null, false), "/application/signed");
+  assertEquals(signedPath(undefined, false), "/application/signed");
+  assertEquals(signedPath("", false), "/application/signed");
+  // the website has no paper form, so there is no /application/pdf/signed
+  assertEquals(signedPath(null, true), "/application/signed");
+  assertEquals(signedPath("stevie", false), "/application/stevie/signed");
+  assertEquals(signedPath("stevie", true), "/application/stevie/pdf/signed");
+  // not a rep slug, or one of the reserved words: nothing is written
+  assertEquals(signedPath("Not A Slug", false), null);
+  assertEquals(signedPath("null", false), null);
+  assertEquals(signedPath("pdf", false), null);
+  assertEquals(signedPath(5 as unknown as string, false), null);
+});
+
+Deno.test("application paths: opens and signed files, by link", () => {
+  assertEquals(applicationLinkOf("/application"), {
+    link: "/application",
+    rep: null,
+    paper: false,
+    signed: false,
+  });
+  assertEquals(applicationLinkOf("/application/signed")?.signed, true);
+  assertEquals(applicationLinkOf("/application/signed")?.rep, null);
+  // old website rows, before the migration relabels them
+  assertEquals(applicationLinkOf("/application/null/signed")?.link, "/application");
+  assertEquals(applicationLinkOf("/application/stevie/pdf/signed"), {
+    link: "/application/stevie/pdf",
+    rep: "stevie",
+    paper: true,
+    signed: true,
+  });
+  assertEquals(applicationLinkOf("/application/pdf"), null);
+  assertEquals(applicationLinkOf("/offer-check"), null);
+});
+
+Deno.test("application links: unique openers, signed files and the rate, website first", () => {
+  const view = (visitor: string, path: string) => ev({ visitor, path });
+  const rows = [
+    view("a", "/application"),
+    view("a", "/application"), // a reload is still one opener
+    view("b", "/application"),
+    view("c", "/application"),
+    view("d", "/application"),
+    view("s1", "/application/signed"),
+    view("e", "/application/stevie"),
+    view("f", "/application/stevie"),
+    view("s2", "/application/stevie/signed"),
+    view("s3", "/application/stevie/signed"),
+    view("g", "/application/zeus/pdf"),
+    view("h", "/"), // not an application page
+  ];
+  const w = buildWebsite(rows, span("2026-10-15", "2026-10-22"));
+  assertEquals(
+    w.links.map((l) => [l.link, l.opened, l.signed, l.rate]),
+    [
+      ["/application", 4, 1, 0.25],
+      ["/application/stevie", 2, 2, 1],
+      ["/application/zeus/pdf", 1, 0, 0],
+    ],
+  );
+});
+
+Deno.test("website: the drop-off is split into the website's application and reps' links", () => {
+  const step = (visitor: string, path: string, s: number, q: string) =>
+    ev({ visitor, kind: "apply_step", path, step: s, question: q });
+  const rows = [
+    step("a", "/application", 0, "amount"),
+    step("a", "/application", 1, "purpose"),
+    step("b", "/application", 0, "amount"),
+    step("c", "/application/stevie", 0, "amount"),
+    step("c", "/application/stevie", 1, "purpose"),
+    step("c", "/application/stevie", 2, "revenue"),
+    step("d", "/apply/zeus", 0, "amount"), // the old rep page
+  ];
+  const w = buildWebsite(rows, span("2026-10-15", "2026-10-22"));
+  const pairs = (xs: { question: string; visitors: number }[]) =>
+    xs.map((x) => [x.question, x.visitors]);
+  assertEquals(pairs(w.funnels.website), [
+    ["amount", 2],
+    ["purpose", 1],
+  ]);
+  assertEquals(pairs(w.funnels.reps), [
+    ["amount", 2],
+    ["purpose", 1],
+    ["revenue", 1],
+  ]);
+  // everyone together, as before
+  assertEquals(pairs(w.apply), [
+    ["amount", 4],
+    ["purpose", 2],
+    ["revenue", 1],
+  ]);
+  assertEquals(
+    [flowOf("/application/"), flowOf("/apply"), flowOf("/application/x")],
+    ["website", "website", "reps"],
+  );
+});
+
+Deno.test("track: an action outside the fixed list is dropped", () => {
+  const base = { visitor: VISITOR, kind: "action", path: "/offer-check" };
+  assertEquals(siteEventFields({ ...base, question: "oc_saved" })?.question, "oc_saved");
+  assertEquals(siteEventFields({ ...base, question: "oc_amount_50000" }), null);
+  assertEquals(siteEventFields({ ...base, question: "50000" }), null);
+  assertEquals(siteEventFields({ ...base }), null);
+  assertEquals(siteEventFields({ ...base, kind: "purchase", question: "oc_saved" }), null);
+  assertEquals(siteEventFields({ ...base, path: "/staff", question: "oc_saved" }), null);
+});
+
+Deno.test("track: an action carries no number, whatever the browser sends", () => {
+  const f = siteEventFields({
+    visitor: VISITOR,
+    kind: "action",
+    path: "/offer-check",
+    question: "oc_calculated",
+    step: 7,
+    amount: 50_000,
+    factor: 1.35,
+  })!;
+  assertEquals(f.step, null);
+  assertEquals(
+    Object.values(f).some((v) => typeof v === "number"),
+    false,
+  );
+  assertEquals("amount" in f || "factor" in f, false);
+  // an /apply step still keeps its number
+  assertEquals(
+    siteEventFields({ visitor: VISITOR, kind: "apply_step", path: "/application", step: 3 })?.step,
+    3,
+  );
+});
+
+Deno.test("Offer Check: people who did each thing, and the leads it brought", () => {
+  const act = (visitor: string, question: string) =>
+    ev({ visitor, kind: "action", path: "/offer-check", question });
+  const rows = [
+    ev({ visitor: "a", path: "/offer-check" }),
+    ev({ visitor: "a", path: "/offer-check" }),
+    ev({ visitor: "b", path: "/offer-check" }),
+    ev({ visitor: "c", path: "/offer-check" }),
+    act("a", "oc_calculated"),
+    act("b", "oc_calculated"),
+    act("a", "oc_saved"),
+    act("a", "oc_saved"), // saved twice: one person
+    act("a", "oc_shared"),
+    act("a", "oc_second_offer"),
+    act("z", "oc_second_offer"),
+    act("old", "oc_calculated"),
+  ];
+  rows[rows.length - 1]!.occurred_at = "2026-09-01T12:00:00Z"; // before the period
+  const leads = [
+    { created_at: "2026-10-20T12:00:00Z", utm: { utm_source: "ig", utm_content: "offer-check" } },
+    { created_at: "2026-10-20T12:00:00Z", utm: { utm_source: "offer-check" } },
+    { created_at: "2026-10-20T12:00:00Z", utm: { utm_source: "website" } },
+    { created_at: "2026-09-01T12:00:00Z", utm: { utm_content: "offer-check" } },
+  ];
+  assertEquals(buildOfferCheck(rows, leads, span("2026-10-15", "2026-10-22")), {
+    visitors: 3,
+    calculated: 2,
+    saved: 1,
+    shared: 1,
+    secondOffer: 2,
+    leads: 2,
+  });
+});
+
+Deno.test("the database allows the same actions and refuses the same slugs as the site", () => {
+  const check = /site_events_action_ok[\s\S]*?question in \(([^)]*)\)/.exec(actionsSql)?.[1] ?? "";
+  const inDb = [...check.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+  assertEquals(inDb, [...SITE_ACTIONS]);
+  const slugs = /reps_slug_not_reserved\s+check \(slug not in \(([^)]*)\)/.exec(actionsSql)?.[1];
+  assert(slugs, "the reps slug check is in the migration");
+  assertEquals(
+    [...slugs.matchAll(/'([a-z]+)'/g)].map((m) => m[1]),
+    [...RESERVED_SLUGS],
+  );
+});
+
+Deno.test(
+  "Offer Check: the example on load is not a calculation; the first edit with a result is",
+  () => {
+    // the page opens on a worked example, so a result is there before anyone types
+    assertEquals(countsAsCalculated({ edited: false, hasResult: true, counted: false }), false);
+    // an edit that leaves the form incomplete: nothing yet
+    assertEquals(countsAsCalculated({ edited: true, hasResult: false, counted: false }), false);
+    // the first edit that gives a result counts
+    assertEquals(countsAsCalculated({ edited: true, hasResult: true, counted: false }), true);
+    // later edits in the same visit do not
+    assertEquals(countsAsCalculated({ edited: true, hasResult: true, counted: true }), false);
+
+    // walk a visit through the rule: load, three edits, one count
+    let counted = false;
+    let sent = 0;
+    for (const s of [
+      { edited: false, hasResult: true },
+      { edited: true, hasResult: false },
+      { edited: true, hasResult: true },
+      { edited: true, hasResult: true },
+    ]) {
+      if (countsAsCalculated({ ...s, counted })) {
+        counted = true;
+        sent++;
+      }
+    }
+    assertEquals(sent, 1);
+  },
+);
