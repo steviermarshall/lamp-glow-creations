@@ -152,7 +152,8 @@ function Staff() {
   const isStaff = access.state === "staff";
   // the agreements a rep signs before anything else (admins sign nothing)
   const { docs: repDocs, reload: reloadRepDocs } = useRepDocuments(isStaff);
-  const chatUnread = useChatUnread(isStaff);
+  const chatThreads = useChatUnread(isStaff);
+  const chatUnread = chatThreads.length;
   const dock = useChatDock();
   // an old Staff > Messages link: open the side panel (on its conversation), then drop it from the address
   const oldMessagesLink = search.view === "messages";
@@ -284,7 +285,7 @@ function Staff() {
             {access.repSlug && inFocusPilot(access.repSlug) && (
               <FocusRing repSlug={access.repSlug} />
             )}
-            <NotificationsBell chatUnread={chatUnread} />
+            <NotificationsBell unreadThreads={chatThreads} />
           </div>
         </div>
         <div className="mt-4">

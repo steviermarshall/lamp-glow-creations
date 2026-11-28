@@ -1,7 +1,11 @@
 // Lamp in Discord: the wording and parsing, with no imports so the deno tests load it directly.
 // The sending lives in discord.server.ts; setup is in docs/discord.md.
 
-/** Notification kinds the team channel also hears about (the rest are only the person's DM). */
+/**
+ * Notification kinds the team channel also hears about (the rest are only the person's DM). A
+ * merchant's chat message ('message', 20261127110000_chat_staff_alerts.sql) is left out on purpose:
+ * it goes to the rep's DM only, and names the business, never what the merchant wrote.
+ */
 export const CHANNEL_KINDS = ["file", "offer", "funded", "started"] as const;
 
 export type TeamNotification = {

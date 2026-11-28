@@ -1,4 +1,5 @@
-// The in-app chat (supabase/migrations/20261110120000_chat_staff.sql, 20261110140000_chat_merchant.sql):
+// The in-app chat (supabase/migrations/20261110120000_chat_staff.sql, 20261110140000_chat_merchant.sql,
+// 20261127110000_chat_staff_alerts.sql):
 // wording and checks, with no imports so the deno tests load this file directly.
 
 /** How often an open conversation looks for new messages. */
@@ -34,6 +35,46 @@ export type InboxRow = {
 /** How many conversations have something new: the count on the tab and under the bell. */
 export const unreadCount = (rows: Pick<InboxRow, "unread">[]) =>
   rows.filter((r) => r.unread).length;
+
+/** The conversations with something new, by id: what the bell matches message alerts against. */
+export const unreadThreads = (rows: Pick<InboxRow, "thread_id" | "unread">[]) =>
+  rows.filter((r) => r.unread).map((r) => r.thread_id);
+
+/**
+ * The conversation a merchant's 'message' alert opens. 20261127110000_chat_staff_alerts.sql writes
+ * its link as /staff?view=messages&thread=<id>. Null for any other link.
+ */
+export function alertThread(link: string | null | undefined): string | null {
+  const m =
+    /[?&]thread=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:&|#|$)/i.exec(
+      link ?? "",
+    );
+  return m ? m[1]!.toLowerCase() : null;
+}
+
+/**
+ * The number on the bell: unread notifications plus conversations with something new. A merchant's
+ * message writes a 'message' notification (20261127110000_chat_staff_alerts.sql) and also leaves its
+ * conversation unread, so an unread alert whose conversation is still unread counts once, as the
+ * conversation. Once that conversation is read, its alert row (still unread under the bell) counts
+ * on its own, so the badge matches what the bell lists.
+ */
+export function bellCount(
+  notes: { kind: string; read_at: string | null; link?: string | null }[],
+  threads: readonly string[],
+): number {
+  const open = new Set(threads.map((t) => t.toLowerCase()));
+  let count = open.size;
+  for (const n of notes) {
+    if (n.read_at) continue;
+    if (n.kind === "message") {
+      const t = alertThread(n.link);
+      if (t && open.has(t)) continue;
+    }
+    count++;
+  }
+  return count;
+}
 
 export type ChatMessage = {
   id: number;

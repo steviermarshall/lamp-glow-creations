@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
-import { CHAT_READ_EVENT, INBOX_POLL_MS, unreadCount, type InboxRow } from "@/lib/chat";
+import { CHAT_READ_EVENT, INBOX_POLL_MS, unreadThreads, type InboxRow } from "@/lib/chat";
 
 /**
- * How many of this staff member's conversations have something new, for the Messages tab. Zero
- * (and no more asking) until the Messages SQL has run.
+ * The ids of this staff member's conversations that have something new: their number is the count
+ * on the Messages tab, and the bell matches merchant message alerts against them. Empty (and no
+ * more asking) until the Messages SQL has run.
  */
-export function useChatUnread(enabled: boolean): number {
-  const [count, setCount] = useState(0);
+export function useChatUnread(enabled: boolean): string[] {
+  const [threads, setThreads] = useState<string[]>([]);
   useEffect(() => {
     const sb = getSupabase();
     if (!sb || !enabled) return;
@@ -21,7 +22,11 @@ export function useChatUnread(enabled: boolean): number {
         window.clearInterval(timer); // not there yet, or not allowed: stop asking
         return;
       }
-      setCount(unreadCount((data ?? []) as InboxRow[]));
+      const next = unreadThreads((data ?? []) as InboxRow[]);
+      // same ids as before: keep the old array so nothing re-renders
+      setThreads((prev) =>
+        prev.length === next.length && prev.every((t, i) => t === next[i]) ? prev : next,
+      );
     };
     void load();
     timer = window.setInterval(() => void load(), INBOX_POLL_MS);
@@ -34,5 +39,5 @@ export function useChatUnread(enabled: boolean): number {
       window.removeEventListener(CHAT_READ_EVENT, onRead);
     };
   }, [enabled]);
-  return count;
+  return threads;
 }
