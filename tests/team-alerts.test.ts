@@ -129,3 +129,23 @@ Deno.test("member list: people only, named as the server shows them, once, A to 
   ]);
   assertEquals(memberRows({ message: "Missing Access" }), []);
 });
+
+Deno.test("channel: a website file every admin hears is still one #deals post", () => {
+  // notify_admins (20261127100000_unassigned_alerts.sql) writes one row per admin for one file
+  const forAda = n({
+    id: 7,
+    title: "New file: ISK",
+    body: "Came in from the website with no rep yet.",
+  });
+  const forBo = { ...forAda, id: 8 };
+  assertEquals(channelKey(forAda), "file:abc");
+  assertEquals(channelKey(forAda), channelKey(forBo));
+  assertEquals(new Set([forAda, forBo].map(channelKey)).size, 1);
+  // two files are two posts
+  assert(channelKey(forAda) !== channelKey({ ...forBo, application_id: "def" }));
+  // an unassigned start carries no file: the admins' DMs only, never #deals
+  assertEquals(
+    channelKey(n({ kind: "started", title: "Started on the website: Joe", application_id: null })),
+    null,
+  );
+});

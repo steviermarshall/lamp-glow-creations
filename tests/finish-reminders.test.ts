@@ -20,6 +20,7 @@ import {
   stopToken,
 } from "../src/lib/finish-reminders.ts";
 import { isToken, reminderEmail } from "../src/lib/application-links.ts";
+import { reminderRun } from "../src/lib/notice-retry.ts";
 import server from "../src/lib/finish-reminders.server.ts" with { type: "text" };
 import links from "../src/lib/application-links.server.ts" with { type: "text" };
 import stopPage from "../src/routes/reminders.stop.tsx" with { type: "text" };
@@ -242,5 +243,103 @@ Deno.test(
     assert(!migration.includes("cron.schedule"));
     assert(schedule.includes("cron.schedule('lamp-finish-reminders', '*/10 * * * *'"));
     assert(schedule.includes("select cron.unschedule('lamp-finish-reminders');"));
+  },
+);
+
+Deno.test(
+  "run: the new-file sweep runs on every run with a mailbox, even with no reminder due",
+  async () => {
+    const order: string[] = [];
+    const notices = { checked: 1, sent: 1, failed: 0, stale: 0 };
+    const r = await reminderRun({
+      access: () => Promise.resolve({ access: "tok" }),
+      sweep: (access) => {
+        order.push(`sweep:${access}`);
+        return Promise.resolve(notices);
+      },
+      due: 0,
+      remind: () => {
+        order.push("remind");
+        return Promise.resolve({ sent: 0 });
+      },
+    });
+    assertEquals(order, ["sweep:tok"]);
+    assertEquals(r, { mailbox: true, notices, reminders: null });
+
+    // with reminders due: the sweep first, then the reminders, both with the one token
+    order.length = 0;
+    const due = await reminderRun({
+      access: () => Promise.resolve({ access: "tok" }),
+      sweep: () => {
+        order.push("sweep");
+        return Promise.resolve(notices);
+      },
+      due: 3,
+      remind: (access) => {
+        order.push(`remind:${access}`);
+        return Promise.resolve({ sent: 3 });
+      },
+    });
+    assertEquals(order, ["sweep", "remind:tok"]);
+    assertEquals(due, { mailbox: true, notices, reminders: { sent: 3 } });
+  },
+);
+
+Deno.test("run: no mailbox (or Google throws) means no sweep and no reminders", async () => {
+  let ran = 0;
+  const steps = {
+    sweep: () => {
+      ran++;
+      return Promise.resolve({ checked: 0, sent: 0, failed: 0, stale: 0 });
+    },
+    due: 2,
+    remind: () => {
+      ran++;
+      return Promise.resolve(null);
+    },
+  };
+  assertEquals(
+    await reminderRun({ ...steps, access: () => Promise.resolve({ error: "Not connected." }) }),
+    { mailbox: false, skipped: "Not connected." },
+  );
+  assertEquals(await reminderRun({ ...steps, access: () => Promise.reject(new Error("down")) }), {
+    mailbox: false,
+    skipped: "Couldn't reach Google.",
+  });
+  assertEquals(ran, 0);
+  // a sweep that throws never stops the reminders
+  let reminded = false;
+  const r = await reminderRun({
+    access: () => Promise.resolve({ access: "tok" }),
+    sweep: () => Promise.reject(new Error("db")),
+    due: 1,
+    remind: () => {
+      reminded = true;
+      return Promise.resolve({ sent: 1 });
+    },
+  });
+  assert(reminded);
+  assert(r.mailbox && r.notices.error);
+});
+
+Deno.test(
+  "server: finishReminders runs through reminderRun, and no early return skips the sweep",
+  () => {
+    const fn = server.slice(
+      server.indexOf("export async function finishReminders("),
+      server.indexOf("async function sendReminders("),
+    );
+    assert(fn.includes("const run = await reminderRun({"));
+    assert(fn.includes("noticeSweep(noticeStore(svc), now.getTime()"));
+    assert(fn.includes("sendNewApplicationNotice(svc, appId, { access })"));
+    // the old "nothing due" return came before the mailbox and is gone
+    assert(!fn.includes("if (!due.length) return"));
+    const runAt = fn.indexOf("const run = await reminderRun(");
+    // after the secret check, nothing returns before the run
+    const between = fn.slice(
+      fn.indexOf('return json(401, { error: "Not the database." });') + 50,
+      runAt,
+    );
+    assert(!between.includes("return json("));
   },
 );

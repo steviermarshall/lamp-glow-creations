@@ -2,7 +2,9 @@
 //
 //   POST /api/application/remind      every 10 minutes from the database (finish_remind_tick()
 //                                     through pg_cron, 20261120090100_finish_reminders_schedule.sql)
-//                                     with the x-finish-remind-secret header. Sends what is due.
+//                                     with the x-finish-remind-secret header. Sends what is due,
+//                                     and first emails any signed file whose new-file email never
+//                                     went (notice-retry.ts).
 //   POST /api/application/reminders   { action: "unsubscribe", token } from the stop link in an
 //                                     email, or { action: "stop", kind, id } from a rep or admin.
 //
@@ -28,11 +30,14 @@ import {
   doNotContact,
   gmailSend,
   isLampAddress,
+  noticeStore,
   repBySlug,
   replyToFor,
+  sendNewApplicationNotice,
   staffEmails,
   type Rep,
 } from "@/lib/application-links.server";
+import { noticeSweep, reminderRun } from "@/lib/notice-retry";
 import { ownRow } from "@/lib/team-lead";
 import {
   inviteLeftAt,
@@ -214,20 +219,49 @@ export async function finishReminders(request: Request): Promise<Response> {
       .gte("started_at", since)
       .limit(500),
   ]);
-  if (leads.error || invites.error) return json(503, { error: "Couldn't read who started." });
+  // a failed read sends no reminders this time, but the new-file sweep below still runs
+  const readFailed = !!(leads.error || invites.error);
 
   const site = SITE_URL();
-  const due = dueNow(
-    (leads.data ?? []) as unknown as LeadRow[],
-    (invites.data ?? []) as unknown as InviteRow[],
-    now,
-    site,
-  );
-  if (!due.length) return json(200, { due: 0, sent: 0 });
+  const due = readFailed
+    ? []
+    : dueNow(
+        (leads.data ?? []) as unknown as LeadRow[],
+        (invites.data ?? []) as unknown as InviteRow[],
+        now,
+        site,
+      );
 
-  const access = await gmailAccessToken(svc).catch(() => ({ error: "Couldn't reach Google." }));
-  if ("error" in access) return json(200, { due: due.length, sent: 0, skipped: access.error });
+  // the mailbox first, then signed files whose new-file email never went (notice-retry.ts), then
+  // the reminders: the sweep runs on every run with a mailbox, even when no reminder is due
+  const run = await reminderRun({
+    access: () => gmailAccessToken(svc),
+    sweep: (access) =>
+      noticeSweep(noticeStore(svc), now.getTime(), (appId) =>
+        sendNewApplicationNotice(svc, appId, { access }).then((r) => r.outcome),
+      ),
+    due: due.length,
+    remind: (access) => sendReminders(svc, due, access, secret, site, now),
+  });
+  if (readFailed)
+    return json(503, {
+      error: "Couldn't read who started.",
+      ...(run.mailbox ? { notices: run.notices } : {}),
+    });
+  if (!run.mailbox) return json(200, { due: due.length, sent: 0, skipped: run.skipped });
+  if (!run.reminders) return json(200, { due: 0, sent: 0, notices: run.notices });
+  return json(200, { due: due.length, ...run.reminders, notices: run.notices });
+}
 
+/** Sends the reminders that are due, at most PER_RUN. */
+async function sendReminders(
+  svc: Svc,
+  due: Due[],
+  token: string,
+  secret: string,
+  site: string,
+  now: Date,
+): Promise<{ sent: number; failed: number; skipped: number }> {
   const staff = await staffEmails(svc);
   const reps = new Map<string, Rep | null>();
   const seen = new Set<string>();
@@ -285,7 +319,7 @@ export async function finishReminders(request: Request): Promise<Response> {
       legalName: SITE.legalName,
       address: SITE.address,
     });
-    const out = await gmailSend(access.access, {
+    const out = await gmailSend(token, {
       to: email,
       fromName: rep ? `${rep.name} at Lamp` : "Lamp",
       replyTo: rep ? await replyToFor(svc, rep, rep.user_id ?? "") : null,
@@ -306,7 +340,7 @@ export async function finishReminders(request: Request): Promise<Response> {
     }
     sent++;
   }
-  return json(200, { due: due.length, sent, failed, skipped });
+  return { sent, failed, skipped };
 }
 
 /** Stops reminders for every lead and personal link with this email. */

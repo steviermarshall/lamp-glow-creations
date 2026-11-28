@@ -123,7 +123,7 @@ Deno.test("pages: both application pages use it and pass the reason on", () => {
 
 Deno.test("server: the reason is written on the file only while the copy is really missing", () => {
   const fn = server.slice(server.indexOf("export async function notifyNewApplication("));
-  const note = fn.indexOf("copyMissingNote(body.copy_error.trim())");
+  const note = fn.indexOf("copyMissingNote(opts.copyError.trim())");
   assert(note > 0);
   // after the caller is proven and the file is signed, never before
   assert(

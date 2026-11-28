@@ -70,6 +70,21 @@ import { copyMissingNote } from "@/lib/signed-copy";
 import type { Json } from "@/integrations/supabase/types";
 import { recordSigned } from "@/lib/tracking.server";
 import {
+  CLAIM_BODY,
+  mailNotice,
+  NOTICE,
+  NOTICE_LIMIT_MS,
+  sendNoticeOnce,
+  sentBody,
+  SIGNED_READ_LIMIT,
+  type Delivery,
+  type NoticeEvent,
+  type NoticeOutcome,
+  type SignedRow,
+  type SweepStore,
+  type UploadRow,
+} from "@/lib/notice-retry";
+import {
   einVariants,
   newApplicationEmail,
   recipients,
@@ -1543,7 +1558,6 @@ export async function uploadToApplication(request: Request): Promise<Response> {
 
 // ---------- POST /api/application/notify (once the signed copy and statements are in) ----------
 
-const NOTICE = "new_application";
 /** "docs_needed" reads "Docs needed". */
 const stageText = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, " ");
 
@@ -1552,7 +1566,8 @@ const stageText = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replac
  * with NEW_APPLICATION_COPY (Asad and Stevie) copied, the details on top, a warning when the tax
  * ID is already in Lamp, and the signed application and bank statements attached. Asked for by
  * the browser that signed (claim token) or the signed-in merchant who owns the file, within two
- * days of signing, and sent once per file.
+ * days of signing. The sending is sendNewApplicationNotice, which the finish-reminders job also
+ * runs for signed files the browser never asked for.
  */
 export async function notifyNewApplication(request: Request): Promise<Response> {
   const nr = notReady();
@@ -1570,16 +1585,10 @@ export async function notifyNewApplication(request: Request): Promise<Response> 
   const svc = service();
   const app = await svc
     .from("applications")
-    .select("id,user_id,claim_token_hash,rep_slug,business_name,utm")
+    .select("id,user_id,claim_token_hash")
     .eq("id", appId)
     .maybeSingle();
-  const a = app.data as {
-    user_id: string | null;
-    claim_token_hash: string | null;
-    rep_slug: string | null;
-    business_name: string | null;
-    utm: { source?: string } | null;
-  } | null;
+  const a = app.data as { user_id: string | null; claim_token_hash: string | null } | null;
   if (!a) return json(404, { error: "We couldn't find that application." });
   let allowed =
     isToken(claim) &&
@@ -1588,11 +1597,50 @@ export async function notifyNewApplication(request: Request): Promise<Response> 
   if (!allowed && a.user_id) allowed = (await caller(request))?.userId === a.user_id;
   if (!allowed) return json(404, { error: "We couldn't find that application." });
 
-  const det = await svc
-    .from("application_details")
-    .select("business,owners,request,balances,real_estate,signed_name,signed_at")
-    .eq("application_id", appId)
-    .maybeSingle();
+  const r = await sendNewApplicationNotice(svc, appId, {
+    signedIn: !!a.user_id && !claim,
+    copyError: typeof body.copy_error === "string" ? body.copy_error : "",
+  });
+  return json(r.status, r.body);
+}
+
+/**
+ * Sends a signed file's new-file email once, with no check of who asked: the caller has done that
+ * (notifyNewApplication) or is the database's own job (finishReminders). Refused before signing
+ * and after 48 hours; nothing when it already went or another try is sending it right now
+ * (notice-retry.ts). Every try that sends leaves "Emailed ..." or "Couldn't email ..." on the
+ * file's timeline, a Google token failure included.
+ */
+export async function sendNewApplicationNotice(
+  svc: Svc,
+  appId: string,
+  opts: { signedIn?: boolean; copyError?: string; access?: string } = {},
+): Promise<{ status: number; body: Record<string, unknown>; outcome: NoticeOutcome }> {
+  const [app, det] = await Promise.all([
+    svc
+      .from("applications")
+      .select("id,user_id,claim_token_hash,rep_slug,business_name,utm")
+      .eq("id", appId)
+      .maybeSingle(),
+    svc
+      .from("application_details")
+      .select("business,owners,request,balances,real_estate,signed_name,signed_at")
+      .eq("application_id", appId)
+      .maybeSingle(),
+  ]);
+  const a = app.data as {
+    user_id: string | null;
+    claim_token_hash: string | null;
+    rep_slug: string | null;
+    business_name: string | null;
+    utm: { source?: string } | null;
+  } | null;
+  if (!a)
+    return {
+      status: 404,
+      body: { error: "We couldn't find that application." },
+      outcome: { kind: "error" },
+    };
   const d = det.data as {
     business: Record<string, string> | null;
     owners: Record<string, string>[] | null;
@@ -1602,13 +1650,14 @@ export async function notifyNewApplication(request: Request): Promise<Response> 
     signed_name: string | null;
     signed_at: string | null;
   } | null;
-  if (!d?.signed_at) return json(409, { error: "Not signed yet." });
-  if (Date.now() - Date.parse(d.signed_at) > 48 * 3_600_000)
-    return json(410, { error: "Too late." });
+  if (!d?.signed_at)
+    return { status: 409, body: { error: "Not signed yet." }, outcome: { kind: "error" } };
+  if (Date.now() - Date.parse(d.signed_at) > NOTICE_LIMIT_MS)
+    return { status: 410, body: { error: "Too late." }, outcome: { kind: "error" } };
 
   // The page could not save the signed PDF copy: say so on the timeline, with why, so nobody
   // finds a signed file without its copy and has to guess. Only while the copy really is missing.
-  if (typeof body.copy_error === "string" && body.copy_error.trim()) {
+  if (opts.copyError?.trim()) {
     const copy = await svc
       .from("documents")
       .select("id", { count: "exact", head: true })
@@ -1618,17 +1667,133 @@ export async function notifyNewApplication(request: Request): Promise<Response> 
       await svc.from("events").insert({
         application_id: appId,
         kind: "system",
-        body: copyMissingNote(body.copy_error.trim()),
+        body: copyMissingNote(opts.copyError.trim()),
       } as never);
   }
 
-  const already = await svc
-    .from("events")
-    .select("id", { count: "exact", head: true })
-    .eq("application_id", appId)
-    .contains("payload", { notice: NOTICE });
-  if ((already.count ?? 0) > 0) return json(200, { ok: true, already: true });
+  const outcome = await sendNoticeOnce(noticeStore(svc), appId, () =>
+    deliverNewApplication(svc, appId, a, d, opts),
+  );
+  const body: Record<string, unknown> =
+    outcome.kind === "sent"
+      ? { ok: true, sent: true }
+      : outcome.kind === "failed"
+        ? { ok: true, sent: false }
+        : outcome.kind === "already"
+          ? { ok: true, already: true }
+          : outcome.kind === "busy"
+            ? { ok: true, sending: true }
+            : { error: "Try again in a moment." };
+  return { status: outcome.kind === "error" ? 503 : 200, body, outcome };
+}
 
+/** The file's timeline, as notice-retry.ts reads and claims it. */
+export function noticeStore(svc: Svc): SweepStore {
+  return {
+    async events(appIds) {
+      if (!appIds.length) return [];
+      const r = await svc
+        .from("events")
+        .select("id,application_id,created_at,payload")
+        .in("application_id", appIds)
+        .eq("kind", "system")
+        .order("id", { ascending: true })
+        .limit(5000);
+      if (r.error) return null;
+      return ((r.data ?? []) as unknown as NoticeEvent[]).filter((e) => {
+        const p = e.payload ?? {};
+        return (
+          p["notice"] === NOTICE || p["notice_failed"] === NOTICE || p["notice_claim"] === NOTICE
+        );
+      });
+    },
+    async claim(appId, attempt) {
+      const r = await svc
+        .from("events")
+        .insert({
+          application_id: appId,
+          kind: "system",
+          body: CLAIM_BODY,
+          payload: { notice_claim: NOTICE, attempt },
+          visible_to_merchant: false,
+        } as never)
+        .select("id")
+        .single();
+      // events_notice_claim_once: another try holds this attempt
+      if (r.error?.code === "23505") return "taken";
+      const id = (r.data as { id: number } | null)?.id;
+      return r.error || typeof id !== "number" ? null : id;
+    },
+    async finish(id, body, payload) {
+      // only while the claim is still open: a claim keeps CLAIM_BODY until its result is written,
+      // so a late try and the job's write-off can't overwrite each other's result
+      const r = await svc
+        .from("events")
+        .update({ body, payload: payload as Json } as never)
+        .eq("id", id)
+        .eq("body", CLAIM_BODY)
+        .select("id");
+      if (r.error) return null;
+      return ((r.data ?? []) as unknown[]).length > 0;
+    },
+    async record(appId, body, payload) {
+      const r = await svc.from("events").insert({
+        application_id: appId,
+        kind: "system",
+        body,
+        payload: payload as Json,
+        visible_to_merchant: false,
+      } as never);
+      return !r.error;
+    },
+    async signed(fromIso, toIso) {
+      // newest first, so a busy two days can only push the oldest files (the ones nearest their
+      // 48 hour limit) past the read, never one signed an hour ago
+      const r = await svc
+        .from("application_details")
+        .select("application_id,signed_at")
+        .gte("signed_at", fromIso)
+        .lte("signed_at", toIso)
+        .order("signed_at", { ascending: false })
+        .limit(SIGNED_READ_LIMIT);
+      if (r.error) return null;
+      return (r.data ?? []) as unknown as SignedRow[];
+    },
+    async uploads(appIds, sinceIso) {
+      if (!appIds.length) return [];
+      const r = await svc
+        .from("documents")
+        .select("application_id,created_at")
+        .in("application_id", appIds)
+        .gte("created_at", sinceIso)
+        .limit(1000);
+      if (r.error) return null;
+      return (r.data ?? []) as unknown as UploadRow[];
+    },
+  };
+}
+
+/** Builds the new-file email with its attachments and sends it from the Lamp mailbox. */
+async function deliverNewApplication(
+  svc: Svc,
+  appId: string,
+  a: {
+    user_id: string | null;
+    claim_token_hash: string | null;
+    rep_slug: string | null;
+    business_name: string | null;
+    utm: { source?: string } | null;
+  },
+  d: {
+    business: Record<string, string> | null;
+    owners: Record<string, string>[] | null;
+    request: { amount?: string } | null;
+    balances: { current?: string; payment?: string }[] | null;
+    real_estate: { owns?: string } | null;
+    signed_name: string | null;
+  },
+  opts: { signedIn?: boolean; access?: string },
+): Promise<Delivery> {
   const business = d.business ?? {};
   const owner = d.owners?.[0] ?? {};
 
@@ -1729,16 +1894,17 @@ export async function notifyNewApplication(request: Request): Promise<Response> 
 
   const rep = a.rep_slug ? await repBySlug(svc, a.rep_slug).catch(() => null) : null;
   const to = recipients(await emailOf(svc, rep?.user_id ?? null), NEW_APPLICATION_COPY);
-  if (!to) return json(200, { ok: true, sent: false });
+  if (!to) return { ok: false, why: "no one to email" };
   const balances = d.balances ?? [];
+  // the job has no request to read: a file with an account and no claim token was signed signed in
+  const signedIn = opts.signedIn ?? (!!a.user_id && !a.claim_token_hash);
   const m = newApplicationEmail({
     repName: rep?.name ?? null,
-    via:
-      a.user_id && !claim
-        ? "their Lamp account"
-        : a.utm?.source === "website_application"
-          ? "the website's application"
-          : "an application link",
+    via: signedIn
+      ? "their Lamp account"
+      : a.utm?.source === "website_application"
+        ? "the website's application"
+        : "an application link",
     signer: d.signed_name ?? "",
     business,
     owner,
@@ -1750,49 +1916,38 @@ export async function notifyNewApplication(request: Request): Promise<Response> 
     attached: { application: !!pdf, statements, leftOff },
   });
 
-  const access = await gmailAccessToken(svc);
-  let sentOk = false;
-  let why = "";
-  if ("error" in access) why = access.error;
-  else {
-    try {
-      const raw = buildMime({
-        from: `${fromName("Lamp")} <${MAILBOX()}>`,
-        to: to.to,
-        cc: to.cc,
-        subject: m.subject,
-        body: m.text,
-        attachments,
-      });
-      const res = await fetch(GMAIL_SEND_URL(), {
+  const given = opts.access;
+  const mailed = await mailNotice(
+    () => (given ? Promise.resolve({ access: given }) : gmailAccessToken(svc)),
+    (access) =>
+      fetch(GMAIL_SEND_URL(), {
         method: "POST",
-        headers: { Authorization: `Bearer ${access.access}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ raw: b64url(raw) }),
-      });
-      sentOk = res.ok;
-      if (!res.ok) why = `Gmail ${res.status}`;
-    } catch {
-      why = "couldn't reach Gmail";
-    }
-  }
-  await svc.from("events").insert({
-    application_id: appId,
-    kind: "system",
-    body: sentOk
-      ? `Emailed the signed application to ${[to.to, ...to.cc].join(", ")}${duplicates.length ? " (tax ID already in Lamp)" : ""}.`
-      : `Couldn't email the signed application (${why}).`,
-    payload: sentOk
-      ? {
-          notice: NOTICE,
-          to: to.to,
-          cc: to.cc,
-          attachments: attachments.length,
-          duplicates: duplicates.length,
-        }
-      : { notice_failed: NOTICE, error: why },
-    visible_to_merchant: false,
-  });
-  return json(200, { ok: true, sent: sentOk });
+        headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          raw: b64url(
+            buildMime({
+              from: `${fromName("Lamp")} <${MAILBOX()}>`,
+              to: to.to,
+              cc: to.cc,
+              subject: m.subject,
+              body: m.text,
+              attachments,
+            }),
+          ),
+        }),
+      }),
+  );
+  if (!mailed.ok) return mailed;
+  return {
+    ok: true,
+    body: sentBody([to.to, ...to.cc], duplicates.length),
+    payload: {
+      to: to.to,
+      cc: to.cc,
+      attachments: attachments.length,
+      duplicates: duplicates.length,
+    },
+  };
 }
 
 // ---------- POST /api/application/finish (the file's rep or an admin) ----------
