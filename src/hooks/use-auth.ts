@@ -63,19 +63,3 @@ async function insertDraft(userId: string, email: string | undefined) {
   clearDraft();
   return true;
 }
-
-/** Records the lead as soon as we have an email, so unfinished sign-ups aren't lost. */
-export async function recordLead(draft: Omit<Draft, "savedAt">) {
-  if (!getSupabase() || !draft.answers.email) return;
-  // through the site's server, which takes only these fields and limits each network
-  await fetch("/api/leads", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email: draft.answers.email,
-      first_name: draft.answers.firstName ?? null,
-      answers: draft.answers,
-      utm: draft.utm,
-    }),
-  });
-}

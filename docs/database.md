@@ -73,7 +73,7 @@ routes instead (`src/routes/api.*.ts`, code in `src/lib/*.server.ts`):
 | files in the `documents` bucket (statements, IDs, signed copies) | refused: no upload, list, link or remove | `/api/documents/upload`, `/api/documents` (folder, remove, open) |
 | `documents` rows | reading the list still works (the board counts them); add, review, remove refused | `/api/documents` (review), upload, remove |
 | `staff_application_details()`, `reveal_application_details()` | refused | `/api/application-details` |
-| `leads` (the public form) | refused; only email, first name, phone, answers and utm may be set at all | `/api/leads`, at most 10 an hour from one network |
+| `leads` (the application's first screen) | refused; only email, first name, phone, answers and utm may be set at all | written only by the server: `/api/application/start` (`application-start.server.ts`), at most 10 an hour from one network. The old `/api/leads` route was removed on 2026-11-27, since anyone could post a lead with any rep's `ref` and set off that rep's "Started on your link" alert |
 
 The server proves a request came through it with the `x-lamp-server` header (its secret is
 `LAMP_SERVER_STAMP` in Lovable Cloud's secrets). The database keeps only the secret's SHA-256 in

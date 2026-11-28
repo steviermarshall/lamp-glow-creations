@@ -27,7 +27,6 @@ import { Route as ApiApplicationInvitesRouteImport } from './routes/api.applicat
 import { Route as ApiCalendarRouteImport } from './routes/api.calendar'
 import { Route as ApiDocumentsRouteImport } from './routes/api.documents'
 import { Route as ApiDriveRouteImport } from './routes/api.drive'
-import { Route as ApiLeadsRouteImport } from './routes/api.leads'
 import { Route as ApiRepDocumentsRouteImport } from './routes/api.rep-documents'
 import { Route as ApiServerCheckRouteImport } from './routes/api.server-check'
 import { Route as ApiStatementsRouteImport } from './routes/api.statements'
@@ -161,11 +160,6 @@ const ApiDocumentsRoute = ApiDocumentsRouteImport.update({
 const ApiDriveRoute = ApiDriveRouteImport.update({
   id: '/api/drive',
   path: '/api/drive',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiLeadsRoute = ApiLeadsRouteImport.update({
-  id: '/api/leads',
-  path: '/api/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiRepDocumentsRoute = ApiRepDocumentsRouteImport.update({
@@ -409,7 +403,6 @@ export interface FileRoutesByFullPath {
   '/api/calendar': typeof ApiCalendarRoute
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/drive': typeof ApiDriveRoute
-  '/api/leads': typeof ApiLeadsRoute
   '/api/rep-documents': typeof ApiRepDocumentsRoute
   '/api/server-check': typeof ApiServerCheckRoute
   '/api/statements': typeof ApiStatementsRoute
@@ -474,7 +467,6 @@ export interface FileRoutesByTo {
   '/api/calendar': typeof ApiCalendarRoute
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/drive': typeof ApiDriveRoute
-  '/api/leads': typeof ApiLeadsRoute
   '/api/rep-documents': typeof ApiRepDocumentsRoute
   '/api/server-check': typeof ApiServerCheckRoute
   '/api/statements': typeof ApiStatementsRoute
@@ -540,7 +532,6 @@ export interface FileRoutesById {
   '/api/calendar': typeof ApiCalendarRoute
   '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/drive': typeof ApiDriveRoute
-  '/api/leads': typeof ApiLeadsRoute
   '/api/rep-documents': typeof ApiRepDocumentsRoute
   '/api/server-check': typeof ApiServerCheckRoute
   '/api/statements': typeof ApiStatementsRoute
@@ -607,7 +598,6 @@ export interface FileRouteTypes {
     | '/api/calendar'
     | '/api/documents'
     | '/api/drive'
-    | '/api/leads'
     | '/api/rep-documents'
     | '/api/server-check'
     | '/api/statements'
@@ -672,7 +662,6 @@ export interface FileRouteTypes {
     | '/api/calendar'
     | '/api/documents'
     | '/api/drive'
-    | '/api/leads'
     | '/api/rep-documents'
     | '/api/server-check'
     | '/api/statements'
@@ -737,7 +726,6 @@ export interface FileRouteTypes {
     | '/api/calendar'
     | '/api/documents'
     | '/api/drive'
-    | '/api/leads'
     | '/api/rep-documents'
     | '/api/server-check'
     | '/api/statements'
@@ -803,7 +791,6 @@ export interface RootRouteChildren {
   ApiCalendarRoute: typeof ApiCalendarRoute
   ApiDocumentsRoute: typeof ApiDocumentsRouteWithChildren
   ApiDriveRoute: typeof ApiDriveRoute
-  ApiLeadsRoute: typeof ApiLeadsRoute
   ApiRepDocumentsRoute: typeof ApiRepDocumentsRoute
   ApiServerCheckRoute: typeof ApiServerCheckRoute
   ApiStatementsRoute: typeof ApiStatementsRoute
@@ -971,13 +958,6 @@ declare module '@tanstack/react-router' {
       path: '/api/drive'
       fullPath: '/api/drive'
       preLoaderRoute: typeof ApiDriveRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/leads': {
-      id: '/api/leads'
-      path: '/api/leads'
-      fullPath: '/api/leads'
-      preLoaderRoute: typeof ApiLeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/rep-documents': {
@@ -1339,7 +1319,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCalendarRoute: ApiCalendarRoute,
   ApiDocumentsRoute: ApiDocumentsRouteWithChildren,
   ApiDriveRoute: ApiDriveRoute,
-  ApiLeadsRoute: ApiLeadsRoute,
   ApiRepDocumentsRoute: ApiRepDocumentsRoute,
   ApiServerCheckRoute: ApiServerCheckRoute,
   ApiStatementsRoute: ApiStatementsRoute,

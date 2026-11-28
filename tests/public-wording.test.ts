@@ -22,7 +22,6 @@ import login from "../src/routes/login.tsx" with { type: "text" };
 import router from "../src/router.tsx" with { type: "text" };
 import layout from "../src/components/site/layout.tsx" with { type: "text" };
 import faqList from "../src/components/site/faq.tsx" with { type: "text" };
-import applyFlow from "../src/components/site/apply-flow.tsx" with { type: "text" };
 import auth from "../src/components/site/auth.tsx" with { type: "text" };
 import quickQuestion from "../src/components/site/quick-question.tsx" with { type: "text" };
 import lampOrb from "../src/components/site/lamp-orb.tsx" with { type: "text" };
@@ -51,7 +50,6 @@ const PUBLIC: Record<string, string> = {
   "src/router.tsx": router,
   "src/components/site/layout.tsx": layout,
   "src/components/site/faq.tsx": faqList,
-  "src/components/site/apply-flow.tsx": applyFlow,
   "src/components/site/auth.tsx": auth,
   "src/components/site/quick-question.tsx": quickQuestion,
   "src/components/site/lamp-orb.tsx": lampOrb,
