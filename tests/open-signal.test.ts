@@ -5,6 +5,18 @@
 // the rep filled it in on the call. Opened and Started now mean the merchant's own browser.
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { deviceOf, isScanner, openLines, tracksMerchant } from "../src/lib/open-signal.ts";
+import {
+  fetchStartWithin,
+  fromServer,
+  keptStartKey,
+  retryKeptStart,
+  sendStart,
+  START_TIMEOUT_MS,
+  startVerdict,
+  type KeptStorage,
+  type StartReply,
+} from "../src/lib/start-retry.ts";
+import { openRequest } from "../src/lib/application-resume.ts";
 import server from "../src/lib/application-links.server.ts" with { type: "text" };
 import paper from "../src/components/application/paper-application.tsx" with { type: "text" };
 import link from "../src/components/application/link-application.tsx" with { type: "text" };
@@ -120,6 +132,253 @@ Deno.test("pages: the open and start calls carry the staff session when there is
     );
   }
   assert(visit.includes('headers["Authorization"] = `Bearer ${token}`'));
+  // a personal link and a rep's public link still make the open call, with the staff session;
+  // only the website (no token, no rep) skips it
+  assert(openRequest("tok", "zeus") !== null && openRequest(null, "zeus") !== null);
+  assert(link.includes("const ask = openRequest(token, repSlug);"));
+  const call = link.slice(link.indexOf('fetch("/api/application/open", {'));
+  assert(call.slice(0, 200).includes("headers: await visitHeaders(),"));
+});
+
+// ---------- the contact save is retried, never lost to one bad answer (gap 2, 2026-11-27) ----------
+
+/** A tab's sessionStorage, in memory. */
+function tab(): KeptStorage & { data: Map<string, string> } {
+  const data = new Map<string, string>();
+  return {
+    data,
+    getItem: (k) => data.get(k) ?? null,
+    setItem: (k, v) => void data.set(k, v),
+    removeItem: (k) => void data.delete(k),
+  };
+}
+
+/** The start route's own answer: { error } in its own words, or the saved lead's progress. */
+const own = (status: number): StartReply => ({
+  status,
+  body:
+    status === 200
+      ? { ok: true, progress: "p-1" }
+      : status === 400
+        ? { error: "Enter a valid email." }
+        : { error: "Couldn't save that. Try again." },
+});
+/** A 5xx the route never wrote: the edge's error page, or a worker that crashed. */
+const edge = (status: number): StartReply => ({ status, body: null });
+const LOST: StartReply = { status: null, body: null };
+const SLOW: StartReply = { status: null, body: null, timedOut: true };
+
+/** A start route that answers each call from the list, and remembers what it was sent. */
+function route(...answers: StartReply[]) {
+  const sent: Record<string, unknown>[] = [];
+  const send = (body: Record<string, unknown>): Promise<StartReply> => {
+    sent.push(body);
+    return Promise.resolve(answers.shift() ?? LOST);
+  };
+  return { sent, send };
+}
+
+const CONTACT = { rep: "", first_name: "Thomas", email: "t@example.test", form: "online" };
+const now = () => Promise.resolve();
+
+Deno.test("start: only a request the server never answered is worth another try", () => {
+  assertEquals(startVerdict(200), "saved");
+  assertEquals(startVerdict(400, true), "fix");
+  for (const s of [500, 502, 503, 504, null]) assertEquals(startVerdict(s), "retry", String(s));
+  // the route's own 500 has already emailed the team the details: one person, one email
+  for (const s of [500, 503]) assertEquals(startVerdict(s, true), "stop", String(s));
+  assertEquals(fromServer(own(500).body), true);
+  assertEquals(fromServer(edge(502).body), false);
+  assertEquals(fromServer("<html>error 1101</html>"), false);
+  // the network's hourly cap and an inactive rep's link are final
+  for (const s of [429, 404, 403, 409]) assertEquals(startVerdict(s, true), "stop", String(s));
+});
+
+Deno.test(
+  "start: a lost answer keeps the contact and tries once more before the range",
+  async () => {
+    const storage = tab();
+    const r = route(LOST, own(200));
+    const out = await sendStart(CONTACT, { send: r.send, storage, store: "website", wait: now });
+    assertEquals(out, { outcome: "saved", progress: "p-1" });
+    assertEquals(r.sent, [CONTACT, CONTACT]);
+    // saved on the retry: nothing is left to try again
+    assertEquals(storage.data.size, 0);
+    assertEquals(await retryKeptStart({ send: r.send, storage, store: "website" }), null);
+    assertEquals(r.sent.length, 2);
+  },
+);
+
+Deno.test("start: still unanswered, it is kept for one last try at the next step", async () => {
+  const storage = tab();
+  const r = route(edge(503), LOST, own(200));
+  const out = await sendStart(CONTACT, { send: r.send, storage, store: "website", wait: now });
+  // the visitor carries on: kept, not an error on their screen
+  assertEquals(out, { outcome: "kept" });
+  assertEquals(r.sent.length, 2);
+  assertEquals(JSON.parse(storage.data.get(keptStartKey("website"))!), CONTACT);
+  // the next step sends it once, and then nothing is kept whatever the answer
+  assertEquals(await retryKeptStart({ send: r.send, storage, store: "website" }), {
+    outcome: "saved",
+    progress: "p-1",
+  });
+  assertEquals(r.sent.length, 3);
+  assertEquals(storage.data.size, 0);
+  assertEquals(await retryKeptStart({ send: r.send, storage, store: "website" }), null);
+  assertEquals(r.sent.length, 3);
+  // and a last try that fails too is dropped, never retried a fourth time
+  const again = tab();
+  const r2 = route(edge(502), edge(502), edge(502), own(200));
+  await sendStart(CONTACT, { send: r2.send, storage: again, store: "zeus", wait: now });
+  assertEquals(
+    (await retryKeptStart({ send: r2.send, storage: again, store: "zeus" }))?.outcome,
+    "stopped",
+  );
+  assertEquals(await retryKeptStart({ send: r2.send, storage: again, store: "zeus" }), null);
+  assertEquals(r2.sent.length, 3);
+});
+
+Deno.test(
+  "start: the server's own 500 is final, so a failing save sends one email, not three",
+  async () => {
+    // the leads insert keeps failing: the route emails the team "not saved" and answers 500
+    const storage = tab();
+    const r = route(own(500), own(500), own(500));
+    const out = await sendStart(CONTACT, { send: r.send, storage, store: "website", wait: now });
+    assertEquals(out, { outcome: "stopped" });
+    assertEquals(r.sent.length, 1);
+    assertEquals(storage.data.size, 0);
+    assertEquals(await retryKeptStart({ send: r.send, storage, store: "website" }), null);
+    assertEquals(r.sent.length, 1);
+    // a lost first answer, then the route's own 500: two requests, and nothing kept for a third
+    const again = tab();
+    const r2 = route(LOST, own(500), own(500));
+    assertEquals(
+      (await sendStart(CONTACT, { send: r2.send, storage: again, store: "website", wait: now }))
+        .outcome,
+      "stopped",
+    );
+    assertEquals(await retryKeptStart({ send: r2.send, storage: again, store: "website" }), null);
+    assertEquals(r2.sent.length, 2);
+  },
+);
+
+Deno.test(
+  "start: a timeout waits for the next step, so a slow save isn't sent twice at once",
+  async () => {
+    const storage = tab();
+    let paused = 0;
+    const r = route(SLOW, own(200));
+    const wait = () => {
+      paused++;
+      return Promise.resolve();
+    };
+    assertEquals(await sendStart(CONTACT, { send: r.send, storage, store: "website", wait }), {
+      outcome: "kept",
+    });
+    assertEquals(r.sent.length, 1);
+    assertEquals(paused, 0);
+    assertEquals(JSON.parse(storage.data.get(keptStartKey("website"))!), CONTACT);
+    assertEquals(
+      (await retryKeptStart({ send: r.send, storage, store: "website" }))?.outcome,
+      "saved",
+    );
+    assertEquals(r.sent.length, 2);
+  },
+);
+
+Deno.test("start: the browser's send tells a timeout from a dropped connection", async () => {
+  const real = globalThis.fetch;
+  try {
+    // never answers until the page gives up on it
+    globalThis.fetch = ((_: unknown, init?: RequestInit) =>
+      new Promise((_ok, fail) =>
+        init?.signal?.addEventListener("abort", () =>
+          fail(new DOMException("aborted", "AbortError")),
+        ),
+      )) as typeof fetch;
+    assertEquals(await fetchStartWithin(5)(CONTACT), { status: null, body: null, timedOut: true });
+    globalThis.fetch = (() => Promise.reject(new TypeError("offline"))) as typeof fetch;
+    assertEquals(await fetchStartWithin(1000)(CONTACT), { status: null, body: null });
+    // an edge's HTML error page has no body the page can read, so it counts as not the route's
+    globalThis.fetch = (() =>
+      Promise.resolve(new Response("<html>bad gateway</html>", { status: 502 }))) as typeof fetch;
+    const reply = await fetchStartWithin(1000)(CONTACT);
+    assertEquals(reply, { status: 502, body: null });
+    assertEquals(startVerdict(reply.status, fromServer(reply.body)), "retry");
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        Response.json({ error: "Couldn't save that. Try again." }, { status: 500 }),
+      )) as typeof fetch;
+    const mine = await fetchStartWithin(1000)(CONTACT);
+    assertEquals(startVerdict(mine.status, fromServer(mine.body)), "stop");
+  } finally {
+    globalThis.fetch = real;
+  }
+  // well above the route's slowest normal answer (the save plus the Gmail heads-up)
+  assert(START_TIMEOUT_MS >= 25_000);
+});
+
+Deno.test("start: a 429 or 404 is never retried, and a 400 shows the server's words", async () => {
+  for (const status of [429, 404]) {
+    const storage = tab();
+    const r = route(own(status), own(200));
+    const out = await sendStart(CONTACT, { send: r.send, storage, store: "website", wait: now });
+    assertEquals(out, { outcome: "stopped" }, String(status));
+    assertEquals(r.sent.length, 1, String(status));
+    assertEquals(storage.data.size, 0, String(status));
+  }
+  // an edge 5xx followed by the cap stops there too
+  const storage = tab();
+  const r = route(edge(502), own(429), own(200));
+  assertEquals(
+    (await sendStart(CONTACT, { send: r.send, storage, store: "website", wait: now })).outcome,
+    "stopped",
+  );
+  assertEquals(storage.data.size, 0);
+  assertEquals(await retryKeptStart({ send: r.send, storage, store: "website" }), null);
+  assertEquals(r.sent.length, 2);
+  const bad = route(own(400));
+  assertEquals(await sendStart(CONTACT, { send: bad.send, storage: tab(), store: "website" }), {
+    outcome: "fix",
+    error: "Enter a valid email.",
+  });
+  // a browser that refuses sessionStorage still gets the retry before the range
+  const none = route(LOST, own(200));
+  assertEquals(
+    (await sendStart(CONTACT, { send: none.send, storage: null, store: "website", wait: now }))
+      .outcome,
+    "saved",
+  );
+});
+
+Deno.test("start: the page uses the retry and never holds the visitor up", () => {
+  const gate = link.slice(
+    link.indexOf("function ContactGate("),
+    link.indexOf("function RangeCard("),
+  );
+  assert(
+    gate.includes("await sendStart(body, { send: fetchStart, storage: tabStorage(), store })"),
+  );
+  assert(gate.includes('if (out.outcome === "fix") {'));
+  // past a refusal of the details, they always go on
+  assert(gate.indexOf("onDone({") > gate.indexOf('if (out.outcome === "fix") {'));
+  // the last try runs when they leave the range and at every step change
+  assert(link.includes("setShowRange(false);\n                  retryStart();"));
+  assert(
+    link.includes(
+      "setVisited((v) => Math.max(v, to));\n    retryStart(Math.min(Math.max(visited, to), lastStep));",
+    ),
+  );
+  // a retry that lands reports the furthest step itself: the report sent before it had no token
+  const retry = link.slice(link.indexOf("const retryStart = (furthest = 0) => {"));
+  const saved = retry.indexOf("saveProgressToken(store, r.progress);");
+  assert(saved > 0 && retry.indexOf("reportStage(store, STEPS[furthest]!.id", saved) > saved);
+  // before the script runs the contact form can't be sent (a native submit drops the answers)
+  assert(gate.includes("const [ready, setReady] = useState(false);"));
+  assert(gate.includes("useEffect(() => setReady(true), []);"));
+  assert(gate.includes("<fieldset disabled={!ready}"));
+  assert(gate.indexOf("<fieldset disabled={!ready}") < gate.indexOf('type="submit"'));
 });
 
 Deno.test(

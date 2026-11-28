@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { findRep, seo } from "@/lib/site";
 import { isToken } from "@/lib/application-links";
 import { carriedSearch, quickFromParams } from "@/lib/apply";
+import { PageShell } from "@/components/site/layout";
 import { LinkApplication } from "@/components/application/link-application";
 
 // The full application from a link. getlamp.app/application/<rep>?i=<token> is a personal link a
@@ -34,12 +35,16 @@ function Application() {
   const { rep } = Route.useParams();
   const search = Route.useSearch();
   const { i, fill } = search;
+  // the page shell is the route's, so the server's HTML preloads its code with the route
   return (
-    <LinkApplication
-      repSlug={rep.toLowerCase()}
-      token={i ?? null}
-      filling={fill === "rep"}
-      prefill={i ? {} : quickFromParams(search)}
-    />
+    <PageShell member themeToggle={false} minimalHeader footer={false} tone="night">
+      <LinkApplication
+        repSlug={rep.toLowerCase()}
+        token={i ?? null}
+        filling={fill === "rep"}
+        prefill={i ? {} : quickFromParams(search)}
+        carried={i ? {} : carriedSearch(search)}
+      />
+    </PageShell>
   );
 }

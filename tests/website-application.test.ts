@@ -12,6 +12,22 @@ import {
   quickFromParams,
 } from "../src/lib/apply.ts";
 import { startedEmail } from "../src/lib/new-application-email.ts";
+import {
+  applicationPath,
+  countWord,
+  firstPaint,
+  firstUnanswered,
+  openRequest,
+  pickSaved,
+  quickOptionHref,
+  resumeAt,
+  STATEMENT_MONTHS,
+  stepTracked,
+  WEBSITE_OPEN,
+  withThisBrowser,
+} from "../src/lib/application-resume.ts";
+import { REQUIRED_DOCUMENTS } from "../src/lib/documents.ts";
+import quickQuestion from "../src/components/site/quick-question.tsx" with { type: "text" };
 import original from "../supabase/migrations/20261027120000_application_links.sql" with { type: "text" };
 import migration from "../supabase/migrations/20261119200000_website_application.sql" with { type: "text" };
 import applyRoute from "../src/routes/apply.tsx" with { type: "text" };
@@ -220,4 +236,180 @@ Deno.test("staff see where a website file or lead came from", () => {
   assert(cameIn.includes('utm["source"] === "website_application"'));
   assert(cameIn.includes("The website's application (getlamp.app/application)"));
   assert(started.includes(': "Website"'));
+});
+
+// ---------- first paint (gap 4, 2026-11-27) ----------
+// /application used to render a spinner until the script loaded and /api/application/open
+// answered, although for the website that answer is a constant. Now the server renders the first
+// question, a tap works before the script runs, and this browser's saved place comes back after
+// the first render, so the server's HTML and the browser's first render match.
+
+const AMOUNT = QUESTIONS[0]!;
+const ANSWER = AMOUNT.options[2]!.id;
+
+Deno.test("first paint: the website asks the server nothing; links still do", () => {
+  assertEquals(openRequest(null, ""), null);
+  assertEquals(openRequest("tok", "zeus"), { token: "tok" });
+  assertEquals(openRequest(null, "zeus"), { rep: "zeus" });
+  // the page starts with exactly what the server would have answered for the website
+  assertEquals(WEBSITE_OPEN, { state: "open", draft: null, rep: null, prefill: null });
+  const flat = links.replace(/\s+/g, " ");
+  assert(
+    flat.includes(
+      'if (slug === "") return json(200, { state: "open", draft: null, rep: null, prefill: null,',
+    ),
+  );
+  // wiring: the website's first render is already open, and the one open call sits after the
+  // website returns (so it is never made for the website)
+  assert(page.includes('useState<OpenResponse | "error" | null>(website ? WEBSITE_OPEN : null)'));
+  const mount = page.slice(page.indexOf("const ask = openRequest(token, repSlug);"));
+  const websiteReturn = mount.indexOf("if (!ask) {");
+  const call = mount.indexOf('fetch("/api/application/open"');
+  assert(websiteReturn >= 0 && call > websiteReturn);
+  assert(mount.slice(websiteReturn, call).includes("return;"));
+  assert(mount.includes("body: JSON.stringify(ask),"));
+});
+
+Deno.test("first paint: the first render reads only the link, never this browser's storage", () => {
+  // any read of storage during the first render fails this test
+  const g = globalThis as Record<string, unknown>;
+  const had = "localStorage" in g;
+  const before = g["localStorage"];
+  Object.defineProperty(g, "localStorage", {
+    configurable: true,
+    get() {
+      throw new Error("the first render read localStorage");
+    },
+  });
+  try {
+    assertEquals(firstPaint(null, {}), { quick: {}, quickStep: 0, contactDone: false });
+    assertEquals(firstPaint(null, { amount: ANSWER }), {
+      quick: { amount: ANSWER },
+      quickStep: 1,
+      contactDone: false,
+    });
+    // a personal link already knows who it's for
+    assertEquals(firstPaint("tok", {}).contactDone, true);
+  } finally {
+    if (had) Object.defineProperty(g, "localStorage", { configurable: true, value: before });
+    else delete g["localStorage"];
+  }
+  // wiring: no state starts from storage. Every useState in the page starts from a constant, the
+  // link (firstPaint) or the website's fixed answer, so a storage read through a helper of any
+  // name is caught too
+  const comp = page.slice(page.indexOf("export function LinkApplication("));
+  const body = comp.slice(0, comp.indexOf("\nfunction "));
+  const inits: string[] = [];
+  for (let at = body.indexOf("useState"); at >= 0; at = body.indexOf("useState", at + 1)) {
+    let i = body.indexOf("(", at);
+    if (i < 0 || !/^useState(<[\s\S]*>)?$/.test(body.slice(at, i))) continue;
+    const from = ++i;
+    for (let depth = 1; depth; i++) depth += body[i] === "(" ? 1 : body[i] === ")" ? -1 : 0;
+    inits.push(body.slice(from, i - 1).trim());
+  }
+  assert(inits.length >= 10, String(inits.length));
+  const SAFE =
+    /^(|false|true|-?\d+|""|null|\[\]|empty[A-Z]\w*|first\.\w+|\(\) => firstPaint\(token, prefill\)|website \? WEBSITE_OPEN : null)$/;
+  for (const init of inits) assert(SAFE.test(init), `useState(${init})`);
+  assert(page.includes("const [first] = useState(() => firstPaint(token, prefill));"));
+});
+
+Deno.test("returning visitor: their answers and contact come back, then their step", () => {
+  const first = firstPaint(null, {});
+  const stored = { amount: ANSWER, purpose: QUESTIONS[1]!.options[0]!.id };
+  // quick answers kept in this browser come back, the link's answers win, and someone who gave
+  // their name and number skips the questions
+  const back = withThisBrowser(first, { amount: AMOUNT.options[0]!.id }, stored, true);
+  assertEquals(back.quick, { amount: AMOUNT.options[0]!.id, purpose: stored.purpose });
+  assertEquals(back.quickStep, 2);
+  assertEquals(back.contactDone, true);
+  assertEquals(withThisBrowser(first, {}, {}, false), first);
+  // the saved draft: this browser's, unless a rep's phone answers are newer
+  const local = { d: "browser", step: 4, savedAt: 200 };
+  const server = { d: "phone", step: 2, savedAt: 100 };
+  assertEquals(pickSaved(local, server), local);
+  assertEquals(pickSaved(local, { ...server, savedAt: 300 })?.d, "phone");
+  assertEquals(pickSaved(null, server), server);
+  assertEquals(pickSaved(null, null), null);
+  // they land on the first step with a gap, and every step they reached stays reachable
+  assertEquals(resumeAt(4, 1), { step: 1, visited: 4 });
+  assertEquals(resumeAt(4, -1), { step: 4, visited: 4 });
+  assertEquals(resumeAt(2, 5), { step: 2, visited: 2 });
+  // wiring: the restore is one function, run at mount for the website and after the open call
+  // for a link, so a returning website visitor keeps their place
+  assert(page.includes("const restoreSaved = (o: OpenResponse) => {"));
+  assert(page.includes("const saved = pickSaved(local, server);"));
+  const mount = page.slice(page.indexOf("const ask = openRequest(token, repSlug);"));
+  assert(
+    mount.indexOf("restoreSaved(WEBSITE_OPEN);") < mount.indexOf('fetch("/api/application/open"'),
+  );
+  assert(mount.includes('if (o.state === "open") restoreSaved(o);'));
+  assert(page.includes("loadDraft(draftKey(o.draft, store))"));
+});
+
+Deno.test("drop-off: nothing is logged before a returning visitor's place is back", () => {
+  assertEquals(stepTracked(null, false, WEBSITE_OPEN), false);
+  assertEquals(stepTracked(null, true, WEBSITE_OPEN), true);
+  // a personal link, a link still opening, or one that didn't open is never counted here
+  assertEquals(stepTracked("tok", true, WEBSITE_OPEN), false);
+  assertEquals(stepTracked(null, true, null), false);
+  assertEquals(stepTracked(null, true, "error"), false);
+  assertEquals(stepTracked(null, true, { ...WEBSITE_OPEN, state: "expired" }), false);
+  // wiring: the track waits for that flag, which is set only after the restore
+  const effect = page.slice(page.indexOf("useEffect(() => {\n    if (!stepTracked("));
+  assert(effect.includes('track(\n      "apply_step",'));
+  assert(page.includes("[token, restored, open, quickStep, contactDone, showRange, step, done]"));
+  const mount = page.slice(page.indexOf("const ask = openRequest(token, repSlug);"));
+  for (const restore of ["restoreSaved(WEBSITE_OPEN);", 'if (o.state === "open") restoreSaved(o);'])
+    assert(mount.indexOf(restore) < mount.indexOf("setRestored(true);", mount.indexOf(restore)));
+});
+
+Deno.test("quick questions: each answer is a link that works before the script loads", () => {
+  const carried = { amount: ANSWER, utm_source: "google", email: "someone@example.test" };
+  const href = quickOptionHref(
+    applicationPath(""),
+    carried,
+    { amount: ANSWER },
+    "purpose",
+    "payroll",
+  );
+  const url = new URL(href, "https://getlamp.app");
+  assertEquals(url.pathname, "/application");
+  assertEquals(url.searchParams.get("purpose"), "payroll");
+  assertEquals(url.searchParams.get("amount"), ANSWER);
+  assertEquals(url.searchParams.get("utm_source"), "google");
+  // nothing personal rides in the link
+  assertEquals(url.searchParams.get("email"), null);
+  // loading that link skips both questions: the server renders the third
+  const landed = quickFromParams(Object.fromEntries(url.searchParams));
+  assertEquals(landed, { amount: ANSWER, purpose: "payroll" });
+  assertEquals(firstPaint(null, landed).quickStep, 2);
+  assertEquals(firstUnanswered(landed), 2);
+  // a rep's public link stays on that rep's page
+  assertEquals(
+    new URL(quickOptionHref(applicationPath("zeus"), {}, {}, "amount", ANSWER), "https://x.test")
+      .pathname,
+    "/application/zeus",
+  );
+  // the option is an <a>; once the script runs the page handles the tap and the link isn't followed
+  assert(quickQuestion.includes("href={hrefFor(o.id)}"));
+  const anchor = quickQuestion.slice(quickQuestion.indexOf("<a\n"));
+  assert(anchor.indexOf("e.preventDefault();") < anchor.indexOf("onChoose(o.id);"));
+  assert(page.includes("quickOptionHref(applicationPath(repSlug), carried, quick, key, id)"));
+  // the routes hand over the quick answers and utm_ tags; a personal link carries none
+  assert(websiteRoute.includes("carried={search}"));
+  assert(repRoute.includes("carried={i ? {} : carriedSearch(search)}"));
+});
+
+Deno.test("copy: the credit line covers checking, and the months match the checklist", () => {
+  assert(page.includes("Checking your options never affects your credit."));
+  assert(!page.includes("Your answers are private and never affect your credit"));
+  const statements = REQUIRED_DOCUMENTS.find((r) => r.kind === "bank_statement")!;
+  assertEquals(STATEMENT_MONTHS, statements.required);
+  assertEquals(countWord(3), "three");
+  assertEquals(countWord(12), "12");
+  assert(
+    page.includes("Your last {countWord(STATEMENT_MONTHS)} months of business bank statements."),
+  );
+  assert(!/last (three|four) months/.test(page));
 });

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { seo } from "@/lib/site";
 import { carriedSearch, quickFromParams } from "@/lib/apply";
+import { PageShell } from "@/components/site/layout";
 import { LinkApplication } from "@/components/application/link-application";
 
 // The website's own application (Asad, 2026-11-19): getlamp.app's "Check my options" lands here.
@@ -20,7 +21,13 @@ export const Route = createFileRoute("/application/")({
   component: WebsiteApplication,
 });
 
+// The page shell is rendered here, not inside LinkApplication, so its code is one of this
+// route's own imports and the server's HTML preloads it with the route (2026-11-27).
 function WebsiteApplication() {
   const search = Route.useSearch();
-  return <LinkApplication repSlug="" token={null} prefill={quickFromParams(search)} />;
+  return (
+    <PageShell member themeToggle={false} minimalHeader footer={false} tone="night">
+      <LinkApplication repSlug="" token={null} prefill={quickFromParams(search)} carried={search} />
+    </PageShell>
+  );
 }
