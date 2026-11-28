@@ -47,7 +47,7 @@ function Faq() {
         <div className="mt-10">
           <FaqList />
         </div>
-        <Link to="/apply" className={`${btnPrimary} mt-12`}>
+        <Link to="/application" className={`${btnPrimary} mt-12`}>
           Check my options
         </Link>
       </section>

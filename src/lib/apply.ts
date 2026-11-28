@@ -1,5 +1,7 @@
-// Question flow for /apply. Every choice id doubles as a URL param value, so email
-// campaigns can link straight into the flow, e.g. /apply?amount=50-100k&industry=trucking
+// Quick questions for the website's application (/application). Every choice id doubles as a
+// URL param value, so email campaigns can link straight into the flow, e.g.
+// /application?amount=50-100k&industry=trucking. Old /apply links are sent on with their quick
+// answers and utm_ tags only (see carriedSearch); ref, contact keys and unknown keys drop.
 
 export type Option = { id: string; label: string; hint?: string };
 
@@ -111,7 +113,8 @@ export const CONTACT_KEYS: ContactKey[] = ["firstName", "businessName", "phone",
 export const PHONE_CONSENT_TEXT =
   "I agree that Lamp may call and text me at this number about my application and funding options, including with automated technology. Agreeing isn't required to get offers. Message and data rates may apply, and frequency varies. Reply STOP to opt out.";
 
-/** URL params accepted by /apply for prefill. Short, email-friendly names. */
+/** URL params read for prefill. Short, email-friendly names. /application keeps only the
+ *  question ones (see carriedSearch), so contact details are never carried in a link. */
 export const PARAM_MAP: Record<string, ChoiceKey | ContactKey> = {
   amount: "amount",
   purpose: "purpose",

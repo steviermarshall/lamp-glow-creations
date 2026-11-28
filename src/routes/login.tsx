@@ -106,7 +106,7 @@ function Login() {
 
           <p className="mt-8 text-center text-sm text-smoke">
             New to Lamp?{" "}
-            <Link to="/apply" className="font-semibold text-forest">
+            <Link to="/application" className="font-semibold text-forest">
               Check your options first
             </Link>
           </p>

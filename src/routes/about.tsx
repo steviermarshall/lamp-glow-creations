@@ -50,7 +50,7 @@ function About() {
         .
       </p>
       <div className="mt-10">
-        <Link to="/apply" className={btnPrimary}>
+        <Link to="/application" className={btnPrimary}>
           Check my options
         </Link>
       </div>

@@ -129,7 +129,7 @@ export function SiteHeader({
           </Link>
           {user && <SignOut />}
           {!minimal && (
-            <Link to="/apply" className={cn(btnPrimary, "hidden px-5 py-2.5 sm:inline-flex")}>
+            <Link to="/application" className={cn(btnPrimary, "hidden px-5 py-2.5 sm:inline-flex")}>
               Check my options
             </Link>
           )}
@@ -180,7 +180,7 @@ export function SiteHeader({
             {user ? "My account" : "Sign in"}
           </Link>
           <Link
-            to="/apply"
+            to="/application"
             onClick={() => setOpen(false)}
             className={cn(btnPrimary, "mt-5 w-full")}
           >
@@ -269,7 +269,7 @@ export function SiteFooter() {
         <FooterCol
           title="Get funded"
           links={[
-            { label: "Check my options", to: "/apply" },
+            { label: "Check my options", to: "/application" },
             { label: "How it works", to: "/how-it-works" },
             { label: "Check an offer you have", to: "/offer-check" },
             { label: "Funding options", to: "/", hash: "options" },

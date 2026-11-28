@@ -15,27 +15,15 @@ import fontsCss from "../fonts.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 import { SITE } from "../lib/site";
+import { orgJsonLd } from "../lib/org-json-ld";
 import { THEME_SCRIPT } from "../lib/theme";
 import { track } from "../lib/track";
 import { METRICOOL_SCRIPT } from "../lib/metricool";
 
 const SITE_URL = SITE.url;
 
-// Tells search engines what Lamp is: a financial service brokering for businesses across the U.S.
-const ORG_JSON_LD = {
-  "@context": "https://schema.org",
-  "@type": "FinancialService",
-  name: SITE.name,
-  legalName: SITE.legalName,
-  url: SITE.url,
-  logo: `${SITE.url}/apple-touch-icon.png`,
-  image: `${SITE.url}/og.png`,
-  email: SITE.email,
-  ...(SITE.phone ? { telephone: SITE.phone } : {}),
-  description:
-    "Small-business working capital brokerage. Lamp shops a merchant's file to third-party funders and lays the offers out side by side in plain English.",
-  areaServed: SITE.areaServed.map((name) => ({ "@type": "Country", name })),
-};
+// Tells search engines what Lamp is (src/lib/org-json-ld.ts).
+const ORG_JSON_LD = orgJsonLd(SITE);
 
 function NotFoundComponent() {
   return (
@@ -52,7 +40,7 @@ function NotFoundComponent() {
             Go home
           </Link>
           <Link
-            to="/apply"
+            to="/application"
             className="rounded-full px-5 py-2.5 font-semibold ring-1 ring-white/20 transition hover:bg-white/5"
           >
             Check my options

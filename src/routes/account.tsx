@@ -130,14 +130,15 @@ function Account() {
       try {
         // An application signed from a link (on this device, or for this email) moves into this
         // account first; the database checks the proof (claim_applications). When one does, it
-        // supersedes any quick /apply answers still saved here, so those aren't filed as a second.
+        // supersedes any quick answers the old /apply page (retired 2026-11-19) left saved here,
+        // so those aren't filed as a second.
         const claimed = await sb.rpc("claim_applications", { _tokens: loadClaims() });
         if (!claimed.error && (claimed.data ?? 0) > 0) {
           clearClaims();
           clearDraft();
         } else if (isFinished(loadDraft())) {
-          // Only a finished draft becomes an application. A half-answered one (say, from
-          // tapping "Check my options" while signed in) waits in /apply instead.
+          // Only a finished draft from that old page becomes an application. A half-answered one
+          // is left alone: "Check my options" now opens /application, which keeps its own draft.
           await saveDraftToAccount(user.id, user.email);
         }
         const { data, error: err } = await sb
@@ -164,7 +165,7 @@ function Account() {
       <PageShell member tone="night">
         <div className="mx-auto max-w-xl px-5 py-24 text-center text-smoke">
           Online accounts are being set up.{" "}
-          <Link to="/apply" className="font-semibold text-forest">
+          <Link to="/application" className="font-semibold text-forest">
             Check your options
           </Link>{" "}
           in the meantime.
@@ -217,7 +218,7 @@ function Account() {
           <div className={cn(card, "mt-8 p-8 text-center")}>
             <h2 className="font-display text-xl font-semibold">Let's get your file started</h2>
             <p className="mt-2 text-smoke">Answer a few quick questions to see your options.</p>
-            <Link to="/apply" className={cn(btnPrimary, "mt-6")}>
+            <Link to="/application" className={cn(btnPrimary, "mt-6")}>
               Check my options
             </Link>
           </div>
@@ -489,7 +490,7 @@ function Dashboard({ app, userId }: { app: Application; userId: string }) {
           <h2 className="font-display text-lg font-semibold">Your file</h2>
           {note && <p className="mt-2 text-sm leading-relaxed text-smoke">{note}</p>}
           {ended ? (
-            <Link to="/apply" className={cn(btnPrimary, "mt-5")}>
+            <Link to="/application" className={cn(btnPrimary, "mt-5")}>
               Check my options
             </Link>
           ) : (
