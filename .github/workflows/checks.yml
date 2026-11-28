@@ -41,3 +41,9 @@ jobs:
 
       - name: Tests
         run: deno test --node-modules-dir=none tests/
+
+      # Its own step because reading what git tracks needs --allow-run=git, which the other
+      # tests do not get. Fails on a committed server secret; never prints the value.
+      # --require-scan makes it fail, not skip, if git is ever not allowed here.
+      - name: No secrets in tracked files
+        run: deno test --node-modules-dir=none --allow-run=git tests/env-hygiene.test.ts -- --require-scan

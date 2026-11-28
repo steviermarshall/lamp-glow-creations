@@ -30,3 +30,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment files. Only the public .env (VITE_ values the browser reads) is tracked; anything
+# with a server secret stays local. tests/env-hygiene.test.ts fails CI if one gets committed.
+.env.local
+.env.*.local
+.env.*
+!.env.example
